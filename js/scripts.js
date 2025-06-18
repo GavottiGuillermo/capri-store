@@ -178,6 +178,15 @@ document.addEventListener("DOMContentLoaded", function() {
   const finalizarBtn = document.getElementById('finalizar-compra-btn');
   if (finalizarBtn) {
     finalizarBtn.addEventListener('click', async function() {
+      // Verificar si el carrito está vacío
+      if (cartItems.length === 0) {
+        alert("El carrito está vacío.");
+        return;
+      }
+
+      finalizarBtn.disabled = true;
+      finalizarBtn.textContent = "Redirigiendo a Mercado Pago...";
+
       // Prepara los items para Mercado Pago
       const items = cartItems.map(item => ({
         title: item.nombre,
@@ -187,19 +196,22 @@ document.addEventListener("DOMContentLoaded", function() {
       }));
 
       try {
-        const response = await fetch('http://localhost:3001/crear-preferencia', {
+        const response = await fetch('https://api.capristorezte.com.ar/crear-preferencia', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items })
+          body: JSON.stringify({ items: cartItems })
         });
         const data = await response.json();
         if (data.init_point) {
           window.location.href = data.init_point;
         } else {
-          alert('Error al crear la preferencia de pago');
+          alert('Error al generar el link de pago');
         }
       } catch (err) {
         alert('Error de conexión con el backend');
+      } finally {
+        finalizarBtn.disabled = false;
+        finalizarBtn.textContent = "Finalizar compra";
       }
     });
   }

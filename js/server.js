@@ -8,10 +8,10 @@ app.use(cors());
 
 // Configura tu access_token de Mercado Pago (reemplaza por el tuyo real)
 mercadopago.configure({
-  access_token: 'TU_ACCESS_TOKEN'
+  access_token: 'APP_USR-2138195612449986-060618-7e91aa37e30b016c2493a948759a5a8a-651988584'
 });
 
-app.post('/crear-preferencia', async (req, res) => {
+app.post('https://api.capristorezte.com.ar/crear-preferencia', async (req, res) => {
   try {
     const items = req.body.items; // [{title, quantity, currency_id, unit_price}]
     if (!Array.isArray(items) || items.length === 0) {
@@ -20,9 +20,9 @@ app.post('/crear-preferencia', async (req, res) => {
     const preference = {
       items,
       back_urls: {
-        success: "http://localhost:3000/success",
-        failure: "http://localhost:3000/failure",
-        pending: "http://localhost:3000/pending"
+        success: "https://www.capristorezte.com.ar/success",
+        failure: "https://www.capristorezte.com.ar/failure",
+        pending: "https://www.capristorezte.com.ar/pending"
       },
       auto_return: "approved"
     };

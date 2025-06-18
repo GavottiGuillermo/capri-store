@@ -10488,3 +10488,13 @@ input:focus, textarea:focus {
   background-color: var(--color-hover);
   color: var(--color-acento);
 }
+.capri-divider-dot {
+  color: #801f1c;                /* Vino tinto */
+  font-size: 2.9rem;             /* Ajusta el tamaño según prefieras */
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 999;              /* Más grueso */
+  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
+  margin-bottom: 0.15em;         /* Ajusta fino para centrar el punto */
+}
