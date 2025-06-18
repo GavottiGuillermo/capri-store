@@ -8,7 +8,7 @@ app.use(cors());
 
 // Configura tu access_token de Mercado Pago (reemplaza por el tuyo real)
 mercadopago.configure({
-  access_token: 'APP_USR-2138195612449986-060618-7e91aa37e30b016c2493a948759a5a8a-651988584'
+  access_token: ''
 });
 
 app.post('https://api.capristorezte.com.ar/crear-preferencia', async (req, res) => {
