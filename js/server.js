@@ -9,7 +9,7 @@ app.use(cors());
 
 // Configura tu access_token de Mercado Pago (reemplaza por el tuyo real)
 mercadopago.configure({
-  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
+  access_token: ''
 });
 
 app.post('/crear-preferencia', async (req, res) => {
