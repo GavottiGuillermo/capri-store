@@ -1,6 +1,7 @@
 const express = require('express');
 const mercadopago = require('mercadopago');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(express.json());
@@ -8,10 +9,10 @@ app.use(cors());
 
 // Configura tu access_token de Mercado Pago (reemplaza por el tuyo real)
 mercadopago.configure({
-  access_token: 'APP_USR-2138195612449986-060618-7e91aa37e30b016c2493a948759a5a8a-651988584'
+  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
 });
 
-app.post('https://api.capristorezte.com.ar/crear-preferencia', async (req, res) => {
+app.post('/crear-preferencia', async (req, res) => {
   try {
     const items = req.body.items; // [{title, quantity, currency_id, unit_price}]
     if (!Array.isArray(items) || items.length === 0) {
@@ -20,9 +21,9 @@ app.post('https://api.capristorezte.com.ar/crear-preferencia', async (req, res) 
     const preference = {
       items,
       back_urls: {
-        success: "https://www.capristorezte.com.ar/success",
-        failure: "https://www.capristorezte.com.ar/failure",
-        pending: "https://www.capristorezte.com.ar/pending"
+        success: "https://www.capristorezte.com.ar/?status=approved",
+        failure: "https://www.capristorezte.com.ar/?status=failure",
+        pending: "https://www.capristorezte.com.ar/?status=pending"
       },
       auto_return: "approved"
     };
@@ -30,6 +31,57 @@ app.post('https://api.capristorezte.com.ar/crear-preferencia', async (req, res) 
     res.json({ init_point: response.body.init_point });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Nuevo endpoint para confirmar compra y enviar correo
+app.post('/confirmar-compra', async (req, res) => {
+  try {
+    const { nombre, apellido, email, resumen, total } = req.body;
+    if (!nombre || !apellido || !email || !resumen || !total) {
+      return res.status(400).json({ success: false, error: "Faltan datos." });
+    }
+
+    // Generar número de pedido único
+    const numeroPedido = Math.floor(100000 + Math.random() * 900000);
+
+    // Configura tu transporter de nodemailer (ejemplo con Gmail)
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,      // tu email
+        pass: process.env.EMAIL_PASS       // tu contraseña o app password
+      }
+    });
+
+    // Email content
+    const mailOptions = {
+      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Confirmación de compra - Capri Store',
+      text: 
+`¡Gracias por tu compra, ${nombre} ${apellido}!
+
+Resumen de tu pedido:
+${resumen}
+Total: $${total}
+
+Tu número de pedido es: ${numeroPedido}
+
+Para abonar por transferencia, utiliza el siguiente alias de Mercado Pago:
+capristore.mp
+
+O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
+
+¡Te esperamos!`
+    };
+
+    // Enviar el correo
+    await transporter.sendMail(mailOptions);
+
+    res.json({ success: true, numeroPedido });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

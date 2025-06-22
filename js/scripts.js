@@ -177,43 +177,92 @@ document.addEventListener("DOMContentLoaded", function() {
 
   const finalizarBtn = document.getElementById('finalizar-compra-btn');
   if (finalizarBtn) {
-    finalizarBtn.addEventListener('click', async function() {
-      // Verificar si el carrito está vacío
+    finalizarBtn.addEventListener('click', function() {
       if (cartItems.length === 0) {
         alert("El carrito está vacío.");
         return;
       }
-
-      finalizarBtn.disabled = true;
-      finalizarBtn.textContent = "Redirigiendo a Mercado Pago...";
-
-      // Prepara los items para Mercado Pago
-      const items = cartItems.map(item => ({
-        title: item.nombre,
-        quantity: 1,
-        currency_id: "ARS",
-        unit_price: item.precio
-      }));
-
-      try {
-        const response = await fetch('https://api.capristorezte.com.ar/crear-preferencia', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: cartItems })
-        });
-        const data = await response.json();
-        if (data.init_point) {
-          window.location.href = data.init_point;
-        } else {
-          alert('Error al generar el link de pago');
-        }
-      } catch (err) {
-        alert('Error de conexión con el backend');
-      } finally {
-        finalizarBtn.disabled = false;
-        finalizarBtn.textContent = "Finalizar compra";
-      }
+      mostrarResumenCompra();
+      $('#checkoutModal').modal('show');
     });
+  }
+
+  function mostrarResumenCompra() {
+    let resumen = '';
+    let total = 0;
+    cartItems.forEach(item => {
+      resumen += `<div>${item.nombre} - $${item.precio.toFixed(2)}</div>`;
+      total += item.precio;
+    });
+    resumen += `<hr><strong>Total: $${total.toFixed(2)}</strong>`;
+    document.getElementById('resumenCompra').innerHTML = resumen;
+  }
+
+  // Cambia aquí la URL de tu backend desplegado en Render
+  const BACKEND_URL = 'https://tu-backend.onrender.com/confirmar-compra';
+
+  document.getElementById('checkoutForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    // Obtener datos del cliente
+    const nombre = document.getElementById('nombre').value;
+    const apellido = document.getElementById('apellido').value;
+    const email = document.getElementById('email').value;
+
+    // Construir resumen y total
+    let resumen = '';
+    let total = 0;
+    cartItems.forEach(item => {
+      resumen += `${item.nombre} - $${item.precio.toFixed(2)}\n`;
+      total += item.precio;
+    });
+
+    // Enviar datos al backend
+    fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre,
+        apellido,
+        email,
+        resumen,
+        total
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        // Vaciar carrito y cerrar modal
+        cartItems = [];
+        guardarCarrito();
+        actualizarCarrito();
+        $('#checkoutModal').modal('hide');
+        // Mostrar mensaje de éxito
+        mostrarMensajeCorreoExitoso(data.numeroPedido);
+      } else {
+        alert('Ocurrió un error al enviar el correo. Intenta nuevamente.');
+      }
+    })
+    .catch(() => alert('Error de conexión con el backend'));
+  });
+
+  function mostrarMensajeCorreoExitoso(numeroPedido) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.style.background = 'rgba(0,0,0,0.5)';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+          <h3 class="text-success mb-3">¡Compra confirmada!</h3>
+          <p>Te enviamos un correo con los detalles de tu compra.</p>
+          <p>Tu número de pedido es: <strong>${numeroPedido}</strong></p>
+          <button class="btn btn-primary mt-2" onclick="location.href='/'">Aceptar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.body.classList.add('modal-open');
   }
 });
 

@@ -432,10 +432,32 @@
             </div>
           </div>
         </div>
-        
 
-
-
+        <!-- Modal de Checkout usando Bootstrap -->
+        <div class="modal fade" id="checkoutModal" tabindex="-1" role="dialog" aria-labelledby="checkoutModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="checkoutModalLabel">Datos del comprador</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <form id="checkoutForm">
+                <div class="modal-body">
+                  <input type="text" id="nombre" class="form-control mb-2" placeholder="Nombre" required>
+                  <input type="text" id="apellido" class="form-control mb-2" placeholder="Apellido" required>
+                  <input type="email" id="email" class="form-control mb-2" placeholder="Correo electrónico" required>
+                  <h3 class="mt-3">Resumen de compra</h3>
+                  <div id="resumenCompra"></div>
+                </div>
+                <div class="modal-footer">
+                  <button type="submit" id="realizarPagoBtn" class="btn btn-success">Realizar Pago</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
         <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
