@@ -199,7 +199,7 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   // Cambia aquí la URL de tu backend desplegado en Render
-  const BACKEND_URL = 'https://tu-backend.onrender.com/confirmar-compra';
+  const BACKEND_URL = 'https://capri-store.onrender.com/confirmar-compra';
 
   document.getElementById('checkoutForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -212,8 +212,8 @@ document.addEventListener("DOMContentLoaded", function() {
       unit_price: item.precio
     }));
 
-    // Llama al backend para crear la preferencia de Mercado Pago
-    fetch('https://tu-backend.onrender.com/crear-preferencia', {
+    // Llama al backend para crear la preferencia de Mercado Pago.
+    fetch('https://capri-store.onrender.com/crear-preferencia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items })
