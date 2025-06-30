@@ -204,43 +204,26 @@ document.addEventListener("DOMContentLoaded", function() {
   document.getElementById('checkoutForm').addEventListener('submit', function(e) {
     e.preventDefault();
 
-    // Obtener datos del cliente
-    const nombre = document.getElementById('nombre').value;
-    const apellido = document.getElementById('apellido').value;
-    const email = document.getElementById('email').value;
+    // Obtener datos del carrito
+    const items = cartItems.map(item => ({
+      title: item.nombre,
+      quantity: 1,
+      currency_id: "ARS",
+      unit_price: item.precio
+    }));
 
-    // Construir resumen y total
-    let resumen = '';
-    let total = 0;
-    cartItems.forEach(item => {
-      resumen += `${item.nombre} - $${item.precio.toFixed(2)}\n`;
-      total += item.precio;
-    });
-
-    // Enviar datos al backend
-    fetch(BACKEND_URL, {
+    // Llama al backend para crear la preferencia de Mercado Pago
+    fetch('https://tu-backend.onrender.com/crear-preferencia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nombre,
-        apellido,
-        email,
-        resumen,
-        total
-      })
+      body: JSON.stringify({ items })
     })
     .then(res => res.json())
     .then(data => {
-      if (data.success) {
-        // Vaciar carrito y cerrar modal
-        cartItems = [];
-        guardarCarrito();
-        actualizarCarrito();
-        $('#checkoutModal').modal('hide');
-        // Mostrar mensaje de éxito
-        mostrarMensajeCorreoExitoso(data.numeroPedido);
+      if (data.init_point) {
+        window.location.href = data.init_point; // Redirige a Mercado Pago
       } else {
-        alert('Ocurrió un error al enviar el correo. Intenta nuevamente.');
+        alert('No se pudo iniciar el pago.');
       }
     })
     .catch(() => alert('Error de conexión con el backend'));

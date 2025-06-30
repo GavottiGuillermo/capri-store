@@ -8,13 +8,13 @@ app.use(express.json());
 app.use(cors());
 
 // Configura tu access_token de Mercado Pago (reemplaza por el tuyo real)
-mercadopago.configure({
-  access_token: ''
+const mp = new mercadopago.MercadoPagoConfig({
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
 });
 
 app.post('/crear-preferencia', async (req, res) => {
   try {
-    const items = req.body.items; // [{title, quantity, currency_id, unit_price}]
+    const items = req.body.items;
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No hay productos en el carrito." });
     }
@@ -27,8 +27,9 @@ app.post('/crear-preferencia', async (req, res) => {
       },
       auto_return: "approved"
     };
-    const response = await mercadopago.preferences.create(preference);
-    res.json({ init_point: response.body.init_point });
+    // Cambia esto según el SDK:
+    const response = await mp.preference.create(preference);
+    res.json({ init_point: response.init_point || response.body.init_point });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
