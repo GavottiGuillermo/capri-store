@@ -18,9 +18,24 @@ const mp = new mercadopago.MercadoPagoConfig({
 app.post('/crear-preferencia', async (req, res) => {
   try {
     const items = req.body.items;
+    console.log('Items recibidos:', items);
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No hay productos en el carrito." });
     }
+
+    // Verifica que todos los items tengan los campos requeridos y unit_price sea número
+    for (const item of items) {
+      if (
+        typeof item.title !== 'string' ||
+        typeof item.quantity !== 'number' ||
+        typeof item.currency_id !== 'string' ||
+        typeof item.unit_price !== 'number'
+      ) {
+        return res.status(400).json({ error: "Formato de producto inválido." });
+      }
+    }
+
     const preference = {
       items,
       back_urls: {
@@ -30,7 +45,9 @@ app.post('/crear-preferencia', async (req, res) => {
       },
       auto_return: "approved"
     };
-    // Nuevo: usa Preference con la config
+
+    console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
+
     const preferenceClient = new Preference(mp);
     const response = await preferenceClient.create(preference);
     res.json({ init_point: response.sandbox_init_point || response.init_point || response.body.init_point });

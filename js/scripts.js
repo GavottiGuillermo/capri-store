@@ -227,6 +227,8 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     })
     .catch(() => alert('Error de conexión con el backend'));
+
+    console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
   });
 
   function mostrarMensajeCorreoExitoso(numeroPedido) {
