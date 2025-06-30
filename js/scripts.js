@@ -209,7 +209,7 @@ document.addEventListener("DOMContentLoaded", function() {
       title: item.nombre,
       quantity: 1,
       currency_id: "ARS",
-      unit_price: item.precio
+      unit_price: Number(item.precio)
     }));
 
     // Llama al backend para crear la preferencia de Mercado Pago.
