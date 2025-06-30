@@ -2,6 +2,7 @@ const express = require('express');
 const mercadopago = require('mercadopago');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const { Preference } = require('mercadopago');
 
 const app = express();
 app.use(express.json());
@@ -29,10 +30,12 @@ app.post('/crear-preferencia', async (req, res) => {
       },
       auto_return: "approved"
     };
-    // Cambia esto según el SDK:
-    const response = await mp.preference.create(preference);
-    res.json({ init_point: response.init_point || response.body.init_point });
+    // Nuevo: usa Preference con la config
+    const preferenceClient = new Preference(mp);
+    const response = await preferenceClient.create(preference);
+    res.json({ init_point: response.sandbox_init_point || response.init_point || response.body.init_point });
   } catch (error) {
+    console.error('Error en /crear-preferencia:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -50,10 +53,12 @@ app.post('/confirmar-compra', async (req, res) => {
 
     // Configura tu transporter de nodemailer (ejemplo con Gmail)
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.zoho.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.EMAIL_USER,      // tu email
-        pass: process.env.EMAIL_PASS       // tu contraseña o app password
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
       }
     });
 
