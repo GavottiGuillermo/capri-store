@@ -5,7 +5,9 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar']
+}));
 
 // Configura tu access_token de Mercado Pago (reemplaza por el tuyo real)
 const mp = new mercadopago.MercadoPagoConfig({
