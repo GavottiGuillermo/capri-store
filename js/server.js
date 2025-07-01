@@ -9,10 +9,11 @@ app.use(cors({
   origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar']
 }));
 
-// Configura tu access_token de Mercado Pago
-mercadopago.configure({
-  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
+// Configura tu access_token de Mercado Pago (SDK v3)
+const mp = new mercadopago.MercadoPagoConfig({
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
 });
+const { Preference } = mercadopago;
 
 app.post('/crear-preferencia', async (req, res) => {
   try {
@@ -48,8 +49,9 @@ app.post('/crear-preferencia', async (req, res) => {
 
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
 
-    const response = await mercadopago.preferences.create(preference);
-    res.json({ init_point: response.body.init_point });
+    const preferenceClient = new Preference(mp);
+    const response = await preferenceClient.create(preference);
+    res.json({ init_point: response.sandbox_init_point || response.init_point || response.body.init_point });
   } catch (error) {
     console.error('Error en /crear-preferencia:', error);
     res.status(500).json({ error: error.message });
