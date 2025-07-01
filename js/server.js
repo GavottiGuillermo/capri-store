@@ -49,9 +49,10 @@ app.post('/crear-preferencia', async (req, res) => {
 
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
 
+    // SDK v3: Preference
     const preferenceClient = new Preference(mp);
-    const response = await preferenceClient.create(preference);
-    res.json({ init_point: response.sandbox_init_point || response.init_point || response.body.init_point });
+    const response = await preferenceClient.create({ body: preference });
+    res.json({ init_point: response.init_point || response.body.init_point });
   } catch (error) {
     console.error('Error en /crear-preferencia:', error);
     res.status(500).json({ error: error.message });
@@ -69,7 +70,7 @@ app.post('/confirmar-compra', async (req, res) => {
     // Generar número de pedido único
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
 
-    // Configura tu transporter de nodemailer (ejemplo con Gmail)
+    // Configura tu transporter de nodemailer (Zoho Mail)
     const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
