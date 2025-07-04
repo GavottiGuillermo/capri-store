@@ -270,20 +270,26 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   function mostrarMensajeCompra(titulo, mensaje) {
-    const modal = document.createElement('div');
-    modal.className = 'modal fade show';
-    modal.style.display = 'block';
-    modal.style.background = 'rgba(0,0,0,0.5)';
-    modal.innerHTML = `
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content text-center p-4">
-          <h3 class="mb-3">${titulo}</h3>
-          <p>${mensaje}</p>
-          <button class="btn btn-primary mt-2" onclick="location.href='/'">Aceptar</button>
-        </div>
+    // Elimina cualquier modal anterior
+    const anterior = document.getElementById('custom-modal-overlay');
+    if (anterior) anterior.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'custom-modal-overlay';
+    overlay.className = 'custom-modal-overlay';
+    overlay.innerHTML = `
+      <div class="custom-modal-content text-center">
+        <h3 class="mb-3">${titulo}</h3>
+        <p>${mensaje}</p>
+        <button class="btn btn-primary mt-2" id="cerrar-modal-compra">Aceptar</button>
       </div>
     `;
-    document.body.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    document.getElementById('cerrar-modal-compra').onclick = function() {
+      overlay.remove();
+      document.body.classList.remove('modal-open');
+    };
     document.body.classList.add('modal-open');
   }
 });
