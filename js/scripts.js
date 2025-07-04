@@ -212,6 +212,10 @@ document.addEventListener("DOMContentLoaded", function() {
       unit_price: Number(item.precio)
     }));
 
+    // Guarda el email antes de redirigir a Mercado Pago
+    const email = document.getElementById('email').value;
+    localStorage.setItem('ultimoEmailCompra', email);
+
     // Llama al backend para crear la preferencia de Mercado Pago.
     fetch('https://capri-store.onrender.com/crear-preferencia', {
       method: 'POST',
