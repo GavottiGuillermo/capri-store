@@ -10478,6 +10478,7 @@ input:focus, textarea:focus {
 .modal-header .close {
   color: var(--color-primario);
 }
+/* Modal personalizado para mensaje de compra */
 .custom-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
