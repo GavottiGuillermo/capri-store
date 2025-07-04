@@ -228,9 +228,7 @@ document.addEventListener("DOMContentLoaded", function() {
     })
     .catch(() => alert('Error de conexión con el backend'));
 
-    console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
   });
-
   function mostrarMensajeCorreoExitoso(numeroPedido) {
     const modal = document.createElement('div');
     modal.className = 'modal fade show';
@@ -249,6 +247,44 @@ document.addEventListener("DOMContentLoaded", function() {
     document.body.appendChild(modal);
     document.body.classList.add('modal-open');
   }
+
+  // Mostrar mensaje al volver de Mercado Pago
+  const urlParams = new URLSearchParams(window.location.search);
+  const status = urlParams.get('status');
+  const email = localStorage.getItem('ultimoEmailCompra'); // Guarda el email antes de redirigir a MP
+
+  if (status === 'approved') {
+    mostrarMensajeCompra('¡Gracias por tu compra!', `Te enviamos un email a <b>${email || 'tu correo'}</b> con los detalles para retirar el producto en nuestro local.`);
+    // Limpia el carrito si quieres:
+    cartItems = [];
+    guardarCarrito();
+    actualizarCarrito();
+  } else if (status === 'failure') {
+    mostrarMensajeCompra('Pago rechazado', 'Tu pago no pudo ser procesado. Intenta nuevamente o usa otro medio de pago.');
+  } else if (status === 'pending') {
+    mostrarMensajeCompra('Pago pendiente', 'Tu pago está pendiente. Te avisaremos por email cuando se acredite.');
+  }
+
+  function mostrarMensajeCompra(titulo, mensaje) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.style.background = 'rgba(0,0,0,0.5)';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+          <h3 class="mb-3">${titulo}</h3>
+          <p>${mensaje}</p>
+          <button class="btn btn-primary mt-2" onclick="location.href='/'">Aceptar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.body.classList.add('modal-open');
+  }
 });
+
+// Antes de redirigir a Mercado Pago
+localStorage.setItem('ultimoEmailCompra', document.getElementById('email').value);
 
 

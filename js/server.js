@@ -11,7 +11,7 @@ app.use(cors({
 
 // Configura tu access_token de Mercado Pago (SDK v3)
 const mp = new mercadopago.MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST
 });
 const { Preference } = mercadopago;
 
