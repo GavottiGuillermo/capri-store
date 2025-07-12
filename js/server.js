@@ -15,6 +15,15 @@ app.use(cors({
 // Servir archivos estáticos desde la carpeta raíz del proyecto
 app.use(express.static(path.join(__dirname, '..')));
 
+// Endpoint de salud para verificar que el servidor está funcionando
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    server: 'Capri Store Backend'
+  });
+});
+
 // Configura Mercado Pago con la nueva sintaxis
 const client = new MercadoPagoConfig({
   accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569',
@@ -24,19 +33,45 @@ const client = new MercadoPagoConfig({
   }
 });
 
+// Endpoint de prueba para el SDK de Mercado Pago
+app.get('/test-mp', (req, res) => {
+  try {
+    res.json({ 
+      status: 'OK',
+      sdk_loaded: !!Preference,
+      client_configured: !!client,
+      access_token_configured: !!client.accessToken
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'ERROR',
+      error: error.message 
+    });
+  }
+});
+
 app.post('/crear-preferencia', async (req, res) => {
+  console.log('=== INICIO /crear-preferencia ===');
+  console.log('Request body:', req.body);
+  
   try {
     const items = req.body.items;
+    console.log('Items recibidos:', items);
+    
     if (!Array.isArray(items) || items.length === 0) {
+      console.log('Error: Items no válidos');
       return res.status(400).json({ error: "No hay productos en el carrito." });
     }
+    
     for (const item of items) {
+      console.log('Validando item:', item);
       if (
         typeof item.title !== 'string' ||
         typeof item.quantity !== 'number' ||
         typeof item.currency_id !== 'string' ||
         typeof item.unit_price !== 'number'
       ) {
+        console.log('Error: Formato de producto inválido');
         return res.status(400).json({ error: "Formato de producto inválido." });
       }
     }
@@ -65,13 +100,30 @@ app.post('/crear-preferencia', async (req, res) => {
 
     // Crear preferencia con la nueva sintaxis del SDK
     const preferenceObj = new Preference(client);
+    console.log('Creando preferencia...');
+    
     const response = await preferenceObj.create({ body: preference });
     
-    console.log('Respuesta de Mercado Pago:', response);
-    res.json({ init_point: response.init_point });
+    console.log('Respuesta completa de Mercado Pago:', JSON.stringify(response, null, 2));
+    console.log('init_point:', response.init_point);
+    
+    const result = { init_point: response.init_point };
+    console.log('Enviando respuesta:', result);
+    
+    res.json(result);
+    console.log('=== FIN /crear-preferencia EXITOSO ===');
+    
   } catch (error) {
-    console.error('Error en /crear-preferencia:', error);
-    res.status(500).json({ error: error.message });
+    console.error('=== ERROR en /crear-preferencia ===');
+    console.error('Error completo:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    res.status(500).json({ 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+    console.log('=== FIN /crear-preferencia CON ERROR ===');
   }
 });
 
@@ -87,7 +139,7 @@ app.post('/confirmar-compra', async (req, res) => {
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
 
     // Configura tu transporter de nodemailer (Zoho Mail)
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,

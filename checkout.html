@@ -592,11 +592,29 @@
           body: JSON.stringify({ items })
         });
 
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+
         if (!response.ok) {
-          throw new Error(`Error HTTP: ${response.status}`);
+          // Intentar leer el error como texto primero
+          const errorText = await response.text();
+          console.error('Error response text:', errorText);
+          throw new Error(`Error HTTP: ${response.status} - ${errorText}`);
         }
 
-        const data = await response.json();
+        // Verificar que la respuesta sea JSON válido
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonError) {
+          console.error('Error parsing JSON:', jsonError);
+          console.error('Response text was:', responseText);
+          throw new Error('El servidor devolvió una respuesta inválida. Revisa la consola para más detalles.');
+        }
+
         console.log('Respuesta del backend:', data);
 
         if (data.init_point) {
