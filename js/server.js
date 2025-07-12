@@ -1,5 +1,5 @@
 const express = require('express');
-const mercadopago = require('mercadopago');
+const { MercadoPagoConfig, Preference } = require('mercadopago');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const path = require('path');
@@ -9,15 +9,19 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar', 'http://localhost:3000', 'http://localhost:8080']
+  origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar', 'http://localhost:3000', 'http://localhost:8080', 'http://localhost:3001']
 }));
 
 // Servir archivos estáticos desde la carpeta raíz del proyecto
 app.use(express.static(path.join(__dirname, '..')));
 
-// Configura tu access_token de Mercado Pago (SDK v2)
-mercadopago.configure({
-  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569'
+// Configura Mercado Pago con la nueva sintaxis
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569',
+  options: {
+    timeout: 5000,
+    idempotencyKey: 'abc'
+  }
 });
 
 app.post('/crear-preferencia', async (req, res) => {
@@ -59,9 +63,12 @@ app.post('/crear-preferencia', async (req, res) => {
 
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
 
-    // SDK v2: crear preferencia
-    const response = await mercadopago.preferences.create(preference);
-    res.json({ init_point: response.body.init_point });
+    // Crear preferencia con la nueva sintaxis del SDK
+    const preferenceObj = new Preference(client);
+    const response = await preferenceObj.create({ body: preference });
+    
+    console.log('Respuesta de Mercado Pago:', response);
+    res.json({ init_point: response.init_point });
   } catch (error) {
     console.error('Error en /crear-preferencia:', error);
     res.status(500).json({ error: error.message });
