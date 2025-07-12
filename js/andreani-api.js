@@ -1,11 +1,15 @@
 /**
+ * Comentario: Archivo de integración con la API de Andreani para cotización y cálculo de envíos en Capri Store. Última edición: 12/07/2025 para asegurar visibilidad de campos en producción.
+ */
+
+/**
  * Andreani API Integration
  * Configuración y funciones para integrar con la API de Andreani
  */
 
 // Configuración de la API de Andreani
 const ANDREANI_CONFIG = {
-  // URLs de la API
+  //  URLs de la API
   PRODUCTION_URL: 'https://apis.andreani.com/v2',
   TESTING_URL: 'https://apis.andreani.com/v2', // URL de testing si tienes acceso
   

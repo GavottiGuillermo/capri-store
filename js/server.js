@@ -81,7 +81,7 @@ app.post('/confirmar-compra', async (req, res) => {
       }
     });
 
-    // Email content
+    //  Email content
     const mailOptions = {
       from: `"Capri Store" <${process.env.EMAIL_USER}>`,
       to: email,

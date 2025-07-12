@@ -220,7 +220,7 @@ function finalizarCompraSidebar() {
     mostrarPopup("El carrito está vacío.");
     return;
   }
-  // Redirigir a la página de checkout
+  //  Redirigir a la página de checkout
   window.location.href = 'checkout.html';
 }
 
