@@ -1,471 +1,346 @@
 <!DOCTYPE html>
 <html lang="es">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="description" content="Tienda de libros en formato pdf. Localizada en Argentina" />
-        <meta name="author" content="" />
-        <title>Capri Store</title>
-        <!-- Favicon-->
-        <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
-    
-        <script src="https://use.fontawesome.com/releases/v5.13.0/js/all.js" crossorigin="anonymous"></script>
-        <!-- Google fonts-->
-        <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700" rel="stylesheet" type="text/css" />
-        <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic" rel="stylesheet" type="text/css" />
-       
-        <link href="css/styles.css" rel="stylesheet" />
-    </head>
-    <body id="page-top">
-        <!-- Navegacion-->
-        <nav class="navbar navbar-expand-lg bg-secondary text-uppercase fixed-top" id="mainNav">
-            <div class="container">
-                <a class="navbar-brand js-scroll-trigger" href="#page-top">Capri Store</a>
-                <button class="navbar-toggler navbar-toggler-right text-uppercase font-weight-bold bg-primary text-white rounded" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
-                    Menu
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarResponsive">
-                    <ul class="navbar-nav ml-auto">
-                        <li class="nav-item mx-0 mx-lg-1"><a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#portfolio">Productos</a></li>
-                        <li class="nav-item mx-0 mx-lg-1"><a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#about">Somos</a></li>
-                        <li class="nav-item mx-0 mx-lg-1"><a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#contact">Contacto</a></li>
-                        <!-- Icono del carrito en la navbar -->
-                        <li class="nav-item mx-0 mx-lg-1 d-flex align-items-center">
-                          <a class="nav-link position-relative d-flex align-items-center justify-content-center" href="#" data-toggle="modal" data-target="#cartModal">
-                            <i class="fas fa-shopping-cart navbar-cart-icon"></i>
-                            <span class="badge badge-pill badge-light navbar-cart-badge" id="cart-count">0</span>
-                          </a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </nav>
-        
-        <header class="masthead text-center">
-            <div class="container d-flex align-items-center flex-column">
-              
-                <img class="masthead-avatar mb-5" src="assets/img/Icono.jpg" alt="" />
-               
-                <h1 class="masthead-heading text-uppercase mb-0 mb-4">Capri Store</h1>
-                <p class="masthead-subheading font-weight-light mb-0 mt-3">Tienda de Ropa</p>
-            </div>
-        </header>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Capri Store - Venta de Ropa</title>
+  <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
+  <link href="css/styles.css" rel="stylesheet" />
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    body { font-family: 'Montserrat', sans-serif; }
+    .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+    .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
+    .bg-vino-tinto { background-color: #6b0a0a !important; }
+    .text-vino-tinto { color: #6b0a0a !important; }
+    .text-rosado { color: #e29ca3 !important; }
+    .bg-rosado { background-color: #e29ca3 !important; }
+    .border-rosado { border-color: #e29ca3 !important; }
+    .shadow-lg { box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important; }
+    .rounded-lg { border-radius: 1rem !important; }
+    .btn-rosado { background-color: #e29ca3; color: #fff; }
+    .btn-rosado:hover { background-color: #d1848d; color: #fff; }
+    .btn-vino-tinto { background-color: #6b0a0a; color: #fff; }
+    .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    .card-product img { height: 250px; object-fit: cover; }
+    .card-product { min-height: 100%; }
+  </style>
+</head>
+<body class="bg-white text-vino">
+  <!-- Navbar -->
+  <nav id="mainNav" class="navbar navbar-expand-lg bg-vino-tinto navbar-dark sticky-top shadow">
+    <div class="container">
+      <a class="navbar-brand" href="#">
+        <img src="assets/img/Icono.jpg" alt="Capri Store Logo" class="logo-capri"/>
+        Capri Store
+      </a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Menú">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNavbar">
+        <ul class="navbar-nav ml-auto font-weight-bold">
+          <li class="nav-item"><a class="nav-link" href="#novedades">Novedades</a></li>
+          <li class="nav-item"><a class="nav-link" href="#productos">Productos</a></li>
+          <li class="nav-item"><a class="nav-link" href="#nosotros">Nosotros</a></li>
+          <li class="nav-item"><a class="nav-link" href="#contacto">Contacto</a></li>
+          <li class="nav-item">
+            <a class="nav-link position-relative d-flex align-items-center justify-content-center" href="#" id="navbar-cart-link">
+              <i class="fas fa-shopping-cart navbar-cart-icon"></i>
+              <span class="badge badge-pill badge-light navbar-cart-badge" id="cart-count">0</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
 
-        <section class="page-section portfolio" id="portfolio">
-            <div class="container">
-                <h2 class="page-section-heading text-center text-uppercase seccion-titulo mb-0">Productos</h2>
-                <div class="divider-custom divider-vino">
-                    <div class="divider-custom-line"></div>
-                    <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                    <div class="divider-custom-line"></div>
-                </div>
-                <div class="row">
-                    <!-- Portfolio Item 1-->
-                    <div class="col-md-6 col-lg-4 mb-5">
-                        <div class="portfolio-item mx-auto" data-toggle="modal" data-target="#portfolioModal1">
-                            <div class="portfolio-item-caption d-flex align-items-center justify-content-center h-100 w-100">
-                                <div class="portfolio-item-caption-content text-center text-white"><i class="fas fa-plus fa-3x"></i></div>
-                            </div>
-                            <img class="img-fluid" src="assets\img\portfolio\Portada - El principito.webp" alt="" /> <!--Cambio imagen externa-->
-                        </div>
-                    </div>
-                    <!-- Portfolio Item 2-->
-                    <div class="col-md-6 col-lg-4 mb-5">
-                        <div class="portfolio-item mx-auto" data-toggle="modal" data-target="#portfolioModal2">
-                            <div class="portfolio-item-caption d-flex align-items-center justify-content-center h-100 w-100">
-                                <div class="portfolio-item-caption-content text-center text-white"><i class="fas fa-plus fa-3x"></i></div>
-                            </div>
-                            <img class="img-fluid" src="assets/img/portfolio/Portada - Cobuild.jpg" alt="" /> 
-                        </div>
-                    </div>
-                    <!-- Portfolio Item 3-->
-                    <div class="col-md-6 col-lg-4 mb-5">
-                        <div class="portfolio-item mx-auto" data-toggle="modal" data-target="#portfolioModal3">
-                            <div class="portfolio-item-caption d-flex align-items-center justify-content-center h-100 w-100">
-                                <div class="portfolio-item-caption-content text-center text-white"><i class="fas fa-plus fa-3x"></i></div>
-                            </div>
-                            <img class="img-fluid" src="assets/img/portfolio/Portada - Java.jpg" alt="" />
-                        </div>
-                    </div>
-                    <!-- Portfolio Item 4-->
-                    <div class="col-md-6 col-lg-4 mb-5 mb-lg-0">
-                        <div class="portfolio-item mx-auto" data-toggle="modal" data-target="#portfolioModal4">
-                            <div class="portfolio-item-caption d-flex align-items-center justify-content-center h-100 w-100">
-                                <div class="portfolio-item-caption-content text-center text-white"><i class="fas fa-plus fa-3x"></i></div>
-                            </div>
-                            <img class="img-fluid" src="assets\img\portfolio\Portada - Padre rico.jpg" alt="Portada de Padre rico padre pobre" />
-                        </div>
-                    </div>
-                    <!-- Portfolio Item 5-->
-                    <div class="col-md-6 col-lg-4 mb-5 mb-md-0">
-                        <div class="portfolio-item mx-auto" data-toggle="modal" data-target="#portfolioModal5">
-                            <div class="portfolio-item-caption d-flex align-items-center justify-content-center h-100 w-100">
-                                <div class="portfolio-item-caption-content text-center text-white"><i class="fas fa-plus fa-3x"></i></div>
-                            </div>
-                            <img class="img-fluid" src="assets img/portfolio/Portada - Economia basica.jpg" alt="" />
-                        </div>
-                    </div>
-                    <!-- Portfolio Item 6-->
-                    <div class="col-md-6 col-lg-4">
-                        <div class="portfolio-item mx-auto" data-toggle="modal" data-target="#portfolioModal6">
-                            <div class="portfolio-item-caption d-flex align-items-center justify-content-center h-100 w-100">
-                                <div class="portfolio-item-caption-content text-center text-white"><i class="fas fa-plus fa-3x"></i></div>
-                            </div>
-                            <img class="img-fluid" src="assets\img\portfolio\Portada - Un mundo feliz.jpg" alt="Portada de Un mundo feliz" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        
-        <section class="page-section seccion-somos" id="about">
-            <div class="container">
-               
-                <h2 class="page-section-heading text-center text-uppercase text-white">Somos</h2>
-               
-                <div class="divider-custom divider-vino">
-                    <div class="divider-custom-line"></div>
-                    <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                    <div class="divider-custom-line"></div>
-                </div>
-               
-                <div class="row">
-                    <div class="col-lg-4 ml-auto"><p class="lead">Tienda online de venta de ropa. <br> Buscamos difundir conocimiento y motivación para aprender en todas las etapas de la vida.</p></div>
-                    <div class="col-lg-4 ml-auto"><p class="lead">Porque la educación es el camino que nos lleva hacia la libertad </p></div>
-                </div>
-              
-            </div>
-        </section>
-       
-        <section class="page-section" id="contact">
-            <div class="container">
-                
-                <h2 class="page-section-heading text-center text-uppercase seccion-titulo mb-0">Contactanos</h2>
-              
-                <div class="divider-custom divider-vino">
-                    <div class="divider-custom-line"></div>
-                    <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                    <div class="divider-custom-line"></div>
-                </div>
-                
-                <div class="row">
-                    <div class="col-lg-8 mx-auto">
-                       
-                        <form id="contactForm" name="sentMessage" novalidate="novalidate">
-                            <div class="control-group">
-                                <div class="form-group floating-label-form-group controls mb-0 pb-2">
-                                    <label>Nombre</label>
-                                    <input class="form-control" id="name" type="text" placeholder="Nombre" required="required" data-validation-required-message="Please enter your name." />
-                                    <p class="help-block text-danger"></p>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="form-group floating-label-form-group controls mb-0 pb-2">
-                                    <label>Mail</label>
-                                    <input class="form-control" id="email" type="email" placeholder="Dirección de Email" required="required" data-validation-required-message="Please enter your email address." />
-                                    <p class="help-block text-danger"></p>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="form-group floating-label-form-group controls mb-0 pb-2">
-                                    <label>Teléfono</label>
-                                    <input class="form-control" id="phone" type="tel" placeholder="Teléfono" required="required" data-validation-required-message="Please enter your phone number." />
-                                    <p class="help-block text-danger"></p>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="form-group floating-label-form-group controls mb-0 pb-2">
-                                    <label>Mensaje</label>
-                                    <textarea class="form-control" id="message" rows="5" placeholder="Mensaje" required="required" data-validation-required-message="Please enter a message."></textarea>
-                                    <p class="help-block text-danger"></p>
-                                </div>
-                            </div>
-                            <br />
-                            <div id="success"></div>
-                            <div class="form-group"><button class="btn btn-primary btn-xl" id="sendMessageButton" type="submit">Enviar</button></div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </section>
-       
-        <footer class="footer footer-vino text-center">
-            <div class="container">
-                <div class="row">
-                    
-                    <div class="col-lg-4 mb-5 mb-lg-0">
-                        <h4 class="text-uppercase mb-4">Ubicación</h4> 
-                        <p class="lead mb-0">La Plata <br> <a href="https://goo.gl/maps/zK2eRSN5G3tQrf466">Mapa</a>
-                
-                        </p>
-                    </div>
-                   
-                    <div class="col-lg-4 mb-5 mb-lg-0">
-                        <h4 class="text-uppercase mb-4">Nuestras redes</h4>
-                        <a class="btn btn-outline-light btn-social mx-1" href="#!"><i class="fab fa-fw fa-facebook-f"></i></a> <!--Iconos de redes sociales-->
-                        <a class="btn btn-outline-light btn-social mx-1" href="#!"><i class="fab fa-fw fa-instagram"></i></a>
-                    </div>
-                   
-                     <div class="col-lg-4">
-                        <h4 class="text-uppercase mb-4">Sobre Capri Store</h4>
-                        <p class="lead mb-0">
-                            Tienda de libros online.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </footer>
-       
-        <div class="copyright py-4 text-center text-white">
-            <div class="container"><small>Copyright © Capri Store 2020</small></div>
-        </div>
-       
-        <div class="scroll-to-top d-lg-none position-fixed">
-            <a class="js-scroll-trigger d-block text-center text-white rounded" href="#page-top"><i class="fa fa-chevron-up"></i></a>
-        </div>
-        <!-- Portfolios Modales-->
-        <!-- Portfolio Modal 1-->
-        <div class="portfolio-modal modal fade" id="portfolioModal1" tabindex="-1" role="dialog" aria-labelledby="portfolioModal1Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                    </button>
-                    <div class="modal-body text-center">
-                        <div class="container">
-                            <div class="row justify-content-center">
-                                <div class="col-lg-8">
-                                    <h2 class="portfolio-modal-title text-secondary text-uppercase mb-0" id="portfolioModal1Label">El principito</h2>
-                                    <div class="divider-custom">
-                                        <div class="divider-custom-line"></div>
-                                        <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                                        <div class="divider-custom-line"></div>
-                                    </div>
-                                    <img class="img-fluid rounded mb-5" src="assets\img\portfolio\Portada - El principito.webp" alt="Portada de libro" />
-                                    <p class="mb-5">Fábula mítica y relato filosófico que interroga acerca de la relación del ser humano con su prójimo y con el mundo, 
-                                         El Principito concentra, con maravillosa simplicidad, la constante reflexión de Saint-Exupery sobre la amistad, el amor, la responsabilidad y el sentido de la vida.</p>                          
-                                    <h1>AR$100</h1>
-                                    <button class="btn btn-primary mt-3" onclick="agregarAlCarrito('El Principito', 100)" data-dismiss="modal">
-                                        <i class="fas fa-plus"></i> Agregar al carrito
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Portfolio Modal 2-->
-        <div class="portfolio-modal modal fade" id="portfolioModal2" tabindex="-1" role="dialog" aria-labelledby="portfolioModal2Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                    </button>
-                    <div class="modal-body text-center">
-                        <div class="container">
-                            <div class="row justify-content-center">
-                                <div class="col-lg-8">
-                                    <h2 class="portfolio-modal-title text-secondary text-uppercase mb-0" id="portfolioModal2Label">English Grammar</h2>
-                                    <div class="divider-custom">
-                                        <div class="divider-custom-line"></div>
-                                        <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                                        <div class="divider-custom-line"></div>
-                                    </div>
-                                    <img class="img-fluid rounded mb-5" src="assets img/portfolio/Portada - Cobuild.jpg" alt="Portada" />
-                                    <p class="mb-5">Aprender gramatica del idioma Ingles</p>
-                                    <h1>AR$100</h1>
-                                    <button class="btn btn-primary mt-3" onclick="agregarAlCarrito('English Grammar', 100)" data-dismiss="modal">
-                                        <i class="fas fa-plus"></i> Agregar al carrito
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Portfolio Modal 3-->
-        <div class="portfolio-modal modal fade" id="portfolioModal3" tabindex="-1" role="dialog" aria-labelledby="portfolioModal3Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                    </button>
-                    <div class="modal-body text-center">
-                        <div class="container">
-                            <div class="row justify-content-center">
-                                <div class="col-lg-8">
-                                    <h2 class="portfolio-modal-title text-secondary text-uppercase mb-0" id="portfolioModal3Label">Java A Begginer's Guide</h2>
-                                    <div class="divider-custom">
-                                        <div class="divider-custom-line"></div>
-                                        <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                                        <div class="divider-custom-line"></div>
-                                    </div>
-                                    <img class="img-fluid rounded mb-5" src="assets/img/portfolio/Portada - Java.jpg" alt="Portada" />
-                                    <p class="mb-5">Aprende Java desde cero.</p>
-                                    <h1>AR$100</h1>
-                                    <button class="btn btn-primary mt-3" onclick="agregarAlCarrito('Java A Begginer\'s Guide', 100)" data-dismiss="modal">
-                                        <i class="fas fa-plus"></i> Agregar al carrito
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Portfolio Modal 4-->
-        <div class="portfolio-modal modal fade" id="portfolioModal4" tabindex="-1" role="dialog" aria-labelledby="portfolioModal4Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                    </button>
-                    <div class="modal-body text-center">
-                        <div class="container">
-                            <div class="row justify-content-center">
-                                <div class="col-lg-8">
-                                    <h2 class="portfolio-modal-title text-secondary text-uppercase mb-0" id="portfolioModal4Label">Padre Rico Padre Pobre</h2>
-                                    <div class="divider-custom">
-                                        <div class="divider-custom-line"></div>
-                                        <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                                        <div class="divider-custom-line"></div>
-                                    </div>
-                                    <img class="img-fluid rounded mb-5" src="assets/img/portfolio/Portada - Padre rico.jpg" alt="Portada" />
-                                    <p class="mb-5">Aprende sobre finanzas personales.</p>
-                                    <h1>AR$100</h1>
-                                    <button class="btn btn-primary mt-3" onclick="agregarAlCarrito('Padre Rico Padre Pobre', 100)" data-dismiss="modal">
-                                        <i class="fas fa-plus"></i> Agregar al carrito
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Portfolio Modal 5-->
-        <div class="portfolio-modal modal fade" id="portfolioModal5" tabindex="-1" role="dialog" aria-labelledby="portfolioModal5Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                    </button>
-                    <div class="modal-body text-center">
-                        <div class="container">
-                            <div class="row justify-content-center">
-                                <div class="col-lg-8">
-                                    <h2 class="portfolio-modal-title text-secondary text-uppercase mb-0" id="portfolioModal5Label">Economía básica</h2>
-                                    <div class="divider-custom">
-                                        <div class="divider-custom-line"></div>
-                                        <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                                        <div class="divider-custom-line"></div>
-                                    </div>
-                                    <img class="img-fluid rounded mb-5" src="assets img/portfolio/Portada - Economia basica.jpg" alt="Portada" />
-                                    <p class="mb-5">Aprende economía desde cero</p>
-                                    <h1>AR$100</h1>
-                                    <button class="btn btn-primary mt-3" onclick="agregarAlCarrito('Economía básica', 100)" data-dismiss="modal">
-                                        <i class="fas fa-plus"></i> Agregar al carrito
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <!-- Hero -->
+  <section class="position-relative bg-white">
+    <img alt="Capri Store Hero" class="w-100" style="max-height:500px; object-fit:cover;" height="500" loading="lazy" src="https://storage.googleapis.com/a1aa/image/20cad6ef-cea8-4094-b9b4-a78445a422a2.jpg" width="1200"/>
+    <div class="position-absolute w-100 h-100 d-flex flex-column justify-content-center align-items-center text-center" style="top:0; left:0; background:rgba(107,10,10,0.7);">
+      <h1 class="text-white display-4 font-weight-bold mb-4">
+        Bienvenidos a Capri Store
+      </h1>
+      <p class="text-rosado lead mb-4">
+        Moda femenina con estilo único en vino tinto, blanco y rosado. ¡Descubrí tu look ideal!
+      </p>
+      <a class="btn btn-rosado btn-lg font-weight-bold px-5 py-3" href="#productos">
+        Ver Productos
+      </a>
+    </div>
+  </section>
 
-        <!-- Portfolio Modal 6-->
-        <div class="portfolio-modal modal fade" id="portfolioModal6" tabindex="-1" role="dialog" aria-labelledby="portfolioModal6Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                    </button>
-                    <div class="modal-body text-center">
-                        <div class="container">
-                            <div class="row justify-content-center">
-                                <div class="col-lg-8">
-                                    <h2 class="portfolio-modal-title text-secondary text-uppercase mb-0" id="portfolioModal6Label">Un mundo feliz</h2>
-                                    <div class="divider-custom">
-                                        <div class="divider-custom-line"></div>
-                                        <div class="divider-custom-icon"><span class="capri-divider-dot">.</span></div>
-                                        <div class="divider-custom-line"></div>
-                                    </div>
-                                    <img class="img-fluid rounded mb-5" src="assets img/portfolio/Portada - Un mundo feliz.jpg" alt="Portada" />
-                                    <p class="mb-5">Novela distopica del escritor Aldous Huxley</p>
-                                    <h1>AR$100</h1>
-                                    <button class="btn btn-primary mt-3" onclick="agregarAlCarrito('Un mundo feliz', 100)" data-dismiss="modal">
-                                        <i class="fas fa-plus"></i> Agregar al carrito
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  <!-- Novedades -->
+  <section class="container main-section py-5" id="novedades">
+    <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center">Novedades</h2>
+    <div class="row">
+      <!-- Novedad 1 -->
+      <div class="col-md-4 mb-4">
+        <div class="card card-product border-rosado rounded-lg shadow h-100">
+          <img src="https://storage.googleapis.com/a1aa/image/90036c8b-4e40-49ae-2055-f4ea149fc4a4.jpg" class="card-img-top" alt="Vestido moderno color vino tinto">
+          <div class="card-body">
+            <h5 class="card-title text-vino-tinto font-weight-bold">Vestido Vino Tinto</h5>
+            <p class="card-text text-muted">Vestido elegante y cómodo para cualquier ocasión especial.</p>
+            <span class="text-rosado font-weight-bold h5">$4,500 ARS</span>
+          </div>
+          <div class="card-footer bg-white border-0">
+            <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+              data-nombre="Vestido Vino Tinto"
+              data-precio="4500"
+              data-img="https://storage.googleapis.com/a1aa/image/90036c8b-4e40-49ae-2055-f4ea149fc4a4.jpg"
+              data-desc="Vestido elegante y cómodo para cualquier ocasión especial.">
+              Ver detalle
+            </button>
+          </div>
         </div>
+      </div>
+      <!-- Novedad 2 -->
+      <div class="col-md-4 mb-4">
+        <div class="card card-product border-rosado rounded-lg shadow h-100">
+          <img src="https://storage.googleapis.com/a1aa/image/c7dc7262-85c1-49f5-59b3-58ce9928ab11.jpg" class="card-img-top" alt="Blusa blanca con detalles rosados">
+          <div class="card-body">
+            <h5 class="card-title text-vino-tinto font-weight-bold">Blusa Blanca con Rosado</h5>
+            <p class="card-text text-muted">Blusa fresca y elegante para combinar con jeans o faldas.</p>
+            <span class="text-rosado font-weight-bold h5">$2,200 ARS</span>
+          </div>
+          <div class="card-footer bg-white border-0">
+            <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+              data-nombre="Blusa Blanca con Rosado"
+              data-precio="2200"
+              data-img="https://storage.googleapis.com/a1aa/image/c7dc7262-85c1-49f5-59b3-58ce9928ab11.jpg"
+              data-desc="Blusa fresca y elegante para combinar con jeans o faldas.">
+              Ver detalle
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Novedad 3 -->
+      <div class="col-md-4 mb-4">
+        <div class="card card-product border-rosado rounded-lg shadow h-100">
+          <img src="https://storage.googleapis.com/a1aa/image/7dac6a83-457b-4792-20b5-fe439cc972fe.jpg" class="card-img-top" alt="Camisa rosada de algodón suave">
+          <div class="card-body">
+            <h5 class="card-title text-vino-tinto font-weight-bold">Camisa Rosada</h5>
+            <p class="card-text text-muted">Camisa casual y cómoda para el día a día con estilo.</p>
+            <span class="text-rosado font-weight-bold h5">$2,800 ARS</span>
+          </div>
+          <div class="card-footer bg-white border-0">
+            <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+              data-nombre="Camisa Rosada"
+              data-precio="2800"
+              data-img="https://storage.googleapis.com/a1aa/image/7dac6a83-457b-4792-20b5-fe439cc972fe.jpg"
+              data-desc="Camisa casual y cómoda para el día a día con estilo.">
+              Ver detalle
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- Modal del carrito -->
-        <div class="modal fade" id="cartModal" tabindex="-1" role="dialog" aria-labelledby="cartModalLabel" aria-hidden="true">
-          <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title" id="cartModalLabel">Tu Carrito</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-              <div class="modal-body">
-                <ul id="cart-items" class="list-group mb-3">
-                  <!-- Productos se insertan aquí por JS -->
-                </ul>
-                <h5 class="text-right">Total: AR$<span id="cart-total">0</span></h5>
-              </div>
-              <div class="modal-footer">
-                <button class="btn btn-danger" onclick="vaciarCarrito()">Vaciar Carrito</button>
-                <button class="btn btn-success" id="finalizar-compra-btn">Finalizar Compra</button>
-              </div>
+  <!-- Productos -->
+  <section class="bg-light main-section py-5" id="productos">
+    <div class="container">
+      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center">Productos</h2>
+      <div class="row">
+        <!-- Producto 1 -->
+        <div class="col-md-3 mb-4">
+          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
+            <img src="https://storage.googleapis.com/a1aa/image/061006f8-02ce-4d3d-39f4-1db5d98a16e1.jpg" class="card-img-top" alt="Falda plisada color vino tinto">
+            <div class="card-body">
+              <h5 class="card-title text-vino-tinto font-weight-bold">Falda Plisada Vino Tinto</h5>
+              <p class="card-text text-muted">Falda midi plisada, ideal para combinar con blusas claras.</p>
+              <span class="text-rosado font-weight-bold h5">$3,200 ARS</span>
+            </div>
+            <div class="card-footer bg-white border-0">
+              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+                data-nombre="Falda Plisada Vino Tinto"
+                data-precio="3200"
+                data-img="https://storage.googleapis.com/a1aa/image/061006f8-02ce-4d3d-39f4-1db5d98a16e1.jpg"
+                data-desc="Falda midi plisada, ideal para combinar con blusas claras.">
+                Ver detalle
+              </button>
             </div>
           </div>
         </div>
-
-        <!-- Modal de Checkout usando Bootstrap -->
-        <div class="modal fade" id="checkoutModal" tabindex="-1" role="dialog" aria-labelledby="checkoutModalLabel" aria-hidden="true">
-          <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title" id="checkoutModalLabel">Datos del comprador</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-              <form id="checkoutForm">
-                <div class="modal-body">
-                  <input type="text" id="nombre" class="form-control mb-2" placeholder="Nombre" required>
-                  <input type="text" id="apellido" class="form-control mb-2" placeholder="Apellido" required>
-                  <input type="email" id="email" class="form-control mb-2" placeholder="Correo electrónico" required>
-                  <h3 class="mt-3">Resumen de compra</h3>
-                  <div id="resumenCompra"></div>
-                </div>
-                <div class="modal-footer">
-                  <button type="submit" id="realizarPagoBtn" class="btn btn-success">Realizar Pago</button>
-                </div>
-              </form>
+        <!-- Producto 2 -->
+        <div class="col-md-3 mb-4">
+          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
+            <img src="https://storage.googleapis.com/a1aa/image/61c12ffc-2a99-47d0-a927-8981e6babaf8.jpg" class="card-img-top" alt="Remera blanca de algodón suave">
+            <div class="card-body">
+              <h5 class="card-title text-vino-tinto font-weight-bold">Remera Blanca</h5>
+              <p class="card-text text-muted">Remera básica para uso diario, cómoda y fresca.</p>
+              <span class="text-rosado font-weight-bold h5">$1,500 ARS</span>
+            </div>
+            <div class="card-footer bg-white border-0">
+              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+                data-nombre="Remera Blanca"
+                data-precio="1500"
+                data-img="https://storage.googleapis.com/a1aa/image/61c12ffc-2a99-47d0-a927-8981e6babaf8.jpg"
+                data-desc="Remera básica para uso diario, cómoda y fresca.">
+                Ver detalle
+              </button>
             </div>
           </div>
         </div>
+        <!-- Producto 3 -->
+        <div class="col-md-3 mb-4">
+          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
+            <img src="https://storage.googleapis.com/a1aa/image/e63a240c-6c72-4fff-3620-2833487fbd7d.jpg" class="card-img-top" alt="Pantalón rosado de tela suave">
+            <div class="card-body">
+              <h5 class="card-title text-vino-tinto font-weight-bold">Pantalón Rosado</h5>
+              <p class="card-text text-muted">Pantalón cómodo y elegante para combinar con blusas o remeras.</p>
+              <span class="text-rosado font-weight-bold h5">$3,700 ARS</span>
+            </div>
+            <div class="card-footer bg-white border-0">
+              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+                data-nombre="Pantalón Rosado"
+                data-precio="3700"
+                data-img="https://storage.googleapis.com/a1aa/image/e63a240c-6c72-4fff-3620-2833487fbd7d.jpg"
+                data-desc="Pantalón cómodo y elegante para combinar con blusas o remeras.">
+                Ver detalle
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Producto 4 -->
+        <div class="col-md-3 mb-4">
+          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
+            <img src="https://storage.googleapis.com/a1aa/image/af643308-4126-4aaa-8937-35fa6fcb1349.jpg" class="card-img-top" alt="Chaqueta de invierno color vino tinto">
+            <div class="card-body">
+              <h5 class="card-title text-vino-tinto font-weight-bold">Chaqueta Vino Tinto</h5>
+              <p class="card-text text-muted">Chaqueta abrigada para los días fríos con estilo único.</p>
+              <span class="text-rosado font-weight-bold h5">$6,500 ARS</span>
+            </div>
+            <div class="card-footer bg-white border-0">
+              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+                data-nombre="Chaqueta Vino Tinto"
+                data-precio="6500"
+                data-img="https://storage.googleapis.com/a1aa/image/af643308-4126-4aaa-8937-35fa6fcb1349.jpg"
+                data-desc="Chaqueta abrigada para los días fríos con estilo único.">
+                Ver detalle
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
-       
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
-        
-        <script src="assets/mail/jqBootstrapValidation.js"></script>
-        <script src="assets/mail/contact_me.js"></script>
-        
-        <script src="js/scripts.js"></script>
-    </body>
+  <!-- Nosotros -->
+  <section class="container main-section py-5" id="nosotros">
+    <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center">Nosotros</h2>
+    <div class="row align-items-center">
+      <div class="col-md-6 mb-4 mb-md-0">
+        <img src="https://storage.googleapis.com/a1aa/image/cc32c7bb-aa8f-4273-bbb0-6233c0569dfb.jpg" class="img-fluid rounded-lg shadow-lg" alt="Equipo de Capri Store">
+      </div>
+      <div class="col-md-6 text-secondary">
+        <p>
+          En <span class="font-weight-bold text-vino-tinto">Capri Store</span> nos apasiona la moda femenina que combina elegancia y comodidad. Nuestra misión es ofrecer prendas de alta calidad en tonos vino tinto, blanco y rosado, que reflejen la personalidad y estilo de cada mujer.
+        </p>
+        <p>
+          Desde nuestros inicios, trabajamos con diseñadores locales y materiales seleccionados para garantizar productos duraderos y con diseño único. Creemos que la moda es una forma de expresión y queremos acompañarte en cada momento especial.
+        </p>
+        <p class="font-weight-bold text-vino-tinto">
+          ¡Gracias por elegirnos y ser parte de la familia Capri!
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contacto -->
+  <section class="bg-vino-tinto text-white main-section py-5" id="contacto">
+    <div class="container max-w-3xl">
+      <h2 class="display-5 font-weight-bold mb-5 text-center">Contacto</h2>
+      <form action="#" class="bg-white rounded-lg p-4 text-vino-tinto shadow-lg" method="POST" novalidate>
+        <div class="form-group">
+          <label class="font-weight-bold" for="nombre">Nombre</label>
+          <input class="form-control border-rosado" id="nombre" name="nombre" placeholder="Tu nombre" required type="text"/>
+        </div>
+        <div class="form-group">
+          <label class="font-weight-bold" for="email">Correo Electrónico</label>
+          <input class="form-control border-rosado" id="email" name="email" placeholder="tuemail@ejemplo.com" required type="email"/>
+        </div>
+        <div class="form-group">
+          <label class="font-weight-bold" for="mensaje">Mensaje</label>
+          <textarea class="form-control border-rosado" id="mensaje" name="mensaje" placeholder="Escribe tu mensaje aquí" required rows="4"></textarea>
+        </div>
+        <button class="btn btn-rosado btn-block font-weight-bold py-3" type="submit">
+          Enviar Mensaje
+        </button>
+      </form>
+      <div class="mt-4 text-center">
+        <p><i class="fas fa-phone-alt mr-2"></i>+54 9 11 1234 5678</p>
+        <p><i class="fas fa-envelope mr-2"></i>contacto@capristore.com.ar</p>
+        <p><i class="fas fa-map-marker-alt mr-2"></i>Av. Moda 1234, Buenos Aires, Argentina</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-vino-tinto text-white py-4 mt-auto">
+    <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center text-sm">
+      <p class="mb-2 mb-md-0">© 2024 Capri Store. Todos los derechos reservados.</p>
+      <div>
+        <a aria-label="Facebook" class="text-white mx-2" href="#"><i class="fab fa-facebook-f"></i></a>
+        <a aria-label="Instagram" class="text-white mx-2" href="#"><i class="fab fa-instagram"></i></a>
+        <a aria-label="Twitter" class="text-white mx-2" href="#"><i class="fab fa-twitter"></i></a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Sidebar Carrito -->
+  <div id="cartSidenav" class="cart-sidenav" style="display:none; position:fixed; top:0; right:0; width:400px; max-width:100vw; height:100vh; background:#6b0a0a; color:#fff; z-index:2000; box-shadow:-2px 0 16px rgba(0,0,0,0.2); transition:right 0.3s;">
+    <button onclick="closeCartSidenav()" style="background:none; border:none; color:#fff; font-size:2rem; position:absolute; top:16px; right:16px; z-index:10;">&times;</button>
+    <h3 class="text-center py-4" style="border-bottom:1px solid #e29ca3;">Mi carrito</h3>
+    <div class="cart-sidenav__loader" style="display: none; text-align:center; margin-top:2rem;">
+      <div class="uk-icon uk-spinner">
+        <svg width="30" height="30" viewBox="0 0 30 30"><circle fill="none" stroke="#fff" cx="15" cy="15" r="14"></circle></svg>
+      </div>
+    </div>
+    <ul id="cart-sidenav-items" class="list-group list-group-flush" style="background:none;"></ul>
+    <div class="p-4" style="border-top:1px solid #e29ca3;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="font-weight-bold">Subtotal:</span>
+        <span id="cart-sidenav-total" class="font-weight-bold"></span>
+      </div>
+      <button class="btn btn-rosado btn-block font-weight-bold py-3" onclick="finalizarCompraSidebar()">Finalizar compra</button>
+    </div>
+  </div>
+  <!-- Overlay para cerrar el sidebar -->
+  <div id="cartSidenavOverlay" onclick="closeCartSidenav()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1999;"></div>
+
+  <!-- Scripts -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
+  <script src="js/scripts.js"></script>
+  <script>
+document.addEventListener('DOMContentLoaded', function() {
+  var cartLink = document.getElementById('navbar-cart-link');
+  if (cartLink) {
+    cartLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (typeof openCartSidenav === 'function') {
+        openCartSidenav();
+      }
+    });
+  }
+});
+</script>
+<script>
+$(document).ready(function() {
+  $('.ver-detalle-btn').on('click', function() {
+    const producto = {
+      nombre: $(this).data('nombre'),
+      precio: $(this).data('precio'),
+      img: $(this).data('img'),
+      desc: $(this).data('desc') || ''
+    };
+    localStorage.setItem('productoDetalle', JSON.stringify(producto));
+    window.location.href = 'detalle.html';
+  });
+});
+</script>
+</body>
 </html>

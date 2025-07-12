@@ -1,6 +1,11 @@
 @charset "UTF-8";
 
 :root {
+  --vino-tinto: #6b0a0a;
+  --rosado: #e29ca3;
+  --color-primario: var(--vino-tinto);
+  --color-acento: #fbeee6;
+  --color-hover: #a85753;
   --blue: #007bff;
   --indigo: #6610f2;
   --purple: #6f42c1;
@@ -29,8 +34,6 @@
   --breakpoint-xl: 1200px;
   --font-family-sans-serif: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --color-primario: #801f1c;
-  --color-acento: #fbe8dc;
   --color-texto: #ffffff;
 }
 

@@ -43,10 +43,13 @@
   
     // Collapse Navbar
     var navbarCollapse = function() {
-      if ($("#mainNav").offset().top > 100) {
-        $("#mainNav").addClass("navbar-shrink");
-      } else {
-        $("#mainNav").removeClass("navbar-shrink");
+      var nav = $("#mainNav");
+      if (nav.length && nav.offset()) {
+        if (nav.offset().top > 100) {
+          nav.addClass("navbar-shrink");
+        } else {
+          nav.removeClass("navbar-shrink");
+        }
       }
     };
     // Collapse now if page is not at top
@@ -67,7 +70,7 @@
   
   })(jQuery); // End of use strict
   
-  // ==== CARRITO DE COMPRAS ====
+  // ==== CARRITO DE COMPRAS UNIFICADO (SIDEBAR) ====
 
 // Cargar carrito desde localStorage o iniciar vacío
 let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
@@ -77,79 +80,54 @@ function guardarCarrito() {
   localStorage.setItem("carrito", JSON.stringify(cartItems));
 }
 
-// Agregar un producto al carrito
-function agregarAlCarrito(nombre, precio) {
-  // Verifica si ya existe el producto en el carrito
-  if (cartItems.some(item => item.nombre === nombre)) {
-    mostrarPopup(`El artículo "${nombre}" ya está en el carrito`);
-    return;
+// Agregar un producto al carrito (permite repetidos con cantidad)
+function agregarAlCarrito(nombre, precio, img, cantidad = 1) {
+  // Validar datos antes de agregar
+  if (!nombre || isNaN(Number(precio)) || !img || isNaN(Number(cantidad)) || Number(cantidad) < 1) return;
+  precio = Number(precio);
+  cantidad = Number(cantidad);
+  const idx = cartItems.findIndex(item => item.nombre === nombre && item.img === img);
+  if (idx !== -1) {
+    cartItems[idx].cantidad += cantidad;
+  } else {
+    cartItems.push({ nombre, precio, img, cantidad });
   }
-  cartItems.push({ nombre, precio });
   guardarCarrito();
-  actualizarCarrito();
-  mostrarPopup(`Artículo "${nombre}" agregado al carrito`);
+  actualizarCartSidenav();
+  // Abrir automáticamente el sidebar del carrito después de agregar (sin popup)
+  openCartSidenav();
+}
+
+// Quitar una unidad de un producto del carrito (por índice)
+function quitarDelCarrito(idx) {
+  if (cartItems[idx] && cartItems[idx].cantidad > 1) {
+    // Si hay más de una unidad, reducir la cantidad
+    cartItems[idx].cantidad -= 1;
+  } else {
+    // Si solo hay una unidad, eliminar el producto completo
+    cartItems.splice(idx, 1);
+  }
+  guardarCarrito();
+  actualizarCartSidenav();
 }
 
 // Vaciar el carrito
 function vaciarCarrito() {
   cartItems = [];
   guardarCarrito();
-  actualizarCarrito();
-}
-
-// Actualizar la vista del carrito en el modal
-function actualizarCarrito() {
-  const lista = document.getElementById("cart-items");
-  const total = document.getElementById("cart-total");
-  const contador = document.getElementById("cart-count");
-
-  if (!lista || !total || !contador) return; // seguridad por si aún no está renderizado
-
-  lista.innerHTML = "";
-  let suma = 0;
-
-  cartItems.forEach((item, idx) => {
-    suma += item.precio;
-    const li = document.createElement("li");
-    li.className = "list-group-item d-flex justify-content-between align-items-center";
-    li.innerHTML = `
-      <span>${item.nombre} <span class="text-muted ml-2">AR$${item.precio.toFixed(2)}</span></span>
-      <button class="btn btn-sm btn-danger quitar-item" data-idx="${idx}">Quitar</button>
-    `;
-    lista.appendChild(li);
-  });
-
-  total.textContent = suma.toFixed(2);
-  contador.textContent = cartItems.length;
-
-  // Asignar evento a los botones "Quitar"
-  document.querySelectorAll('.quitar-item').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const idx = parseInt(this.getAttribute('data-idx'));
-      quitarDelCarrito(idx);
-    });
-  });
-}
-
-// Quitar un producto específico del carrito
-function quitarDelCarrito(idx) {
-  cartItems.splice(idx, 1);
-  guardarCarrito();
-  actualizarCarrito();
+  actualizarCartSidenav();
 }
 
 // Mostrar pop-up de agregado al carrito
 function mostrarPopup(mensaje) {
-  // Si ya existe, elimínalo primero
   let popup = document.getElementById("popup-carrito");
   if (popup) popup.remove();
-
   popup = document.createElement("div");
   popup.id = "popup-carrito";
   popup.style.position = "fixed";
   popup.style.top = "30px";
   popup.style.right = "30px";
-  popup.style.background = "#1abc9c";
+  popup.style.background = "#6b0a0a";
   popup.style.color = "#fff";
   popup.style.padding = "16px 24px";
   popup.style.borderRadius = "8px";
@@ -158,143 +136,138 @@ function mostrarPopup(mensaje) {
   popup.style.fontSize = "1.1rem";
   popup.textContent = mensaje;
   document.body.appendChild(popup);
-
-  setTimeout(() => {
-    popup.remove();
-  }, 2000);
+  setTimeout(() => { popup.remove(); }, 2000);
 }
 
-// Vaciar el carrito
-function vaciarCarrito() {
-  cartItems = [];
-  guardarCarrito();
-  actualizarCarrito();
+// Mostrar el sidebar del carrito
+function openCartSidenav() {
+  document.getElementById('cartSidenav').style.display = 'block';
+  document.getElementById('cartSidenavOverlay').style.display = 'block';
+  actualizarCartSidenav();
 }
 
-// Redirigir a Mercado Pago al finalizar compra
-document.addEventListener("DOMContentLoaded", function() {
-  actualizarCarrito();
+// Cerrar el sidebar del carrito
+function closeCartSidenav() {
+  document.getElementById('cartSidenav').style.display = 'none';
+  document.getElementById('cartSidenavOverlay').style.display = 'none';
+}
 
-  const finalizarBtn = document.getElementById('finalizar-compra-btn');
-  if (finalizarBtn) {
-    finalizarBtn.addEventListener('click', function() {
-      if (cartItems.length === 0) {
-        alert("El carrito está vacío.");
-        return;
-      }
-      mostrarResumenCompra();
-      $('#checkoutModal').modal('show');
-    });
-  }
-
-  function mostrarResumenCompra() {
-    let resumen = '';
-    let total = 0;
-    cartItems.forEach(item => {
-      resumen += `<div>${item.nombre} - $${item.precio.toFixed(2)}</div>`;
-      total += item.precio;
-    });
-    resumen += `<hr><strong>Total: $${total.toFixed(2)}</strong>`;
-    document.getElementById('resumenCompra').innerHTML = resumen;
-  }
-
-  // Cambia aquí la URL de tu backend desplegado en Render
-  const BACKEND_URL = 'https://capri-store.onrender.com/confirmar-compra';
-
-  document.getElementById('checkoutForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    // Obtener datos del carrito
-    const items = cartItems.map(item => ({
-      title: item.nombre,
-      quantity: 1,
-      currency_id: "ARS",
-      unit_price: Number(item.precio)
-    }));
-
-    // Guarda el email antes de redirigir a Mercado Pago
-    const email = document.getElementById('email').value;
-    localStorage.setItem('ultimoEmailCompra', email);
-
-    // Llama al backend para crear la preferencia de Mercado Pago.
-    fetch('https://capri-store.onrender.com/crear-preferencia', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.init_point) {
-        window.location.href = data.init_point; // Redirige a Mercado Pago
-      } else {
-        alert('No se pudo iniciar el pago.');
-      }
-    })
-    .catch(() => alert('Error de conexión con el backend'));
-
-  });
-  function mostrarMensajeCorreoExitoso(numeroPedido) {
-    const modal = document.createElement('div');
-    modal.className = 'modal fade show';
-    modal.style.display = 'block';
-    modal.style.background = 'rgba(0,0,0,0.5)';
-    modal.innerHTML = `
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content text-center p-4">
-          <h3 class="text-success mb-3">¡Compra confirmada!</h3>
-          <p>Te enviamos un correo con los detalles de tu compra.</p>
-          <p>Tu número de pedido es: <strong>${numeroPedido}</strong></p>
-          <button class="btn btn-primary mt-2" onclick="location.href='/'">Aceptar</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    document.body.classList.add('modal-open');
-  }
-
-  // Mostrar mensaje al volver de Mercado Pago
-  const urlParams = new URLSearchParams(window.location.search);
-  const status = urlParams.get('status');
-  const email = localStorage.getItem('ultimoEmailCompra'); // Guarda el email antes de redirigir a MP
-
-  if (status === 'approved') {
-    mostrarMensajeCompra('¡Gracias por tu compra!', `Te enviamos un email a <b>${email || 'tu correo'}</b> con los detalles para retirar el producto en nuestro local.`);
-    // Limpia el carrito si quieres:
-    cartItems = [];
+// Actualizar el contenido del sidebar del carrito
+function actualizarCartSidenav() {
+  const lista = document.getElementById("cart-sidenav-items");
+  const total = document.getElementById("cart-sidenav-total");
+  const cartCount = document.getElementById("cart-count");
+  if (!lista || !total) return;
+  lista.innerHTML = "";
+  let suma = 0;
+  let cantidadTotal = 0;
+  if (!Array.isArray(cartItems)) cartItems = [];
+  // Filtrar productos inválidos
+  cartItems = cartItems.filter(item => item && item.nombre && !isNaN(Number(item.precio)) && item.img && !isNaN(Number(item.cantidad)) && Number(item.cantidad) > 0);
+  if (cartItems.length === 0) {
+    lista.innerHTML = `<li class='text-center py-5 text-rosado'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
+    total.textContent = "$0.00 ARS";
+    if (cartCount) cartCount.textContent = "0";
     guardarCarrito();
-    actualizarCarrito();
-  } else if (status === 'failure') {
-    mostrarMensajeCompra('Pago rechazado', 'Tu pago no pudo ser procesado. Intenta nuevamente o usa otro medio de pago.');
-  } else if (status === 'pending') {
-    mostrarMensajeCompra('Pago pendiente', 'Tu pago está pendiente. Te avisaremos por email cuando se acredite.');
+    return;
   }
-
-  function mostrarMensajeCompra(titulo, mensaje) {
-    // Elimina cualquier modal anterior
-    const anterior = document.getElementById('custom-modal-overlay');
-    if (anterior) anterior.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'custom-modal-overlay';
-    overlay.className = 'custom-modal-overlay';
-    overlay.innerHTML = `
-      <div class="custom-modal-content text-center">
-        <h3 class="mb-3">${titulo}</h3>
-        <p>${mensaje}</p>
-        <button class="btn btn-primary mt-2" id="cerrar-modal-compra">Aceptar</button>
-      </div>
+  cartItems.forEach((item, idx) => {
+    const precioNum = Number(item.precio);
+    const cantidadNum = Number(item.cantidad);
+    if (isNaN(precioNum) || isNaN(cantidadNum)) return;
+    suma += precioNum * cantidadNum;
+    cantidadTotal += cantidadNum;
+    const buttonText = cantidadNum > 1 ? "Quitar 1" : "Quitar";
+    lista.innerHTML += `
+      <li class="list-group-item d-flex justify-content-between align-items-center" style="border:none; background:none;">
+        <div class="d-flex align-items-center">
+          <img src="${item.img || ''}" alt="${item.nombre}" style="width:48px; height:48px; object-fit:cover; border-radius:8px; margin-right:12px;">
+          <div>
+            <div class="font-weight-bold">${item.nombre}</div>
+            <div class="text-rosado">AR$${precioNum.toFixed(2)} x${cantidadNum}</div>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-danger quitar-item" data-idx="${idx}">${buttonText}</button>
+      </li>
     `;
-    document.body.appendChild(overlay);
+  });
+  total.textContent = `$${suma.toFixed(2)} ARS`;
+  if (cartCount) cartCount.textContent = cantidadTotal;
+  // Asignar evento a los botones "Quitar"
+  lista.querySelectorAll('.quitar-item').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const idx = parseInt(this.getAttribute('data-idx'));
+      quitarDelCarrito(idx);
+    });
+  });
+  guardarCarrito();
+}
 
-    document.getElementById('cerrar-modal-compra').onclick = function() {
-      overlay.remove();
-      document.body.classList.remove('modal-open');
-    };
-    document.body.classList.add('modal-open');
+// Finalizar compra - redirigir a checkout
+function finalizarCompraSidebar() {
+  if (cartItems.length === 0) {
+    mostrarPopup("El carrito está vacío.");
+    return;
   }
-});
+  // Redirigir a la página de checkout
+  window.location.href = 'checkout.html';
+}
 
-// Antes de redirigir a Mercado Pago
-localStorage.setItem('ultimoEmailCompra', document.getElementById('email').value);
+// === VALIDACIÓN DE BOTÓN AGREGAR AL CARRITO EN DETALLE ===
+document.addEventListener('DOMContentLoaded', function() {
+  // Si existen los elementos de detalle, aplica la validación
+  const btnAgregar = document.getElementById('btnAgregarCarrito');
+  const selectTalle = document.getElementById('size');
+  const inputCantidad = document.getElementById('quantity');
+  const productForm = document.getElementById('productForm');
+  if (btnAgregar && selectTalle && inputCantidad && productForm) {
+    // Set defaults and enable button for detalle.html
+    selectTalle.value = "M";
+    inputCantidad.value = 1;
+    btnAgregar.disabled = false;
+    btnAgregar.classList.remove('bg-rosado', 'opacity-50');
+    btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+    function validarFormulario() {
+      const talleValido = selectTalle.value !== "";
+      const cantidadValida = inputCantidad.value && Number(inputCantidad.value) > 0;
+      if (talleValido && cantidadValida) {
+        btnAgregar.disabled = false;
+        btnAgregar.classList.remove('bg-rosado', 'opacity-50');
+        btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+      } else {
+        btnAgregar.disabled = true;
+        btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
+        btnAgregar.classList.add('bg-rosado', 'opacity-50');
+      }
+    }
+    selectTalle.addEventListener('change', validarFormulario);
+    inputCantidad.addEventListener('input', validarFormulario);
+    validarFormulario();
+    // Agregar producto al carrito desde detalle
+    productForm.addEventListener("submit", function(e) {
+      e.preventDefault();
+      const producto = JSON.parse(localStorage.getItem('productoDetalle'));
+      const size = selectTalle.value;
+      const quantity = parseInt(inputCantidad.value);
+      if (!producto || !size || !quantity || quantity < 1) return;
+      agregarAlCarrito(
+        `${producto.nombre} (Talle: ${size})`,
+        Number(producto.precio),
+        producto.img,
+        quantity
+      );
+      mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${size}) x${quantity}`);
+      productForm.reset();
+      selectTalle.value = "M";
+      inputCantidad.value = 1;
+      btnAgregar.disabled = false;
+      btnAgregar.classList.remove('bg-rosado', 'opacity-50');
+      btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+      validarFormulario();
+    });
+  }
+  // Actualiza el sidebar al cargar la página
+  actualizarCartSidenav();
+});
 
 
