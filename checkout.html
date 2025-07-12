@@ -520,7 +520,7 @@
     }
 
     // Iniciar proceso de pago
-    function iniciarProcesoPago() {
+    async function iniciarProcesoPago() {
       const form = document.getElementById('checkout-form');
       
       // Validar formulario
@@ -579,64 +579,52 @@
       pagarBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
       pagarBtn.disabled = true;
 
-      // Integración con Mercado Pago usando SDK frontend
+      // Integración REAL con Mercado Pago a través del backend
       try {
-        // Crear preferencia directamente con MercadoPago SDK
-        const preference = {
-          items: items.map(item => ({
-            title: item.nombre,
-            unit_price: parseFloat(item.precio),
-            quantity: parseInt(item.cantidad),
-            currency_id: 'ARS'
-          })),
-          payer: {
-            name: checkoutData.nombre,
-            surname: checkoutData.apellido || '',
-            email: checkoutData.email,
-            phone: {
-              number: checkoutData.telefono || ''
-            },
-            address: {
-              street_name: checkoutData.direccion || '',
-              zip_code: checkoutData.codigoPostal || ''
-            }
-          },
-          back_urls: {
-            success: window.location.origin + '/success.html',
-            failure: window.location.origin + '/failure.html',
-            pending: window.location.origin + '/pending.html'
-          },
-          auto_return: 'approved',
-          payment_methods: {
-            excluded_payment_types: [],
-            installments: 12
-          },
-          shipments: {
-            cost: parseFloat(checkoutData.costoEnvio || 0),
-            mode: 'not_specified'
-          }
-        };
+        console.log('Enviando datos a backend:', { items });
 
-        // Guardar datos del checkout para después del pago
-        localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
-        
-        // Por ahora, simulamos el proceso ya que necesitas configurar las credenciales reales de MP
-        alert('Funcionalidad de pago configurada. Redirigiría a Mercado Pago con los siguientes datos:\n\n' + 
-              'Items: ' + items.length + ' productos\n' + 
-              'Total: $' + checkoutData.total + '\n' + 
-              'Cliente: ' + checkoutData.nombre + '\n' + 
-              'Email: ' + checkoutData.email + '\n\n' + 
-              'Para activar el pago real, configura las credenciales de Mercado Pago en el código.');
-        
-        // Restaurar botón después de la demostración
-        setTimeout(() => {
-          pagarBtn.innerHTML = '<i class="fas fa-credit-card mr-2"></i>Iniciar Pago';
-          pagarBtn.disabled = false;
-        }, 2000);
+        // Llamada real al backend para crear la preferencia de Mercado Pago
+        const response = await fetch('/crear-preferencia', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ items })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error HTTP: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Respuesta del backend:', data);
+
+        if (data.init_point) {
+          // Guardar datos del checkout para después del pago
+          localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+          
+          // Redirigir a Mercado Pago usando el init_point recibido
+          console.log('Redirigiendo a Mercado Pago:', data.init_point);
+          window.location.href = data.init_point;
+        } else {
+          throw new Error('No se recibió el init_point de Mercado Pago');
+        }
 
       } catch (error) {
-        console.error('Error:', error);
-        alert('Error al procesar el pago. Por favor intenta nuevamente.');
+        console.error('Error al crear preferencia:', error);
+        
+        // Si falla la llamada al backend, mostrar error específico
+        let errorMessage = 'Error al procesar el pago. ';
+        
+        if (error.message.includes('fetch')) {
+          errorMessage += 'No se pudo conectar con el servidor. Verifica que el backend esté ejecutándose.';
+        } else if (error.message.includes('HTTP')) {
+          errorMessage += 'Error en el servidor. Por favor intenta nuevamente.';
+        } else {
+          errorMessage += error.message;
+        }
+        
+        alert(errorMessage);
         
         // Restaurar botón
         pagarBtn.innerHTML = '<i class="fas fa-credit-card mr-2"></i>Iniciar Pago';

@@ -2,18 +2,23 @@ const express = require('express');
 const mercadopago = require('mercadopago');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 const app = express();
+
+// Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar']
+  origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar', 'http://localhost:3000', 'http://localhost:8080']
 }));
 
-// Configura tu access_token de Mercado Pago (SDK v3)
-const mp = new mercadopago.MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST
+// Servir archivos estáticos desde la carpeta raíz del proyecto
+app.use(express.static(path.join(__dirname, '..')));
+
+// Configura tu access_token de Mercado Pago (SDK v2)
+mercadopago.configure({
+  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569'
 });
-const { Preference } = mercadopago;
 
 app.post('/crear-preferencia', async (req, res) => {
   try {
@@ -32,6 +37,11 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     }
 
+    // Determinar URL base según el entorno
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://www.capristorezte.com.ar' 
+      : 'http://localhost:3001';
+
     const preference = {
       items: items.map(item => ({
         title: item.title,
@@ -40,19 +50,18 @@ app.post('/crear-preferencia', async (req, res) => {
         unit_price: item.unit_price
       })),
       back_urls: {
-        success: "https://www.capristorezte.com.ar/?status=approved",
-        failure: "https://www.capristorezte.com.ar/?status=failure",
-        pending: "https://www.capristorezte.com.ar/?status=pending"
+        success: `${baseUrl}/success.html?status=approved`,
+        failure: `${baseUrl}/failure.html?status=failure`,
+        pending: `${baseUrl}/pending.html?status=pending`
       },
       auto_return: "approved"
     };
 
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
 
-    // SDK v3: Preference
-    const preferenceClient = new Preference(mp);
-    const response = await preferenceClient.create({ body: preference });
-    res.json({ init_point: response.init_point || response.body.init_point });
+    // SDK v2: crear preferencia
+    const response = await mercadopago.preferences.create(preference);
+    res.json({ init_point: response.body.init_point });
   } catch (error) {
     console.error('Error en /crear-preferencia:', error);
     res.status(500).json({ error: error.message });
@@ -112,4 +121,5 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
   }
 });
 
-app.listen(3001, () => console.log('Backend escuchando en puerto 3001'));
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Backend escuchando en puerto ${PORT}`));

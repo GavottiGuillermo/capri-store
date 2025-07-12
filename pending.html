@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="Pago pendiente - Capri Store" />
+    <meta name="author" content="" />
+    <title>Pago pendiente - Capri Store</title>
+    <!-- Favicon-->
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome-->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+    <!-- Custom CSS -->
+    <link href="css/styles.css" rel="stylesheet" />
+</head>
+
+<body>
+    <!-- Navigation-->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container px-4 px-lg-5">
+            <a class="navbar-brand fw-bold" href="index.html">Capri Store</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Inicio</a></li>
+                </ul>
+                <form class="d-flex">
+                    <button class="btn btn-outline-dark" type="button" onclick="toggleSidebar()">
+                        <i class="bi-cart-fill me-1"></i>
+                        Carrito
+                        <span class="badge bg-dark text-white ms-1 rounded-pill" id="cart-count">0</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header-->
+    <header class="bg-warning py-5">
+        <div class="container px-4 px-lg-5 my-5">
+            <div class="text-center text-dark">
+                <h1 class="display-4 fw-bolder">
+                    <i class="fas fa-clock me-3"></i>Pago Pendiente
+                </h1>
+                <p class="lead fw-normal mb-0">Tu pago está siendo procesado</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Pending content -->
+    <section class="py-5">
+        <div class="container px-4 px-lg-5">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card shadow">
+                        <div class="card-body text-center p-5">
+                            <div class="mb-4">
+                                <i class="fas fa-clock text-warning" style="font-size: 5rem;"></i>
+                            </div>
+                            
+                            <h2 class="card-title text-warning mb-4">Pago en proceso</h2>
+                            
+                            <div class="alert alert-warning" role="alert">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-info-circle me-2"></i>¿Qué significa esto?
+                                </h5>
+                                <p class="mb-0">Tu pago está siendo verificado. Recibirás una confirmación por email cuando se complete el proceso.</p>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-envelope text-primary me-3" style="font-size: 2rem;"></i>
+                                        <div>
+                                            <h6 class="mb-1">Te notificaremos</h6>
+                                            <small class="text-muted">Recibirás un email con el estado</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-headset text-primary me-3" style="font-size: 2rem;"></i>
+                                        <div>
+                                            <h6 class="mb-1">¿Dudas?</h6>
+                                            <small class="text-muted">Contáctanos para más información</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <a href="index.html" class="btn btn-primary btn-lg me-3">
+                                    <i class="fas fa-home me-2"></i>Volver al inicio
+                                </a>
+                                <a href="index.html#productos" class="btn btn-outline-primary btn-lg">
+                                    <i class="fas fa-shopping-bag me-2"></i>Seguir comprando
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer-->
+    <footer class="py-5 bg-dark">
+        <div class="container">
+            <p class="m-0 text-center text-white">Copyright &copy; Capri Store 2024</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Scripts -->
+    <script src="js/scripts.js"></script>
+    
+    <script>
+        // Obtener parámetros de la URL para información adicional
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentId = urlParams.get('payment_id');
+        const status = urlParams.get('status');
+        
+        console.log('Payment pending - ID:', paymentId);
+        console.log('Status:', status);
+        
+        // Limpiar carrito ya que el pago está en proceso
+        localStorage.removeItem('carrito');
+        updateCartCount();
+    </script>
+</body>
+
+</html>
