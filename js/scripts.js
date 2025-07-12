@@ -118,38 +118,47 @@ function vaciarCarrito() {
   actualizarCartSidenav();
 }
 
-// Mostrar pop-up de agregado al carrito
+// Mostrar pop-up de agregado al carrito con animación mejorada
 function mostrarPopup(mensaje) {
-  let popup = document.getElementById("popup-carrito");
-  if (popup) popup.remove();
-  popup = document.createElement("div");
-  popup.id = "popup-carrito";
-  popup.style.position = "fixed";
-  popup.style.top = "30px";
-  popup.style.right = "30px";
-  popup.style.background = "#6b0a0a";
-  popup.style.color = "#fff";
-  popup.style.padding = "16px 24px";
-  popup.style.borderRadius = "8px";
-  popup.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
-  popup.style.zIndex = "9999";
-  popup.style.fontSize = "1.1rem";
-  popup.textContent = mensaje;
-  document.body.appendChild(popup);
-  setTimeout(() => { popup.remove(); }, 2000);
+  mostrarPopupAnimado(mensaje);
 }
 
-// Mostrar el sidebar del carrito
+// Mostrar el sidebar del carrito con animación
 function openCartSidenav() {
-  document.getElementById('cartSidenav').style.display = 'block';
-  document.getElementById('cartSidenavOverlay').style.display = 'block';
+  const cartSidenav = document.getElementById('cartSidenav');
+  const overlay = document.getElementById('cartSidenavOverlay');
+  
+  // Mostrar elementos
+  cartSidenav.style.display = 'block';
+  overlay.style.display = 'block';
+  
+  // Forzar reflow para que las transiciones funcionen
+  cartSidenav.offsetHeight;
+  overlay.offsetHeight;
+  
+  // Activar animaciones
+  setTimeout(() => {
+    cartSidenav.classList.add('open');
+    overlay.classList.add('show');
+  }, 10);
+  
   actualizarCartSidenav();
 }
 
-// Cerrar el sidebar del carrito
+// Cerrar el sidebar del carrito con animación
 function closeCartSidenav() {
-  document.getElementById('cartSidenav').style.display = 'none';
-  document.getElementById('cartSidenavOverlay').style.display = 'none';
+  const cartSidenav = document.getElementById('cartSidenav');
+  const overlay = document.getElementById('cartSidenavOverlay');
+  
+  // Remover clases de animación
+  cartSidenav.classList.remove('open');
+  overlay.classList.remove('show');
+  
+  // Ocultar después de la animación
+  setTimeout(() => {
+    cartSidenav.style.display = 'none';
+    overlay.style.display = 'none';
+  }, 400); // Coincide con la duración de la transición CSS
 }
 
 // Actualizar el contenido del sidebar del carrito
@@ -179,7 +188,7 @@ function actualizarCartSidenav() {
     cantidadTotal += cantidadNum;
     const buttonText = cantidadNum > 1 ? "Quitar 1" : "Quitar";
     lista.innerHTML += `
-      <li class="list-group-item d-flex justify-content-between align-items-center" style="border:none; background:none;">
+      <li class="list-group-item d-flex justify-content-between align-items-center cart-item" style="border:none; background:none; animation-delay: ${idx * 0.1}s;">
         <div class="d-flex align-items-center">
           <img src="${item.img || ''}" alt="${item.nombre}" style="width:48px; height:48px; object-fit:cover; border-radius:8px; margin-right:12px;">
           <div>
@@ -192,7 +201,9 @@ function actualizarCartSidenav() {
     `;
   });
   total.textContent = `$${suma.toFixed(2)} ARS`;
-  if (cartCount) cartCount.textContent = cantidadTotal;
+  
+  // Actualizar contador con animación mejorada
+  updateCartCounterAnimated(cantidadTotal);
   // Asignar evento a los botones "Quitar"
   lista.querySelectorAll('.quitar-item').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -269,5 +280,249 @@ document.addEventListener('DOMContentLoaded', function() {
   // Actualiza el sidebar al cargar la página
   actualizarCartSidenav();
 });
+
+// === ANIMACIONES DE SCROLL Y APARICIÓN DE ELEMENTOS ===
+
+// Función para detectar si un elemento está visible en el viewport
+function isElementInViewport(el, threshold = 0.1) {
+  const rect = el.getBoundingClientRect();
+  const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+  return (
+    rect.top <= windowHeight * (1 - threshold) &&
+    rect.bottom >= windowHeight * threshold
+  );
+}
+
+// Función para animar elementos al hacer scroll
+function animateOnScroll() {
+  // Elementos que aparecen con fade-in
+  const fadeElements = document.querySelectorAll('.fade-in, .section-title, .progressive-reveal, .card-animate, .checkout-section');
+  
+  fadeElements.forEach(element => {
+    if (isElementInViewport(element, 0.15)) {
+      element.classList.add('visible');
+    }
+  });
+
+  // Elementos con fade-in desde la izquierda
+  const fadeLeftElements = document.querySelectorAll('.fade-in-left');
+  fadeLeftElements.forEach(element => {
+    if (isElementInViewport(element, 0.15)) {
+      element.classList.add('visible');
+    }
+  });
+
+  // Elementos con fade-in desde la derecha
+  const fadeRightElements = document.querySelectorAll('.fade-in-right');
+  fadeRightElements.forEach(element => {
+    if (isElementInViewport(element, 0.15)) {
+      element.classList.add('visible');
+    }
+  });
+}
+
+// Función para agregar efecto parallax suave
+function parallaxEffect() {
+  const scrolled = window.pageYOffset;
+  const parallaxElements = document.querySelectorAll('.parallax-element');
+  
+  parallaxElements.forEach(element => {
+    const rate = scrolled * -0.5;
+    element.style.transform = `translateY(${rate}px)`;
+  });
+}
+
+// Throttle function para optimizar el rendimiento
+function throttle(func, limit) {
+  let inThrottle;
+  return function() {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  }
+}
+
+// Event listeners optimizados
+const throttledAnimateOnScroll = throttle(animateOnScroll, 100);
+const throttledParallaxEffect = throttle(parallaxEffect, 16);
+
+// Inicializar animaciones cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+  // Ejecutar animaciones iniciales
+  animateOnScroll();
+  
+  // Agregar clases de animación a elementos específicos
+  setupAnimationClasses();
+  
+  // Configurar Intersection Observer para mejor rendimiento
+  setupIntersectionObserver();
+});
+
+// Función para configurar clases de animación automáticamente
+function setupAnimationClasses() {
+  // Agregar clase fade-in a todas las cards de productos
+  const productCards = document.querySelectorAll('.card-product');
+  productCards.forEach((card, index) => {
+    card.classList.add('progressive-reveal');
+    if (index % 2 === 0) {
+      card.classList.add('fade-in-left');
+    } else {
+      card.classList.add('fade-in-right');
+    }
+  });
+
+  // Agregar clase a títulos de sección
+  const sectionTitles = document.querySelectorAll('h1, h2.display-4, h2.display-5');
+  sectionTitles.forEach(title => {
+    title.classList.add('section-title');
+  });
+
+  // Agregar animación al hero content
+  const heroContent = document.querySelector('.position-absolute.w-100.h-100');
+  if (heroContent) {
+    heroContent.classList.add('hero-content');
+  }
+
+  // Agregar micro-bounces a botones importantes
+  const importantButtons = document.querySelectorAll('.btn-rosado, .btn-vino-tinto');
+  importantButtons.forEach(btn => {
+    btn.classList.add('micro-bounce');
+  });
+}
+
+// Configurar Intersection Observer para mejor rendimiento
+function setupIntersectionObserver() {
+  if ('IntersectionObserver' in window) {
+    const observerOptions = {
+      root: null,
+      rootMargin: '-10% 0px -10% 0px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          // Dejar de observar el elemento una vez que sea visible
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observar todos los elementos animables
+    const animatableElements = document.querySelectorAll(
+      '.fade-in, .fade-in-left, .fade-in-right, .section-title, .progressive-reveal, .card-animate, .checkout-section'
+    );
+    
+    animatableElements.forEach(el => {
+      observer.observe(el);
+    });
+  } else {
+    // Fallback para navegadores sin soporte de Intersection Observer
+    window.addEventListener('scroll', throttledAnimateOnScroll);
+    window.addEventListener('scroll', throttledParallaxEffect);
+  }
+}
+
+// Función para animar la aparición del popup con más suavidad
+function mostrarPopupAnimado(mensaje) {
+  let popup = document.getElementById("popup-carrito");
+  if (popup) popup.remove();
+  
+  popup = document.createElement("div");
+  popup.id = "popup-carrito";
+  popup.className = "animate-scale-in";
+  popup.style.cssText = `
+    position: fixed;
+    top: 30px;
+    right: 30px;
+    background: #6b0a0a;
+    color: #fff;
+    padding: 16px 24px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    z-index: 9999;
+    font-size: 1.1rem;
+    opacity: 0;
+    transform: scale(0.8) translateY(-10px);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  `;
+  
+  popup.textContent = mensaje;
+  document.body.appendChild(popup);
+  
+  // Animar aparición
+  requestAnimationFrame(() => {
+    popup.style.opacity = '1';
+    popup.style.transform = 'scale(1) translateY(0)';
+  });
+  
+  // Animar desaparición
+  setTimeout(() => {
+    popup.style.opacity = '0';
+    popup.style.transform = 'scale(0.8) translateY(-10px)';
+    setTimeout(() => popup.remove(), 400);
+  }, 2500);
+}
+
+// === MEJORAS ESPECÍFICAS PARA EL CARRITO ===
+
+// Función mejorada para actualizar contador del carrito con animación
+function updateCartCounterAnimated(newCount) {
+  const cartCount = document.getElementById("cart-count");
+  if (!cartCount) return;
+  
+  const oldCount = cartCount.textContent;
+  
+  if (oldCount !== newCount.toString()) {
+    // Animar salida del número anterior
+    cartCount.style.transform = 'scale(0.8)';
+    cartCount.style.opacity = '0.5';
+    
+    setTimeout(() => {
+      cartCount.textContent = newCount;
+      cartCount.style.transform = 'scale(1.2)';
+      cartCount.style.opacity = '1';
+      cartCount.classList.add('bounce');
+      
+      setTimeout(() => {
+        cartCount.style.transform = 'scale(1)';
+        cartCount.classList.remove('bounce');
+      }, 300);
+    }, 150);
+  }
+}
+
+// Smooth scroll mejorado para navegación
+function smoothScrollTo(target, duration = 1000) {
+  const targetElement = document.querySelector(target);
+  if (!targetElement) return;
+  
+  const targetPosition = targetElement.offsetTop - 80; // Offset para navbar
+  const startPosition = window.pageYOffset;
+  const distance = targetPosition - startPosition;
+  let startTime = null;
+  
+  function animation(currentTime) {
+    if (startTime === null) startTime = currentTime;
+    const timeElapsed = currentTime - startTime;
+    const run = easeInOutQuart(timeElapsed, startPosition, distance, duration);
+    window.scrollTo(0, run);
+    if (timeElapsed < duration) requestAnimationFrame(animation);
+  }
+  
+  function easeInOutQuart(t, b, c, d) {
+    t /= d/2;
+    if (t < 1) return c/2*t*t*t*t + b;
+    t -= 2;
+    return -c/2 * (t*t*t*t - 2) + b;
+  }
+  
+  requestAnimationFrame(animation);
+}
 
 

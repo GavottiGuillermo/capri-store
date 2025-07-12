@@ -41,10 +41,10 @@
       </button>
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ml-auto font-weight-bold">
-          <li class="nav-item"><a class="nav-link" href="#novedades">Novedades</a></li>
-          <li class="nav-item"><a class="nav-link" href="#productos">Productos</a></li>
-          <li class="nav-item"><a class="nav-link" href="#nosotros">Nosotros</a></li>
-          <li class="nav-item"><a class="nav-link" href="#contacto">Contacto</a></li>
+          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#novedades">Novedades</a></li>
+          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#productos">Productos</a></li>
+          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#nosotros">Nosotros</a></li>
+          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#contacto">Contacto</a></li>
           <li class="nav-item">
             <a class="nav-link position-relative d-flex align-items-center justify-content-center" href="#" id="navbar-cart-link">
               <i class="fas fa-shopping-cart navbar-cart-icon"></i>
@@ -59,26 +59,26 @@
   <!-- Hero -->
   <section class="position-relative bg-white">
     <img alt="Capri Store Hero" class="w-100" style="max-height:500px; object-fit:cover;" height="500" loading="lazy" src="https://storage.googleapis.com/a1aa/image/20cad6ef-cea8-4094-b9b4-a78445a422a2.jpg" width="1200"/>
-    <div class="position-absolute w-100 h-100 d-flex flex-column justify-content-center align-items-center text-center" style="top:0; left:0; background:rgba(107,10,10,0.7);">
+    <div class="position-absolute w-100 h-100 d-flex flex-column justify-content-center align-items-center text-center hero-content" style="top:0; left:0; background:rgba(107,10,10,0.7);">
       <h1 class="text-white display-4 font-weight-bold mb-4">
         Bienvenidos a Capri Store
       </h1>
       <p class="text-rosado lead mb-4">
         Moda femenina con estilo único en vino tinto, blanco y rosado. ¡Descubrí tu look ideal!
       </p>
-      <a class="btn btn-rosado btn-lg font-weight-bold px-5 py-3" href="#productos">
+      <a class="btn btn-rosado btn-lg font-weight-bold px-5 py-3 micro-bounce glow-on-hover js-scroll-trigger" href="#productos">
         Ver Productos
       </a>
     </div>
   </section>
 
   <!-- Novedades -->
-  <section class="container main-section py-5" id="novedades">
-    <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center">Novedades</h2>
+  <section class="container main-section py-5 fade-in" id="novedades">
+    <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title">Novedades</h2>
     <div class="row">
       <!-- Novedad 1 -->
       <div class="col-md-4 mb-4">
-        <div class="card card-product border-rosado rounded-lg shadow h-100">
+        <div class="card card-product border-rosado rounded-lg shadow h-100 progressive-reveal animate-delay-1">
           <img src="https://storage.googleapis.com/a1aa/image/90036c8b-4e40-49ae-2055-f4ea149fc4a4.jpg" class="card-img-top" alt="Vestido moderno color vino tinto">
           <div class="card-body">
             <h5 class="card-title text-vino-tinto font-weight-bold">Vestido Vino Tinto</h5>
@@ -86,7 +86,7 @@
             <span class="text-rosado font-weight-bold h5">$4,500 ARS</span>
           </div>
           <div class="card-footer bg-white border-0">
-            <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+            <button class="btn btn-vino-tinto btn-block ver-detalle-btn micro-bounce"
               data-nombre="Vestido Vino Tinto"
               data-precio="4500"
               data-img="https://storage.googleapis.com/a1aa/image/90036c8b-4e40-49ae-2055-f4ea149fc4a4.jpg"
@@ -98,7 +98,7 @@
       </div>
       <!-- Novedad 2 -->
       <div class="col-md-4 mb-4">
-        <div class="card card-product border-rosado rounded-lg shadow h-100">
+        <div class="card card-product border-rosado rounded-lg shadow h-100 progressive-reveal animate-delay-2">
           <img src="https://storage.googleapis.com/a1aa/image/c7dc7262-85c1-49f5-59b3-58ce9928ab11.jpg" class="card-img-top" alt="Blusa blanca con detalles rosados">
           <div class="card-body">
             <h5 class="card-title text-vino-tinto font-weight-bold">Blusa Blanca con Rosado</h5>
@@ -106,7 +106,7 @@
             <span class="text-rosado font-weight-bold h5">$2,200 ARS</span>
           </div>
           <div class="card-footer bg-white border-0">
-            <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+            <button class="btn btn-vino-tinto btn-block ver-detalle-btn micro-bounce"
               data-nombre="Blusa Blanca con Rosado"
               data-precio="2200"
               data-img="https://storage.googleapis.com/a1aa/image/c7dc7262-85c1-49f5-59b3-58ce9928ab11.jpg"
@@ -118,7 +118,7 @@
       </div>
       <!-- Novedad 3 -->
       <div class="col-md-4 mb-4">
-        <div class="card card-product border-rosado rounded-lg shadow h-100">
+        <div class="card card-product border-rosado rounded-lg shadow h-100 progressive-reveal animate-delay-3">
           <img src="https://storage.googleapis.com/a1aa/image/7dac6a83-457b-4792-20b5-fe439cc972fe.jpg" class="card-img-top" alt="Camisa rosada de algodón suave">
           <div class="card-body">
             <h5 class="card-title text-vino-tinto font-weight-bold">Camisa Rosada</h5>
@@ -126,7 +126,7 @@
             <span class="text-rosado font-weight-bold h5">$2,800 ARS</span>
           </div>
           <div class="card-footer bg-white border-0">
-            <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
+            <button class="btn btn-vino-tinto btn-block ver-detalle-btn micro-bounce"
               data-nombre="Camisa Rosada"
               data-precio="2800"
               data-img="https://storage.googleapis.com/a1aa/image/7dac6a83-457b-4792-20b5-fe439cc972fe.jpg"
@@ -140,13 +140,13 @@
   </section>
 
   <!-- Productos -->
-  <section class="bg-light main-section py-5" id="productos">
+  <section class="bg-light main-section py-5 fade-in" id="productos">
     <div class="container">
-      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center">Productos</h2>
+      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title">Productos</h2>
       <div class="row">
         <!-- Producto 1 -->
         <div class="col-md-3 mb-4">
-          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
+          <div class="card card-product border-vino-tinto rounded-lg shadow h-100 progressive-reveal animate-delay-1">
             <img src="https://storage.googleapis.com/a1aa/image/061006f8-02ce-4d3d-39f4-1db5d98a16e1.jpg" class="card-img-top" alt="Falda plisada color vino tinto">
             <div class="card-body">
               <h5 class="card-title text-vino-tinto font-weight-bold">Falda Plisada Vino Tinto</h5>
@@ -342,5 +342,51 @@ $(document).ready(function() {
   });
 });
 </script>
+  <!-- Script para inicializar animaciones -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Inicializar animaciones de aparición
+      setTimeout(() => {
+        const elements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right, .section-title, .progressive-reveal');
+        elements.forEach((el, index) => {
+          setTimeout(() => {
+            if (typeof setupAnimationClasses === 'function') {
+              el.classList.add('visible');
+            }
+          }, index * 100);
+        });
+      }, 300);
+
+      // Mejorar navegación suave para enlaces internos
+      const navLinks = document.querySelectorAll('a[href^="#"]');
+      navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+          const href = this.getAttribute('href');
+          if (href !== '#' && href.length > 1) {
+            const target = document.querySelector(href);
+            if (target) {
+              e.preventDefault();
+              const offsetTop = target.offsetTop - 80; // Offset para navbar
+              window.scrollTo({
+                top: offsetTop,
+                behavior: 'smooth'
+              });
+            }
+          }
+        });
+      });
+
+      // Agregar efectos de hover a elementos interactivos
+      const buttons = document.querySelectorAll('.btn');
+      buttons.forEach(btn => {
+        btn.addEventListener('mouseenter', function() {
+          this.style.transform = 'translateY(-2px) scale(1.02)';
+        });
+        btn.addEventListener('mouseleave', function() {
+          this.style.transform = 'translateY(0) scale(1)';
+        });
+      });
+    });
+  </script>
 </body>
 </html>

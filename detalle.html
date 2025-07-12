@@ -76,19 +76,19 @@
   <!-- Overlay para cerrar el sidebar -->
   <div id="cartSidenavOverlay" onclick="closeCartSidenav()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1999;"></div>
   <!-- Producto Detalle -->
-  <main class="container main-section py-5">
+  <main class="container main-section py-5 fade-in">
     <div class="row">
       <!-- Imágenes -->
-      <div class="col-md-6 mb-4 mb-md-0 d-flex flex-column justify-content-center align-items-center">
-        <img alt="Imagen principal del producto" class="img-fluid rounded-lg shadow-lg" id="mainImage" loading="lazy" src="" style="max-height:600px; object-fit:cover;"/>
+      <div class="col-md-6 mb-4 mb-md-0 d-flex flex-column justify-content-center align-items-center fade-in-left">
+        <img alt="Imagen principal del producto" class="img-fluid rounded-lg shadow-lg glow-on-hover" id="mainImage" loading="lazy" src="" style="max-height:600px; object-fit:cover;"/>
       </div>
       <!-- Información -->
-      <div class="col-md-6 d-flex flex-column justify-content-between">
+      <div class="col-md-6 d-flex flex-column justify-content-between fade-in-right">
         <div>
-          <h1 class="text-vino-tinto display-4 font-weight-bold mb-4" id="nombre-producto"></h1>
+          <h1 class="text-vino-tinto display-4 font-weight-bold mb-4 section-title" id="nombre-producto"></h1>
           <p class="text-rosado font-semibold h3 mb-4" id="precio-producto"></p>
           <p class="text-secondary mb-4 descripcion-producto"></p>
-          <form id="productForm">
+          <form id="productForm" class="checkout-section">
             <div class="form-group">
               <label class="font-weight-bold text-vino-tinto" for="size">Talle</label>
               <select class="form-control border-rosado" id="size" name="size" required>
@@ -102,10 +102,10 @@
               <label class="font-weight-bold text-vino-tinto" for="quantity">Cantidad</label>
               <input class="form-control border-rosado" id="quantity" min="1" name="quantity" required type="number" value="1"/>
             </div>
-            <button id="btnAgregarCarrito" class="btn btn-vino-tinto btn-block font-weight-bold py-3" type="submit">Agregar al carrito</button>
+            <button id="btnAgregarCarrito" class="btn btn-vino-tinto btn-block font-weight-bold py-3 micro-bounce glow-on-hover" type="submit">Agregar al carrito</button>
           </form>
         </div>
-        <div class="mt-5 pt-4 border-top border-rosado">
+        <div class="mt-5 pt-4 border-top border-rosado checkout-section">
           <h2 class="text-vino-tinto font-weight-bold h4 mb-3">Detalles del Producto</h2>
           <ul class="list-unstyled text-secondary">
             <li>Material: Encaje delicado y tela suave 100% poliéster</li>
@@ -180,6 +180,31 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('precio-producto').textContent = '';
         document.querySelector('.descripcion-producto').textContent = '';
       }
+    });
+  </script>
+  <!-- Script para inicializar animaciones -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Inicializar animaciones de aparición
+      setTimeout(() => {
+        const elements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right, .section-title, .checkout-section');
+        elements.forEach((el, index) => {
+          setTimeout(() => {
+            el.classList.add('visible');
+          }, index * 200);
+        });
+      }, 300);
+
+      // Agregar efectos suaves a elementos interactivos
+      const buttons = document.querySelectorAll('.btn');
+      buttons.forEach(btn => {
+        btn.addEventListener('mouseenter', function() {
+          this.style.transform = 'translateY(-2px) scale(1.02)';
+        });
+        btn.addEventListener('mouseleave', function() {
+          this.style.transform = 'translateY(0) scale(1)';
+        });
+      });
     });
   </script>
  </body>

@@ -65,6 +65,26 @@
       min-height: 100vh;
       padding: 2rem 0;
     }
+    
+    /* Animaciones específicas para checkout */
+    #seccionCodigoPostal {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    #opcionesEnvio {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    #opcionesEnvio.show {
+      max-height: 500px;
+      opacity: 1;
+    }
   </style>
 </head>
 <body class="bg-white text-vino">
@@ -117,15 +137,15 @@
   <div id="cartSidenavOverlay" onclick="closeCartSidenav()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1999;"></div>
 
   <!-- Main Checkout Content -->
-  <main class="container main-section py-5">
-    <h1 class="text-vino-tinto display-4 font-weight-bold mb-5 text-center">Finalizar Compra</h1>
+  <main class="container main-section py-5 fade-in">
+    <h1 class="text-vino-tinto display-4 font-weight-bold mb-5 text-center section-title">Finalizar Compra</h1>
     
     <div class="row">
       <!-- Formulario de Checkout -->
-      <div class="col-lg-6 mb-4">
+      <div class="col-lg-6 mb-4 fade-in-left">
         <form id="checkout-form" novalidate>
           <!-- Datos Personales -->
-          <section class="mb-5">
+          <section class="mb-5 checkout-section">
             <h2 class="text-vino-tinto h3 font-weight-bold section-title">Datos Personales</h2>
             <div class="row">
               <div class="col-md-6 mb-3">
@@ -154,7 +174,7 @@
           </section>
 
           <!-- Opciones de Entrega -->
-          <section class="mb-5">
+          <section class="mb-5 checkout-section">
             <h2 class="text-vino-tinto h3 font-weight-bold section-title">Opciones de Entrega</h2>
             
             <!-- Opciones principales de entrega -->
@@ -203,8 +223,8 @@
       </div>
 
       <!-- Resumen de Compra -->
-      <div class="col-lg-6">
-        <section class="checkout-summary">
+      <div class="col-lg-6 fade-in-right">
+        <section class="checkout-summary checkout-section">
           <h2 class="text-vino-tinto h3 font-weight-bold section-title mb-4">Resumen de Compra</h2>
           
           <!-- Lista de productos -->
@@ -229,7 +249,7 @@
           </div>
 
           <!-- Botón de pago -->
-          <button type="button" class="btn btn-vino-tinto btn-block font-weight-bold py-3" id="iniciarPago">
+          <button type="button" class="btn btn-vino-tinto btn-block font-weight-bold py-3 micro-bounce glow-on-hover" id="iniciarPago">
             <i class="fas fa-credit-card mr-2"></i>Iniciar Pago
           </button>
           
@@ -316,7 +336,7 @@
         cantidadTotal += cantidadNum;
 
         checkoutItems.innerHTML += `
-          <div class="order-item">
+          <div class="order-item fade-in" style="animation-delay: ${index * 0.1}s;">
             <div class="d-flex align-items-center">
               <img src="${item.img || 'assets/img/portfolio/default.jpg'}" alt="${item.nombre}" 
                    style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; margin-right: 12px;">
@@ -362,7 +382,11 @@
 
       if (retiroLocal.checked) {
         // Retiro en local seleccionado
-        seccionCodigoPostal.style.display = 'none';
+        seccionCodigoPostal.style.maxHeight = '0';
+        seccionCodigoPostal.style.opacity = '0';
+        setTimeout(() => {
+          seccionCodigoPostal.style.display = 'none';
+        }, 300);
         codigoPostalInput.removeAttribute('required');
         opcionesEnvio.style.display = 'none';
         costoEnvio = 0;
@@ -370,6 +394,8 @@
       } else if (envioDomicilio.checked) {
         // Envío a domicilio seleccionado
         seccionCodigoPostal.style.display = 'block';
+        seccionCodigoPostal.style.maxHeight = '500px';
+        seccionCodigoPostal.style.opacity = '1';
         codigoPostalInput.setAttribute('required', 'required');
         
         // Verificar si hay código postal para habilitar botón buscar
@@ -476,7 +502,7 @@
       });
 
       opcionesEnvio.innerHTML = opcionesHTML;
-      opcionesEnvio.style.display = 'block';
+      opcionesEnvio.classList.add('show');
       
       // Establecer costo inicial (primer servicio)
       if (cotizaciones.length > 0) {
@@ -553,19 +579,49 @@
       pagarBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
       pagarBtn.disabled = true;
 
-      // Simular proceso de pago (reemplazar con integración real)
-      setTimeout(() => {
-        alert('Simulación: Redirigiendo a Mercado Pago...\n\nDatos del pedido:\n' + JSON.stringify(checkoutData, null, 2));
+      // Llamar a la API de Mercado Pago (integración real)
+      fetch('/crear-preferencia', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: items })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.init_point) {
+          // Guardar datos del checkout para después del pago
+          localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+          
+          // Redirigir a Mercado Pago
+          window.location.href = data.init_point;
+        } else {
+          throw new Error('Error al crear preferencia de pago');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al procesar el pago. Por favor intenta nuevamente.');
         
         // Restaurar botón
         pagarBtn.innerHTML = '<i class="fas fa-credit-card mr-2"></i>Iniciar Pago';
         pagarBtn.disabled = false;
-      }, 2000);
+      });
     }
 
     // Event listeners principales
     document.addEventListener('DOMContentLoaded', function() {
       console.log('Checkout iniciado'); // Debug
+
+      // Inicializar animaciones de secciones
+      setTimeout(() => {
+        const checkoutSections = document.querySelectorAll('.checkout-section');
+        checkoutSections.forEach((section, index) => {
+          setTimeout(() => {
+            section.classList.add('visible');
+          }, index * 200);
+        });
+      }, 500);
 
       // Event listener para el carrito en navbar
       const cartLink = document.getElementById('navbar-cart-link');
@@ -617,14 +673,44 @@
       // Event listener para iniciar pago
       if (iniciarPagoBtn) {
         iniciarPagoBtn.addEventListener('click', iniciarProcesoPago);
-      }
-
+      }      
       // Cargar resumen al cargar la página
       cargarResumenCompra();
       
       // Inicializar tipo de entrega
       manejarTipoEntrega();
+      
+      // Activar animaciones de fade-in
+      activarAnimacionesFadeIn();
     });
+    
+    // Función para activar animaciones cuando los elementos aparecen en pantalla
+    function activarAnimacionesFadeIn() {
+      const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+      };
+      
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, observerOptions);
+      
+      // Observar elementos que deben aparecer con fade-in
+      document.querySelectorAll('.fade-in, .order-item').forEach(el => {
+        observer.observe(el);
+      });
+      
+      // Agregar clase fade-in a secciones principales
+      document.querySelectorAll('section, .checkout-summary').forEach(el => {
+        el.classList.add('fade-in');
+        observer.observe(el);
+      });
+    }
   </script>
 </body>
 </html>
