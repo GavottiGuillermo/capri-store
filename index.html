@@ -342,6 +342,19 @@ $(document).ready(function() {
   });
 });
 </script>
+<script>
+// Permitir acceder al detalle desde toda la tarjeta
+$(document).ready(function() {
+  $('.card-product').on('click', function(e) {
+    // Evitar doble trigger si se hace clic en el botón
+    if ($(e.target).hasClass('ver-detalle-btn')) return;
+    const btn = $(this).find('.ver-detalle-btn');
+    if (btn.length) {
+      btn.trigger('click');
+    }
+  });
+});
+</script>
   <!-- Script para inicializar animaciones -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
