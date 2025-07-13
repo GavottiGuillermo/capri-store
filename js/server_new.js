@@ -25,70 +25,24 @@ app.get('/health', (req, res) => {
 });
 
 // Configura Mercado Pago con la nueva sintaxis
-const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569';
-console.log('Access Token configurado:', accessToken ? 'Sí' : 'No');
-
 const client = new MercadoPagoConfig({
-  accessToken: accessToken,
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569',
   options: {
-    timeout: 10000,
-    idempotencyKey: 'capri-store-' + Date.now()
+    timeout: 5000,
+    idempotencyKey: 'abc'
   }
 });
 
 // Endpoint de prueba para el SDK de Mercado Pago
-app.get('/test-mp', async (req, res) => {
+app.get('/test-mp', (req, res) => {
   try {
-    console.log('=== TEST MERCADO PAGO ===');
-    
-    // Test básico de configuración
-    const basicTest = {
+    res.json({ 
+      status: 'OK',
       sdk_loaded: !!Preference,
       client_configured: !!client,
       access_token_configured: !!client.accessToken
-    };
-    
-    console.log('Test básico:', basicTest);
-    
-    // Test de creación de preferencia simple
-    try {
-      const testPreference = {
-        items: [{
-          title: 'Test Product',
-          quantity: 1,
-          currency_id: 'ARS',
-          unit_price: 100
-        }],
-        back_urls: {
-          success: 'https://www.capristorezte.com.ar/success.html',
-          failure: 'https://www.capristorezte.com.ar/failure.html',
-          pending: 'https://www.capristorezte.com.ar/pending.html'
-        }
-      };
-      
-      const preferenceObj = new Preference(client);
-      const testResponse = await preferenceObj.create({ body: testPreference });
-      
-      console.log('Test de creación exitoso:', !!testResponse.init_point);
-      
-      res.json({ 
-        status: 'OK',
-        ...basicTest,
-        preference_creation_test: 'SUCCESS',
-        test_init_point: testResponse.init_point
-      });
-    } catch (prefError) {
-      console.error('Error en test de preferencia:', prefError.message);
-      res.json({ 
-        status: 'PARTIAL_OK',
-        ...basicTest,
-        preference_creation_test: 'FAILED',
-        preference_error: prefError.message
-      });
-    }
-    
+    });
   } catch (error) {
-    console.error('Error en test-mp:', error);
     res.status(500).json({ 
       status: 'ERROR',
       error: error.message 
@@ -139,9 +93,7 @@ app.post('/crear-preferencia', async (req, res) => {
         failure: `${baseUrl}/failure.html?status=failure`,
         pending: `${baseUrl}/pending.html?status=pending`
       },
-      auto_return: "approved",
-      statement_descriptor: "CAPRI STORE",
-      external_reference: "capri-" + Date.now()
+      auto_return: "approved"
     };
 
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
@@ -150,28 +102,12 @@ app.post('/crear-preferencia', async (req, res) => {
     const preferenceObj = new Preference(client);
     console.log('Creando preferencia...');
     
-    // Usar un timeout más específico
-    const response = await Promise.race([
-      preferenceObj.create({ body: preference }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout al crear preferencia')), 15000)
-      )
-    ]);
+    const response = await preferenceObj.create({ body: preference });
     
-    console.log('Respuesta de Mercado Pago (keys):', Object.keys(response));
+    console.log('Respuesta completa de Mercado Pago:', JSON.stringify(response, null, 2));
     console.log('init_point:', response.init_point);
-    console.log('id:', response.id);
     
-    if (!response.init_point) {
-      console.error('Error: No se recibió init_point en la respuesta');
-      console.log('Respuesta completa:', JSON.stringify(response, null, 2));
-      throw new Error('Mercado Pago no devolvió un link de pago válido');
-    }
-    
-    const result = { 
-      init_point: response.init_point,
-      id: response.id
-    };
+    const result = { init_point: response.init_point };
     console.log('Enviando respuesta:', result);
     
     res.json(result);
@@ -183,18 +119,10 @@ app.post('/crear-preferencia', async (req, res) => {
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
     
-    // Respuesta de error más específica
-    const errorResponse = {
-      error: 'Error al procesar el pago',
-      message: error.message,
-      timestamp: new Date().toISOString()
-    };
-    
-    if (process.env.NODE_ENV === 'development') {
-      errorResponse.details = error.stack;
-    }
-    
-    res.status(500).json(errorResponse);
+    res.status(500).json({ 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
     console.log('=== FIN /crear-preferencia CON ERROR ===');
   }
 });
