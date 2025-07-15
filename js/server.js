@@ -5,6 +5,13 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 
 const app = express();
+// Manejo global de errores no capturados
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 // Middleware
 app.use(express.json());
@@ -273,4 +280,7 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Backend escuchando en puerto ${PORT}`));
+console.log('Intentando iniciar backend Capri Store...');
+app.listen(PORT, () => {
+  console.log(`Backend escuchando en puerto ${PORT}`);
+});
