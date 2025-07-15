@@ -234,7 +234,7 @@ async function finalizarCompraSidebar() {
   if (loader) loader.style.display = 'block';
 
   try {
-    const response = await fetch('/crear-preferencia', {
+    const response = await fetch('https://capri-store.onrender.com/crear-preferencia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: mpItems })
@@ -245,7 +245,7 @@ async function finalizarCompraSidebar() {
       data = await response.json();
     } else {
       const text = await response.text();
-      mostrarPopup("Error al crear preferencia: El servidor devolvió una respuesta inválida (no JSON)");
+      mostrarPopup("Error: El servidor devolvió una respuesta inválida (no JSON)");
       return;
     }
     if (data.init_point) {
