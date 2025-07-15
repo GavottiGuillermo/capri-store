@@ -109,13 +109,13 @@ app.post('/crear-preferencia', async (req, res) => {
   if (req.headers) {
     console.log('Request headers:', JSON.stringify(req.headers, null, 2));
   }
-  
   try {
     const items = req.body.items;
     console.log('Items recibidos:', JSON.stringify(items, null, 2));
     if (!Array.isArray(items) || items.length === 0) {
-      console.log('Error: Items no válidos');
-      res.status(400).json({ error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() });
+      const errorResponse = { error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() };
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.status(400).json(errorResponse);
       return;
     }
     let formatoInvalido = false;
@@ -132,16 +132,15 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     }
     if (formatoInvalido) {
-      console.log('Error: Formato de producto inválido');
-      res.status(400).json({ error: "Formato de producto inválido.", log: 'Formato inválido', timestamp: new Date().toISOString() });
+      const errorResponse = { error: "Formato de producto inválido.", log: 'Formato inválido', timestamp: new Date().toISOString() };
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.status(400).json(errorResponse);
       return;
     }
-
     // Determinar URL base según el entorno
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://www.capristorezte.com.ar' 
       : 'http://localhost:3001';
-
     const preference = {
       items: items.map(item => ({
         title: item.title,
@@ -162,9 +161,7 @@ app.post('/crear-preferencia', async (req, res) => {
         installments: 12 // Permitir hasta 12 cuotas
       }
     };
-
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
-
     // Crear preferencia con la nueva sintaxis del SDK
     const preferenceObj = new Preference(client);
     console.log('Creando preferencia...');
@@ -177,14 +174,15 @@ app.post('/crear-preferencia', async (req, res) => {
         )
       ]);
     } catch (err) {
-      console.error('Error al crear preferencia:', err);
-      res.status(500).json({ error: 'Error al crear preferencia', log: err.message, timestamp: new Date().toISOString() });
+      const errorResponse = { error: 'Error al crear preferencia', log: err.message, timestamp: new Date().toISOString() };
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.status(500).json(errorResponse);
       return;
     }
     if (!response || !response.init_point) {
-      console.error('Error: No se recibió init_point en la respuesta');
-      console.log('Respuesta completa de Mercado Pago:', JSON.stringify(response, null, 2));
-      res.status(500).json({ error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() });
+      const errorResponse = { error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() };
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.status(500).json(errorResponse);
       return;
     }
     const result = { 
@@ -194,7 +192,6 @@ app.post('/crear-preferencia', async (req, res) => {
     console.log('Enviando respuesta al frontend:', JSON.stringify(result, null, 2));
     res.json(result);
     console.log('=== FIN /crear-preferencia EXITOSO ===');
-    
   } catch (error) {
     console.error('=== ERROR en /crear-preferencia ===');
     console.error('Error completo:', error);
@@ -203,20 +200,17 @@ app.post('/crear-preferencia', async (req, res) => {
     }
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
-
-    // Respuesta de error más específica
     const errorResponse = {
       error: 'Error al procesar el pago',
       message: error.message,
       timestamp: new Date().toISOString(),
       mercadoPagoData: error.response && error.response.data ? error.response.data : null
     };
-
     if (process.env.NODE_ENV === 'development') {
       errorResponse.details = error.stack;
     }
-
     try {
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
       res.status(500).json(errorResponse);
     } catch (jsonErr) {
       console.error('Error al enviar respuesta JSON:', jsonErr);
@@ -231,12 +225,12 @@ app.post('/confirmar-compra', async (req, res) => {
   try {
     const { nombre, apellido, email, resumen, total } = req.body;
     if (!nombre || !apellido || !email || !resumen || !total) {
-      return res.status(400).json({ success: false, error: "Faltan datos." });
+      const errorResponse = { success: false, error: "Faltan datos." };
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      return res.status(400).json(errorResponse);
     }
-
     // Generar número de pedido único
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
-
     // Configura tu transporter de nodemailer (Zoho Mail)
     const transporter = nodemailer.createTransporter({
       host: 'smtp.zoho.com',
@@ -247,7 +241,6 @@ app.post('/confirmar-compra', async (req, res) => {
         pass: process.env.EMAIL_PASS
       }
     });
-
     //  Email content
     const mailOptions = {
       from: `"Capri Store" <${process.env.EMAIL_USER}>`,
@@ -269,13 +262,15 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 
 ¡Te esperamos!`
     };
-
     // Enviar el correo
     await transporter.sendMail(mailOptions);
-
-    res.json({ success: true, numeroPedido });
+    const successResponse = { success: true, numeroPedido };
+    console.log('Enviando respuesta exitosa al frontend:', JSON.stringify(successResponse, null, 2));
+    res.json(successResponse);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    const errorResponse = { success: false, error: error.message };
+    console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+    res.status(500).json(errorResponse);
   }
 });
 
