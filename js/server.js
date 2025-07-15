@@ -141,7 +141,11 @@ app.post('/crear-preferencia', async (req, res) => {
       },
       auto_return: "approved",
       statement_descriptor: "CAPRI STORE",
-      external_reference: "capri-" + Date.now()
+      external_reference: "capri-" + Date.now(),
+      payment_methods: {
+        excluded_payment_types: [], // Permitir todos los tipos
+        installments: 12 // Permitir hasta 12 cuotas
+      }
     };
 
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));

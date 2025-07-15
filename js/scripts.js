@@ -215,13 +215,44 @@ function actualizarCartSidenav() {
 }
 
 // Finalizar compra - redirigir a checkout
-function finalizarCompraSidebar() {
+// Finalizar compra - integración Mercado Pago Checkout Pro
+async function finalizarCompraSidebar() {
   if (cartItems.length === 0) {
     mostrarPopup("El carrito está vacío.");
     return;
   }
-  //  Redirigir a la página de checkout
-  window.location.href = 'checkout.html';
+  // Preparar los items para Mercado Pago
+  const mpItems = cartItems.map(item => ({
+    title: item.nombre,
+    quantity: item.cantidad,
+    currency_id: 'ARS',
+    unit_price: Number(item.precio)
+  }));
+
+  // Mostrar loader opcional
+  const loader = document.querySelector('.cart-sidenav__loader');
+  if (loader) loader.style.display = 'block';
+
+  try {
+    const response = await fetch('/crear-preferencia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: mpItems })
+    });
+    const data = await response.json();
+    if (data.init_point) {
+      // Limpiar carrito antes de redirigir
+      vaciarCarrito();
+      // Redirigir a Mercado Pago Checkout Pro
+      window.location.href = data.init_point;
+    } else {
+      mostrarPopup("Error al iniciar pago: " + (data.error || 'Intenta nuevamente.'));
+    }
+  } catch (err) {
+    mostrarPopup("Error de conexión con Mercado Pago.");
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
 }
 
 // === VALIDACIÓN DE BOTÓN AGREGAR AL CARRITO EN DETALLE ===
