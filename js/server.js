@@ -103,12 +103,12 @@ app.post('/crear-preferencia', async (req, res) => {
   try {
     const items = req.body.items;
     console.log('Items recibidos:', items);
-    
     if (!Array.isArray(items) || items.length === 0) {
       console.log('Error: Items no válidos');
-      return res.status(400).json({ error: "No hay productos en el carrito." });
+      res.status(400).json({ error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() });
+      return;
     }
-    
+    let formatoInvalido = false;
     for (const item of items) {
       console.log('Validando item:', item);
       if (
@@ -117,9 +117,14 @@ app.post('/crear-preferencia', async (req, res) => {
         typeof item.currency_id !== 'string' ||
         typeof item.unit_price !== 'number'
       ) {
-        console.log('Error: Formato de producto inválido');
-        return res.status(400).json({ error: "Formato de producto inválido." });
+        formatoInvalido = true;
+        break;
       }
+    }
+    if (formatoInvalido) {
+      console.log('Error: Formato de producto inválido');
+      res.status(400).json({ error: "Formato de producto inválido.", log: 'Formato inválido', timestamp: new Date().toISOString() });
+      return;
     }
 
     // Determinar URL base según el entorno
@@ -153,31 +158,30 @@ app.post('/crear-preferencia', async (req, res) => {
     // Crear preferencia con la nueva sintaxis del SDK
     const preferenceObj = new Preference(client);
     console.log('Creando preferencia...');
-    
-    // Usar un timeout más específico
-    const response = await Promise.race([
-      preferenceObj.create({ body: preference }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout al crear preferencia')), 15000)
-      )
-    ]);
-    
-    console.log('Respuesta de Mercado Pago (keys):', Object.keys(response));
-    console.log('init_point:', response.init_point);
-    console.log('id:', response.id);
-    
-    if (!response.init_point) {
+    let response;
+    try {
+      response = await Promise.race([
+        preferenceObj.create({ body: preference }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout al crear preferencia')), 15000)
+        )
+      ]);
+    } catch (err) {
+      console.error('Error al crear preferencia:', err);
+      res.status(500).json({ error: 'Error al crear preferencia', log: err.message, timestamp: new Date().toISOString() });
+      return;
+    }
+    if (!response || !response.init_point) {
       console.error('Error: No se recibió init_point en la respuesta');
       console.log('Respuesta completa:', JSON.stringify(response, null, 2));
-      throw new Error('Mercado Pago no devolvió un link de pago válido');
+      res.status(500).json({ error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() });
+      return;
     }
-    
     const result = { 
       init_point: response.init_point,
       id: response.id
     };
     console.log('Enviando respuesta:', result);
-    
     res.json(result);
     console.log('=== FIN /crear-preferencia EXITOSO ===');
     
