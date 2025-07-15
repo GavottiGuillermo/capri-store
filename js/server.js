@@ -184,21 +184,30 @@ app.post('/crear-preferencia', async (req, res) => {
   } catch (error) {
     console.error('=== ERROR en /crear-preferencia ===');
     console.error('Error completo:', error);
+    if (error.response && error.response.data) {
+      console.error('Mercado Pago response data:', error.response.data);
+    }
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
-    
+
     // Respuesta de error más específica
     const errorResponse = {
       error: 'Error al procesar el pago',
       message: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      mercadoPagoData: error.response && error.response.data ? error.response.data : null
     };
-    
+
     if (process.env.NODE_ENV === 'development') {
       errorResponse.details = error.stack;
     }
-    
-    res.status(500).json(errorResponse);
+
+    try {
+      res.status(500).json(errorResponse);
+    } catch (jsonErr) {
+      console.error('Error al enviar respuesta JSON:', jsonErr);
+      res.status(500).send('Error interno al procesar el pago');
+    }
     console.log('=== FIN /crear-preferencia CON ERROR ===');
   }
 });
