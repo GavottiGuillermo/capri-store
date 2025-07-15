@@ -98,11 +98,14 @@ app.get('/test-mp', async (req, res) => {
 
 app.post('/crear-preferencia', async (req, res) => {
   console.log('=== INICIO /crear-preferencia ===');
-  console.log('Request body:', req.body);
+  console.log('Request body (raw):', JSON.stringify(req.body, null, 2));
+  if (req.headers) {
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+  }
   
   try {
     const items = req.body.items;
-    console.log('Items recibidos:', items);
+    console.log('Items recibidos:', JSON.stringify(items, null, 2));
     if (!Array.isArray(items) || items.length === 0) {
       console.log('Error: Items no válidos');
       res.status(400).json({ error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() });
@@ -173,7 +176,7 @@ app.post('/crear-preferencia', async (req, res) => {
     }
     if (!response || !response.init_point) {
       console.error('Error: No se recibió init_point en la respuesta');
-      console.log('Respuesta completa:', JSON.stringify(response, null, 2));
+      console.log('Respuesta completa de Mercado Pago:', JSON.stringify(response, null, 2));
       res.status(500).json({ error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() });
       return;
     }
@@ -181,7 +184,7 @@ app.post('/crear-preferencia', async (req, res) => {
       init_point: response.init_point,
       id: response.id
     };
-    console.log('Enviando respuesta:', result);
+    console.log('Enviando respuesta al frontend:', JSON.stringify(result, null, 2));
     res.json(result);
     console.log('=== FIN /crear-preferencia EXITOSO ===');
     
