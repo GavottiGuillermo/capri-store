@@ -239,11 +239,17 @@ async function finalizarCompraSidebar() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: mpItems })
     });
-    const data = await response.json();
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      mostrarPopup("Error al crear preferencia: El servidor devolvió una respuesta inválida (no JSON)");
+      return;
+    }
     if (data.init_point) {
-      // Limpiar carrito antes de redirigir
       vaciarCarrito();
-      // Redirigir a Mercado Pago Checkout Pro
       window.location.href = data.init_point;
     } else {
       mostrarPopup("Error al iniciar pago: " + (data.error || 'Intenta nuevamente.'));
