@@ -5,6 +5,36 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 
 const app = express();
+
+// Middleware de logging para depuración
+app.use((req, res, next) => {
+  console.log('--- REQUEST INICIO ---');
+  console.log('Método:', req.method);
+  console.log('URL:', req.originalUrl);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  if (req.method !== 'GET') {
+    let bodyData = req.body;
+    // Si el body está vacío, intentar leer el raw body
+    if (!bodyData || Object.keys(bodyData).length === 0) {
+      let rawBody = [];
+      req.on('data', chunk => rawBody.push(chunk));
+      req.on('end', () => {
+        try {
+          const rawString = Buffer.concat(rawBody).toString();
+          console.log('Raw Body:', rawString);
+        } catch (e) {
+          console.log('Error leyendo raw body:', e.message);
+        }
+        next();
+      });
+      return;
+    } else {
+      console.log('Body:', JSON.stringify(bodyData, null, 2));
+    }
+  }
+  next();
+});
+
 // Manejo global de errores no capturados
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
@@ -110,30 +140,29 @@ app.post('/crear-preferencia', async (req, res) => {
   try {
     const items = req.body.items;
     console.log('Items recibidos:', JSON.stringify(items, null, 2));
+    // Validación extra de items
     if (!Array.isArray(items) || items.length === 0) {
       const errorResponse = { error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() };
       console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-      res.status(400).json(errorResponse);
-      return;
+      return res.status(400).json(errorResponse);
     }
-    let formatoInvalido = false;
-    for (const item of items) {
-      console.log('Validando item:', item);
+    // Validar que cada item tenga los campos requeridos y sean del tipo correcto
+    for (const [i, item] of items.entries()) {
       if (
-        typeof item.title !== 'string' ||
-        typeof item.quantity !== 'number' ||
-        typeof item.currency_id !== 'string' ||
-        typeof item.unit_price !== 'number'
+        !item ||
+        typeof item.title !== 'string' || !item.title.trim() ||
+        typeof item.quantity !== 'number' || item.quantity < 1 ||
+        typeof item.currency_id !== 'string' || item.currency_id !== 'ARS' ||
+        typeof item.unit_price !== 'number' || isNaN(item.unit_price) || item.unit_price < 0
       ) {
-        formatoInvalido = true;
-        break;
+        const errorResponse = {
+          error: `Formato de producto inválido en el item #${i + 1}`,
+          log: `Item inválido: ${JSON.stringify(item)}`,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+        return res.status(400).json(errorResponse);
       }
-    }
-    if (formatoInvalido) {
-      const errorResponse = { error: "Formato de producto inválido.", log: 'Formato inválido', timestamp: new Date().toISOString() };
-      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-      res.status(400).json(errorResponse);
-      return;
     }
     // Determinar URL base según el entorno
     const baseUrl = process.env.NODE_ENV === 'production' 
