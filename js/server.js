@@ -19,8 +19,6 @@ app.use(cors({
   origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar', 'http://localhost:3000', 'http://localhost:8080', 'http://localhost:3001']
 }));
 
-// Servir archivos estáticos desde la carpeta raíz del proyecto
-app.use(express.static(path.join(__dirname, '..')));
 
 // Endpoint de salud para verificar que el servidor está funcionando
 app.get('/health', (req, res) => {
@@ -275,6 +273,9 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 });
 
 const PORT = process.env.PORT || 3001;
+// Servir archivos estáticos desde la carpeta raíz del proyecto (al final)
+app.use(express.static(path.join(__dirname, '..')));
+
 console.log('Intentando iniciar backend Capri Store...');
 app.listen(PORT, () => {
   console.log(`Backend escuchando en puerto ${PORT}`);
