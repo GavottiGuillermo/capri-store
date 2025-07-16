@@ -212,53 +212,19 @@ function actualizarCartSidenav() {
     });
   });
   guardarCarrito();
+  // Cambiar el texto y acción del botón de compra
+  const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado');
+  if (finalizarBtn) {
+    finalizarBtn.textContent = 'Iniciar compra';
+    finalizarBtn.onclick = function() {
+      window.location.href = 'checkout.html';
+    };
+  }
 }
 
 // Finalizar compra - redirigir a checkout
-// Finalizar compra - integración Mercado Pago Checkout Pro
-async function finalizarCompraSidebar() {
-  if (cartItems.length === 0) {
-    mostrarPopup("El carrito está vacío.");
-    return;
-  }
-  // Preparar los items para Mercado Pago
-  const mpItems = cartItems.map(item => ({
-    title: item.nombre,
-    quantity: item.cantidad,
-    currency_id: 'ARS',
-    unit_price: Number(item.precio)
-  }));
-
-  // Mostrar loader opcional
-  const loader = document.querySelector('.cart-sidenav__loader');
-  if (loader) loader.style.display = 'block';
-
-  try {
-    const response = await fetch('https://capri-store.onrender.com/crear-preferencia', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: mpItems })
-    });
-    let data;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      mostrarPopup("Error: El servidor devolvió una respuesta inválida (no JSON)");
-      return;
-    }
-    if (data.init_point) {
-      vaciarCarrito();
-      window.location.href = data.init_point;
-    } else {
-      mostrarPopup("Error al iniciar pago: " + (data.error || 'Intenta nuevamente.'));
-    }
-  } catch (err) {
-    mostrarPopup("Error de conexión con Mercado Pago.");
-  } finally {
-    if (loader) loader.style.display = 'none';
-  }
+function finalizarCompraSidebar() {
+  window.location.href = 'checkout.html';
 }
 
 // === VALIDACIÓN DE BOTÓN AGREGAR AL CARRITO EN DETALLE ===
