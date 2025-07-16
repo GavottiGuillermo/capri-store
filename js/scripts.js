@@ -215,7 +215,7 @@ function actualizarCartSidenav() {
   // Cambiar el texto y acción del botón de compra
   const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado');
   if (finalizarBtn) {
-    finalizarBtn.textContent = 'Iniciar pago';
+    finalizarBtn.textContent = 'Comenzar Compra';
     finalizarBtn.onclick = function() {
       window.location.href = 'checkout.html';
     };
