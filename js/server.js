@@ -6,6 +6,9 @@ const path = require('path');
 
 const app = express();
 
+// SIEMPRE PRIMERO
+app.use(express.json());
+
 // Middleware de logging para depuración
 app.use((req, res, next) => {
   console.log('--- REQUEST INICIO ---');
@@ -13,24 +16,7 @@ app.use((req, res, next) => {
   console.log('URL:', req.originalUrl);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
   if (req.method !== 'GET') {
-    let bodyData = req.body;
-    // Si el body está vacío, intentar leer el raw body
-    if (!bodyData || Object.keys(bodyData).length === 0) {
-      let rawBody = [];
-      req.on('data', chunk => rawBody.push(chunk));
-      req.on('end', () => {
-        try {
-          const rawString = Buffer.concat(rawBody).toString();
-          console.log('Raw Body:', rawString);
-        } catch (e) {
-          console.log('Error leyendo raw body:', e.message);
-        }
-        next();
-      });
-      return;
-    } else {
-      console.log('Body:', JSON.stringify(bodyData, null, 2));
-    }
+    console.log('Body:', JSON.stringify(req.body, null, 2));
   }
   next();
 });
@@ -44,9 +30,15 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Middleware
-app.use(express.json());
 app.use(cors({
-  origin: ['https://www.capristorezte.com.ar', 'https://capristorezte.com.ar', 'http://localhost:3000', 'http://localhost:8080', 'http://localhost:3001']
+  origin: [
+    'https://www.capristorezte.com.ar',
+    'https://capristorezte.com.ar',
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'http://localhost:3001',
+    'http://127.0.0.1:5500' // <--- agrega esta línea
+  ]
 }));
 
 
@@ -134,6 +126,7 @@ app.get('/test-mp', async (req, res) => {
 app.post('/crear-preferencia', async (req, res) => {
   console.log('=== INICIO /crear-preferencia ===');
   console.log('Request body (raw):', JSON.stringify(req.body, null, 2));
+  console.log('Tipo de req.body:', typeof req.body, req.body);
   if (req.headers) {
     console.log('Request headers:', JSON.stringify(req.headers, null, 2));
   }
@@ -144,6 +137,7 @@ app.post('/crear-preferencia', async (req, res) => {
     if (!Array.isArray(items) || items.length === 0) {
       const errorResponse = { error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() };
       console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.setHeader('Content-Type', 'application/json');
       return res.status(400).json(errorResponse);
     }
     // Validar que cada item tenga los campos requeridos y sean del tipo correcto
@@ -161,12 +155,14 @@ app.post('/crear-preferencia', async (req, res) => {
           timestamp: new Date().toISOString()
         };
         console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+        res.setHeader('Content-Type', 'application/json');
         return res.status(400).json(errorResponse);
       }
     }
     // Determinar URL base según el entorno
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://www.capristorezte.com.ar' 
+    const isProduction = process.env.NODE_ENV === 'production';
+    const baseUrl = isProduction
+      ? 'https://www.capristorezte.com.ar'
       : 'http://localhost:3001';
     const preference = {
       items: items.map(item => ({
@@ -180,7 +176,7 @@ app.post('/crear-preferencia', async (req, res) => {
         failure: `${baseUrl}/failure.html?status=failure`,
         pending: `${baseUrl}/pending.html?status=pending`
       },
-      auto_return: "approved",
+      ...(isProduction ? { auto_return: "approved" } : {}),
       statement_descriptor: "CAPRI STORE",
       external_reference: "capri-" + Date.now(),
       payment_methods: {
@@ -203,12 +199,14 @@ app.post('/crear-preferencia', async (req, res) => {
     } catch (err) {
       const errorResponse = { error: 'Error al crear preferencia', log: err.message, timestamp: new Date().toISOString() };
       console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.setHeader('Content-Type', 'application/json');
       res.status(500).json(errorResponse);
       return;
     }
     if (!response || !response.init_point) {
       const errorResponse = { error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() };
       console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.setHeader('Content-Type', 'application/json');
       res.status(500).json(errorResponse);
       return;
     }
@@ -217,6 +215,7 @@ app.post('/crear-preferencia', async (req, res) => {
       id: response.id
     };
     console.log('Enviando respuesta al frontend:', JSON.stringify(result, null, 2));
+    res.setHeader('Content-Type', 'application/json');
     res.json(result);
     console.log('=== FIN /crear-preferencia EXITOSO ===');
   } catch (error) {
@@ -238,6 +237,7 @@ app.post('/crear-preferencia', async (req, res) => {
     }
     try {
       console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      res.setHeader('Content-Type', 'application/json');
       res.status(500).json(errorResponse);
     } catch (jsonErr) {
       console.error('Error al enviar respuesta JSON:', jsonErr);

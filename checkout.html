@@ -584,11 +584,9 @@
         console.log('Enviando datos a backend:', { items });
 
         // Llamada real al backend para crear la preferencia de Mercado Pago
-        const response = await fetch('/crear-preferencia', {
+        const response = await fetch('http://localhost:3001/crear-preferencia', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items })
         });
 
@@ -755,7 +753,7 @@
         });
       }, observerOptions);
       
-      // Observar elementos que deben aparecer con fade-in
+      // Observar elementos que deben aparecer with fade-in
       document.querySelectorAll('.fade-in, .order-item').forEach(el => {
         observer.observe(el);
       });
