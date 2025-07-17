@@ -584,7 +584,7 @@
         console.log('Enviando datos a backend:', { items });
 
         // Llamada real al backend para crear la preferencia de Mercado Pago
-        const response = await fetch('http://localhost:3001/crear-preferencia', {
+        const response = await fetch('/crear-preferencia', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items })
