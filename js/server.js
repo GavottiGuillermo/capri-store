@@ -136,9 +136,8 @@ app.post('/crear-preferencia', async (req, res) => {
     // Validación extra de items
     if (!Array.isArray(items) || items.length === 0) {
       const errorResponse = { error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() };
-      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(400).json(errorResponse);
+      res.status(400).type('application/json').json(errorResponse);
+      return;
     }
     // Validar que cada item tenga los campos requeridos y sean del tipo correcto
     for (const [i, item] of items.entries()) {
@@ -154,9 +153,8 @@ app.post('/crear-preferencia', async (req, res) => {
           log: `Item inválido: ${JSON.stringify(item)}`,
           timestamp: new Date().toISOString()
         };
-        console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(400).json(errorResponse);
+        res.status(400).type('application/json').json(errorResponse);
+        return;
       }
     }
     // Determinar URL base según el entorno
@@ -198,25 +196,20 @@ app.post('/crear-preferencia', async (req, res) => {
       ]);
     } catch (err) {
       const errorResponse = { error: 'Error al crear preferencia', log: err.message, timestamp: new Date().toISOString() };
-      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json(errorResponse);
+      res.status(500).type('application/json').json(errorResponse);
       return;
     }
     if (!response || !response.init_point) {
       const errorResponse = { error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() };
-      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json(errorResponse);
+      res.status(500).type('application/json').json(errorResponse);
       return;
     }
     const result = { 
       init_point: response.init_point,
       id: response.id
     };
+    res.type('application/json').json(result);
     console.log('Enviando respuesta al frontend:', JSON.stringify(result, null, 2));
-    res.setHeader('Content-Type', 'application/json');
-    res.json(result);
     console.log('=== FIN /crear-preferencia EXITOSO ===');
   } catch (error) {
     console.error('=== ERROR en /crear-preferencia ===');
@@ -224,24 +217,16 @@ app.post('/crear-preferencia', async (req, res) => {
     if (error.response && error.response.data) {
       console.error('Mercado Pago response data:', error.response.data);
     }
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
     const errorResponse = {
       error: 'Error al procesar el pago',
       message: error.message,
       timestamp: new Date().toISOString(),
       mercadoPagoData: error.response && error.response.data ? error.response.data : null
     };
-    if (process.env.NODE_ENV === 'development') {
-      errorResponse.details = error.stack;
-    }
     try {
-      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json(errorResponse);
+      res.status(500).type('application/json').json(errorResponse);
     } catch (jsonErr) {
-      console.error('Error al enviar respuesta JSON:', jsonErr);
-      res.status(500).send('Error interno al procesar el pago');
+      res.status(500).type('text/plain').send('Error interno al procesar el pago');
     }
     console.log('=== FIN /crear-preferencia CON ERROR ===');
   }
@@ -259,7 +244,7 @@ app.post('/confirmar-compra', async (req, res) => {
     // Generar número de pedido único
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
     // Configura tu transporter de nodemailer (Zoho Mail)
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,
