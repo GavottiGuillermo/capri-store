@@ -167,9 +167,57 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Cargar datos del producto en el detalle
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Obtener el producto seleccionado desde localStorage
       const producto = JSON.parse(localStorage.getItem('productoDetalle'));
-      if (producto) {
+      if (producto && producto.txt) {
+        try {
+          // Obtener los datos actualizados desde el .txt del producto
+          const resp = await fetch(producto.txt);
+          const txt = await resp.text();
+          // Extraer información entre llaves
+          const nombreMatch = txt.match(/Nombre:\s*\{([^}]+)\}/);
+          const textoMatch = txt.match(/Texto Tarjeta:\s*\{([^}]+)\}/);
+          const precioMatch = txt.match(/Precio:\s*\{([^}]+)\}/);
+          const detalleMatch = txt.match(/Detalle:\s*\{([^}]+)\}/);
+          
+          const nombre = nombreMatch ? nombreMatch[1].trim() : producto.nombre;
+          const textoTarjeta = textoMatch ? textoMatch[1].trim() : producto.desc;
+          const precio = precioMatch ? precioMatch[1].trim() : producto.precio;
+          const detalle = detalleMatch ? detalleMatch[1].trim() : '';
+          
+          document.getElementById('mainImage').src = producto.img;
+          document.getElementById('mainImage').alt = nombre;
+          document.getElementById('nombre-producto').textContent = nombre;
+          document.getElementById('precio-producto').textContent = precio ? ('$' + precio + ' ARS') : '';
+          document.querySelector('.descripcion-producto').textContent = textoTarjeta;
+          
+          // Actualizar la sección de detalles si existe información de detalle
+          if (detalle) {
+            const detallesList = document.querySelector('.list-unstyled');
+            if (detallesList) {
+              detallesList.innerHTML = '';
+              // Dividir el detalle en líneas y crear elementos de lista
+              const lineas = detalle.split('\n');
+              lineas.forEach(linea => {
+                if (linea.trim()) {
+                  const li = document.createElement('li');
+                  li.textContent = linea.trim();
+                  detallesList.appendChild(li);
+                }
+              });
+            }
+          }
+        } catch (e) {
+          // Si falla el fetch, mostrar lo que haya en localStorage
+          document.getElementById('mainImage').src = producto.img;
+          document.getElementById('mainImage').alt = producto.nombre;
+          document.getElementById('nombre-producto').textContent = producto.nombre;
+          document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
+          document.querySelector('.descripcion-producto').textContent = producto.desc;
+        }
+      } else if (producto) {
+        // Si no hay txt, usar los datos guardados
         document.getElementById('mainImage').src = producto.img;
         document.getElementById('mainImage').alt = producto.nombre;
         document.getElementById('nombre-producto').textContent = producto.nombre;

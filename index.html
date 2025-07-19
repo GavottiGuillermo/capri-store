@@ -24,6 +24,8 @@
     .btn-rosado:hover { background-color: #d1848d; color: #fff; }
     .btn-vino-tinto { background-color: #6b0a0a; color: #fff; }
     .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    .btn-outline-vino-tinto { border: 2px solid #6b0a0a; color: #6b0a0a; background: transparent; }
+    .btn-outline-vino-tinto:hover { background-color: #6b0a0a; color: #fff; }
     .card-product img { height: 250px; object-fit: cover; }
     .card-product { min-height: 100%; }
   </style>
@@ -73,157 +75,19 @@
   </section>
 
   <!-- Novedades -->
-  <section class="container main-section py-5 fade-in" id="novedades">
-    <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title">Novedades</h2>
-    <div class="row">
-      <!-- Novedad 1 -->
-      <div class="col-md-4 mb-4">
-        <div class="card card-product border-rosado rounded-lg shadow h-100 progressive-reveal animate-delay-1">
-          <img src="https://storage.googleapis.com/a1aa/image/90036c8b-4e40-49ae-2055-f4ea149fc4a4.jpg" class="card-img-top" alt="Vestido moderno color vino tinto">
-          <div class="card-body">
-            <h5 class="card-title text-vino-tinto font-weight-bold">Vestido Vino Tinto</h5>
-            <p class="card-text text-muted">Vestido elegante y cómodo para cualquier ocasión especial.</p>
-            <span class="text-rosado font-weight-bold h5">$4,500 ARS</span>
-          </div>
-          <div class="card-footer bg-white border-0">
-            <button class="btn btn-vino-tinto btn-block ver-detalle-btn micro-bounce"
-              data-nombre="Vestido Vino Tinto"
-              data-precio="4500"
-              data-img="https://storage.googleapis.com/a1aa/image/90036c8b-4e40-49ae-2055-f4ea149fc4a4.jpg"
-              data-desc="Vestido elegante y cómodo para cualquier ocasión especial.">
-              Ver detalle
-            </button>
-          </div>
-        </div>
-      </div>
-      <!-- Novedad 2 -->
-      <div class="col-md-4 mb-4">
-        <div class="card card-product border-rosado rounded-lg shadow h-100 progressive-reveal animate-delay-2">
-          <img src="https://storage.googleapis.com/a1aa/image/c7dc7262-85c1-49f5-59b3-58ce9928ab11.jpg" class="card-img-top" alt="Blusa blanca con detalles rosados">
-          <div class="card-body">
-            <h5 class="card-title text-vino-tinto font-weight-bold">Blusa Blanca con Rosado</h5>
-            <p class="card-text text-muted">Blusa fresca y elegante para combinar con jeans o faldas.</p>
-            <span class="text-rosado font-weight-bold h5">$2,200 ARS</span>
-          </div>
-          <div class="card-footer bg-white border-0">
-            <button class="btn btn-vino-tinto btn-block ver-detalle-btn micro-bounce"
-              data-nombre="Blusa Blanca con Rosado"
-              data-precio="2200"
-              data-img="https://storage.googleapis.com/a1aa/image/c7dc7262-85c1-49f5-59b3-58ce9928ab11.jpg"
-              data-desc="Blusa fresca y elegante para combinar con jeans o faldas.">
-              Ver detalle
-            </button>
-          </div>
-        </div>
-      </div>
-      <!-- Novedad 3 -->
-      <div class="col-md-4 mb-4">
-        <div class="card card-product border-rosado rounded-lg shadow h-100 progressive-reveal animate-delay-3">
-          <img src="https://storage.googleapis.com/a1aa/image/7dac6a83-457b-4792-20b5-fe439cc972fe.jpg" class="card-img-top" alt="Camisa rosada de algodón suave">
-          <div class="card-body">
-            <h5 class="card-title text-vino-tinto font-weight-bold">Camisa Rosada</h5>
-            <p class="card-text text-muted">Camisa casual y cómoda para el día a día con estilo.</p>
-            <span class="text-rosado font-weight-bold h5">$2,800 ARS</span>
-          </div>
-          <div class="card-footer bg-white border-0">
-            <button class="btn btn-vino-tinto btn-block ver-detalle-btn micro-bounce"
-              data-nombre="Camisa Rosada"
-              data-precio="2800"
-              data-img="https://storage.googleapis.com/a1aa/image/7dac6a83-457b-4792-20b5-fe439cc972fe.jpg"
-              data-desc="Camisa casual y cómoda para el día a día con estilo.">
-              Ver detalle
-            </button>
-          </div>
-        </div>
+  <section class="main-section py-5 fade-in" id="novedades" style="display: none;">
+    <div class="container">
+      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title">Novedades</h2>
+      <div class="row" id="novedades-list">
+        <!-- Aquí se insertan las novedades dinámicamente -->
       </div>
     </div>
   </section>
-
-  <!-- Productos -->
   <section class="bg-light main-section py-5 fade-in" id="productos">
     <div class="container">
       <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title">Productos</h2>
-      <div class="row">
-        <!-- Producto 1 -->
-        <div class="col-md-3 mb-4">
-          <div class="card card-product border-vino-tinto rounded-lg shadow h-100 progressive-reveal animate-delay-1">
-            <img src="https://storage.googleapis.com/a1aa/image/061006f8-02ce-4d3d-39f4-1db5d98a16e1.jpg" class="card-img-top" alt="Falda plisada color vino tinto">
-            <div class="card-body">
-              <h5 class="card-title text-vino-tinto font-weight-bold">Falda Plisada Vino Tinto</h5>
-              <p class="card-text text-muted">Falda midi plisada, ideal para combinar con blusas claras.</p>
-              <span class="text-rosado font-weight-bold h5">$3,200 ARS</span>
-            </div>
-            <div class="card-footer bg-white border-0">
-              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
-                data-nombre="Falda Plisada Vino Tinto"
-                data-precio="3200"
-                data-img="https://storage.googleapis.com/a1aa/image/061006f8-02ce-4d3d-39f4-1db5d98a16e1.jpg"
-                data-desc="Falda midi plisada, ideal para combinar con blusas claras.">
-                Ver detalle
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- Producto 2 -->
-        <div class="col-md-3 mb-4">
-          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
-            <img src="https://storage.googleapis.com/a1aa/image/61c12ffc-2a99-47d0-a927-8981e6babaf8.jpg" class="card-img-top" alt="Remera blanca de algodón suave">
-            <div class="card-body">
-              <h5 class="card-title text-vino-tinto font-weight-bold">Remera Blanca</h5>
-              <p class="card-text text-muted">Remera básica para uso diario, cómoda y fresca.</p>
-              <span class="text-rosado font-weight-bold h5">$1,500 ARS</span>
-            </div>
-            <div class="card-footer bg-white border-0">
-              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
-                data-nombre="Remera Blanca"
-                data-precio="1500"
-                data-img="https://storage.googleapis.com/a1aa/image/61c12ffc-2a99-47d0-a927-8981e6babaf8.jpg"
-                data-desc="Remera básica para uso diario, cómoda y fresca.">
-                Ver detalle
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- Producto 3 -->
-        <div class="col-md-3 mb-4">
-          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
-            <img src="https://storage.googleapis.com/a1aa/image/e63a240c-6c72-4fff-3620-2833487fbd7d.jpg" class="card-img-top" alt="Pantalón rosado de tela suave">
-            <div class="card-body">
-              <h5 class="card-title text-vino-tinto font-weight-bold">Pantalón Rosado</h5>
-              <p class="card-text text-muted">Pantalón cómodo y elegante para combinar con blusas o remeras.</p>
-              <span class="text-rosado font-weight-bold h5">$3,700 ARS</span>
-            </div>
-            <div class="card-footer bg-white border-0">
-              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
-                data-nombre="Pantalón Rosado"
-                data-precio="3700"
-                data-img="https://storage.googleapis.com/a1aa/image/e63a240c-6c72-4fff-3620-2833487fbd7d.jpg"
-                data-desc="Pantalón cómodo y elegante para combinar con blusas o remeras.">
-                Ver detalle
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- Producto 4 -->
-        <div class="col-md-3 mb-4">
-          <div class="card card-product border-vino-tinto rounded-lg shadow h-100">
-            <img src="https://storage.googleapis.com/a1aa/image/af643308-4126-4aaa-8937-35fa6fcb1349.jpg" class="card-img-top" alt="Chaqueta de invierno color vino tinto">
-            <div class="card-body">
-              <h5 class="card-title text-vino-tinto font-weight-bold">Chaqueta Vino Tinto</h5>
-              <p class="card-text text-muted">Chaqueta abrigada para los días fríos con estilo único.</p>
-              <span class="text-rosado font-weight-bold h5">$6,500 ARS</span>
-            </div>
-            <div class="card-footer bg-white border-0">
-              <button class="btn btn-vino-tinto btn-block ver-detalle-btn"
-                data-nombre="Chaqueta Vino Tinto"
-                data-precio="6500"
-                data-img="https://storage.googleapis.com/a1aa/image/af643308-4126-4aaa-8937-35fa6fcb1349.jpg"
-                data-desc="Chaqueta abrigada para los días fríos con estilo único.">
-                Ver detalle
-              </button>
-            </div>
-          </div>
-        </div>
+      <div class="row" id="productos-list">
+        <!-- Aquí se insertan los productos dinámicamente -->
       </div>
     </div>
   </section>
@@ -317,6 +181,300 @@
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
   <script src="js/scripts.js"></script>
   <script>
+  // Variables globales para paginación
+  let todosLosProductos = [];
+  let todasLasNovedades = [];
+  const ITEMS_POR_PAGINA_NOVEDADES = 6; // 2 filas de 3 productos
+  const ITEMS_POR_PAGINA_PRODUCTOS = 8; // 2 filas de 4 productos
+  let paginaActualNovedades = 1;
+  let paginaActualProductos = 1;
+
+  // Cargar productos desde productos.json del bucket
+  async function cargarProductosCapri() {
+    const urlJson = 'https://storage.googleapis.com/imagenes-web-capri/productos.json';
+    let productos = [];
+    try {
+      console.log('Intentando cargar productos desde:', urlJson);
+      const resp = await fetch(urlJson);
+      console.log('Respuesta del fetch:', resp.status, resp.statusText);
+      
+      if (!resp.ok) {
+        throw new Error(`HTTP error! status: ${resp.status}`);
+      }
+      
+      const text = await resp.text();
+      console.log('Contenido crudo del JSON:', text);
+      
+      productos = JSON.parse(text);
+      console.log('Productos cargados:', productos);
+      console.log('Total de productos:', productos.length);
+    } catch (e) {
+      console.error('No se pudo cargar productos.json', e);
+      return;
+    }
+
+    // Separar novedades y productos
+    todasLasNovedades = productos.filter(p => p.categoria && p.categoria.toLowerCase() === 'novedades');
+    todosLosProductos = productos.filter(p => !p.categoria || p.categoria.toLowerCase() !== 'novedades');
+    
+    console.log('Novedades encontradas:', todasLasNovedades);
+    console.log('Productos encontrados:', todosLosProductos);
+
+    // Actualizar navegación
+    actualizarNavegacion();
+
+    // Renderizar la primera página
+    await renderizarNovedades();
+    await renderizarProductos();
+  }
+
+  // Función para mostrar/ocultar links de navegación
+  function actualizarNavegacion() {
+    const linkNovedades = document.querySelector('a[href="#novedades"]');
+    if (linkNovedades) {
+      const liNovedades = linkNovedades.closest('li');
+      if (todasLasNovedades.length === 0) {
+        liNovedades.style.display = 'none';
+        console.log('Link de Novedades oculto - no hay elementos');
+      } else {
+        liNovedades.style.display = 'block';
+        console.log('Link de Novedades visible - hay elementos');
+      }
+    }
+  }
+
+  // Renderizar novedades con paginación
+  async function renderizarNovedades() {
+    console.log('=== INICIANDO RENDERIZADO DE NOVEDADES ===');
+    
+    // Verificar si hay novedades disponibles
+    if (todasLasNovedades.length === 0) {
+      console.log('No hay novedades disponibles, ocultando sección');
+      const seccionNovedades = document.getElementById('novedades');
+      if (seccionNovedades) {
+        seccionNovedades.style.display = 'none';
+      }
+      return;
+    } else {
+      // Mostrar la sección si hay novedades
+      const seccionNovedades = document.getElementById('novedades');
+      if (seccionNovedades) {
+        seccionNovedades.style.display = 'block';
+      }
+    }
+    
+    const novedadesList = document.getElementById('novedades-list');
+    console.log('Elemento novedades-list encontrado:', novedadesList);
+    
+    const inicio = (paginaActualNovedades - 1) * ITEMS_POR_PAGINA_NOVEDADES;
+    const fin = inicio + ITEMS_POR_PAGINA_NOVEDADES;
+    const novedadesPagina = todasLasNovedades.slice(inicio, fin);
+    
+    console.log('Novedades para esta página:', novedadesPagina);
+    console.log('Inicio:', inicio, 'Fin:', fin);
+
+    // Solo limpiar si es la primera página
+    if (paginaActualNovedades === 1) {
+      novedadesList.innerHTML = '';
+      console.log('Lista limpiada para primera página');
+    }
+
+    for (const prod of novedadesPagina) {
+      console.log('Procesando producto:', prod);
+      const cardHtml = await crearTarjetaProducto(prod, 'novedad');
+      console.log('HTML generado:', cardHtml);
+      novedadesList.insertAdjacentHTML('beforeend', cardHtml);
+      console.log('Producto agregado al DOM');
+      
+      // Verificar inmediatamente que se agregó
+      console.log('Total de hijos después de agregar:', novedadesList.children.length);
+      console.log('Último elemento agregado:', novedadesList.lastElementChild);
+    }
+
+    // Mostrar/ocultar botón "Ver más"
+    actualizarBotonVerMas('novedades', fin < todasLasNovedades.length);
+    console.log('=== RENDERIZADO DE NOVEDADES COMPLETADO ===');
+  }
+
+  // Renderizar productos con paginación
+  async function renderizarProductos() {
+    console.log('=== INICIANDO RENDERIZADO DE PRODUCTOS ===');
+    const productosList = document.getElementById('productos-list');
+    console.log('Elemento productos-list encontrado:', productosList);
+    
+    const inicio = (paginaActualProductos - 1) * ITEMS_POR_PAGINA_PRODUCTOS;
+    const fin = inicio + ITEMS_POR_PAGINA_PRODUCTOS;
+    const productosPagina = todosLosProductos.slice(inicio, fin);
+    
+    console.log('Productos para esta página:', productosPagina);
+    console.log('Inicio:', inicio, 'Fin:', fin);
+
+    // Solo limpiar si es la primera página
+    if (paginaActualProductos === 1) {
+      productosList.innerHTML = '';
+      console.log('Lista de productos limpiada para primera página');
+    }
+
+    for (const prod of productosPagina) {
+      console.log('Procesando producto:', prod);
+      const cardHtml = await crearTarjetaProducto(prod, 'producto');
+      console.log('HTML de producto generado:', cardHtml);
+      productosList.insertAdjacentHTML('beforeend', cardHtml);
+      console.log('Producto agregado al DOM');
+    }
+
+    // Mostrar/ocultar botón "Ver más"
+    actualizarBotonVerMas('productos', fin < todosLosProductos.length);
+    console.log('=== RENDERIZADO DE PRODUCTOS COMPLETADO ===');
+  }
+
+  // Crear HTML de tarjeta de producto
+  async function crearTarjetaProducto(prod, tipo) {
+    let nombre = '', precio = '', textoTarjeta = '';
+    try {
+      const txtResp = await fetch(prod.txt);
+      const txt = await txtResp.text();
+      console.log('Contenido del .txt:', txt);
+      
+      const nombreMatch = txt.match(/Nombre:\s*\{([^}]+)\}/i);
+      const textoMatch = txt.match(/Texto\s+Tarjeta:\s*\{([^}]+)\}/i);
+      const precioMatch = txt.match(/Precio:\s*\{([^}]+)\}/i);
+      
+      nombre = nombreMatch ? nombreMatch[1].trim() : '';
+      textoTarjeta = textoMatch ? textoMatch[1].trim() : '';
+      precio = precioMatch ? precioMatch[1].trim() : '';
+      
+      console.log('Datos extraídos:', { nombre, textoTarjeta, precio });
+    } catch (e) {
+      console.error('Error al cargar .txt:', e);
+    }
+
+    const colClass = tipo === 'novedad' ? 'col-md-4' : 'col-md-3';
+    const borderClass = tipo === 'novedad' ? 'border-rosado' : 'border-vino-tinto';
+    const btnClass = tipo === 'novedad' ? 'btn-rosado' : 'btn-vino-tinto';
+
+    return `
+      <div class="${colClass} mb-4">
+        <div class="card card-product ${borderClass} rounded-lg shadow h-100 progressive-reveal visible animate-delay-1">
+          <img src="${prod.imagen}" class="card-img-top" alt="${nombre || ''}" style="height: 250px; object-fit: cover;">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title text-vino-tinto font-weight-bold">${nombre || ''}</h5>
+            <p class="card-text text-muted mb-2">${textoTarjeta || ''}</p>
+            <span class="text-rosado font-weight-bold h5 mb-3">${precio ? '$' + precio + ' ARS' : ''}</span>
+          </div>
+          <div class="card-footer bg-white border-0">
+            <button class="btn ${btnClass} btn-block ver-detalle-btn" onclick='verDetalleCapri(${JSON.stringify(prod)})'>Ver detalle</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Actualizar botón "Ver más"
+  function actualizarBotonVerMas(seccion, mostrar) {
+    console.log('Actualizando botón Ver más para:', seccion, 'Mostrar:', mostrar);
+    let btnContainer = document.getElementById(`btn-ver-mas-${seccion}`);
+    
+    if (!btnContainer) {
+      // Crear el contenedor del botón si no existe
+      btnContainer = document.createElement('div');
+      btnContainer.id = `btn-ver-mas-${seccion}`;
+      btnContainer.className = 'text-center mt-4';
+      
+      const container = seccion === 'novedades' 
+        ? document.querySelector('#novedades .container')
+        : document.querySelector('#productos .container');
+      
+      console.log('Contenedor encontrado para botón:', container);
+      if (container) {
+        container.appendChild(btnContainer);
+        console.log('Botón agregado al contenedor');
+      } else {
+        console.error('No se encontró contenedor para el botón');
+        return;
+      }
+    }
+
+    if (mostrar) {
+      btnContainer.innerHTML = `
+        <button class="btn btn-outline-vino-tinto btn-lg px-5 py-3" onclick="cargarMas${seccion === 'novedades' ? 'Novedades' : 'Productos'}()">
+          Ver más
+        </button>
+      `;
+      btnContainer.style.display = 'block';
+      console.log('Botón Ver más mostrado');
+    } else {
+      btnContainer.style.display = 'none';
+      console.log('Botón Ver más oculto');
+    }
+  }
+
+  // Funciones para cargar más elementos
+  async function cargarMasNovedades() {
+    console.log('=== CARGANDO MÁS NOVEDADES ===');
+    console.log('Página actual antes:', paginaActualNovedades);
+    paginaActualNovedades++;
+    console.log('Página actual después:', paginaActualNovedades);
+    await renderizarNovedades();
+    
+    // Verificar el estado del DOM después del renderizado
+    const novedadesList = document.getElementById('novedades-list');
+    console.log('Total de tarjetas en DOM después de cargar más:', novedadesList.children.length);
+  }
+
+  async function cargarMasProductos() {
+    console.log('=== CARGANDO MÁS PRODUCTOS ===');
+    console.log('Página actual antes:', paginaActualProductos);
+    paginaActualProductos++;
+    console.log('Página actual después:', paginaActualProductos);
+    await renderizarProductos();
+    
+    // Verificar el estado del DOM después del renderizado
+    const productosList = document.getElementById('productos-list');
+    console.log('Total de tarjetas de productos en DOM después de cargar más:', productosList.children.length);
+  }  // Guardar producto en localStorage y redirigir
+  function verDetalleCapri(prod) {
+    // Leer el .txt para obtener nombre, precio, desc y guardar junto con las urls
+    fetch(prod.txt).then(r => r.text()).then(txt => {
+      // Extraer información entre llaves
+      const nombreMatch = txt.match(/Nombre:\s*\{([^}]+)\}/);
+      const textoMatch = txt.match(/Texto Tarjeta:\s*\{([^}]+)\}/);
+      const precioMatch = txt.match(/Precio:\s*\{([^}]+)\}/);
+      const detalleMatch = txt.match(/Detalle:\s*\{([^}]+)\}/);
+      
+      const nombre = nombreMatch ? nombreMatch[1].trim() : '';
+      const textoTarjeta = textoMatch ? textoMatch[1].trim() : '';
+      const precio = precioMatch ? precioMatch[1].trim() : '';
+      const detalle = detalleMatch ? detalleMatch[1].trim() : '';
+      
+      const productoDetalle = {
+        nombre: nombre,
+        precio: precio,
+        desc: textoTarjeta,
+        detalle: detalle,
+        img: prod.imagen,
+        txt: prod.txt
+      };
+      localStorage.setItem('productoDetalle', JSON.stringify(productoDetalle));
+      window.location.href = 'detalle.html';
+    }).catch(() => {
+      // Si falla, guardar solo las urls
+      const productoDetalle = {
+        nombre: '',
+        precio: '',
+        desc: '',
+        detalle: '',
+        img: prod.imagen,
+        txt: prod.txt
+      };
+      localStorage.setItem('productoDetalle', JSON.stringify(productoDetalle));
+      window.location.href = 'detalle.html';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', cargarProductosCapri);
+  </script>
+  <script>
 document.addEventListener('DOMContentLoaded', function() {
   var cartLink = document.getElementById('navbar-cart-link');
   if (cartLink) {
@@ -330,30 +488,22 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
-$(document).ready(function() {
-  $('.ver-detalle-btn').on('click', function() {
-    const producto = {
-      nombre: $(this).data('nombre'),
-      precio: $(this).data('precio'),
-      img: $(this).data('img'),
-      desc: $(this).data('desc') || ''
-    };
-    localStorage.setItem('productoDetalle', JSON.stringify(producto));
-    window.location.href = 'detalle.html';
-  });
+// Usar event delegation para botones que se crean dinámicamente
+$(document).on('click', '.ver-detalle-btn', function() {
+  // El evento onclick del HTML se encarga de esto
+  console.log('Clic en ver detalle detectado');
 });
 </script>
 <script>
-// Permitir acceder al detalle desde toda la tarjeta
-$(document).ready(function() {
-  $('.card-product').on('click', function(e) {
-    // Evitar doble trigger si se hace clic en el botón
-    if ($(e.target).hasClass('ver-detalle-btn')) return;
-    const btn = $(this).find('.ver-detalle-btn');
-    if (btn.length) {
-      btn.trigger('click');
-    }
-  });
+// Permitir acceder al detalle desde toda la tarjeta usando event delegation
+$(document).on('click', '.card-product', function(e) {
+  // Evitar doble trigger si se hace clic en el botón
+  if ($(e.target).hasClass('ver-detalle-btn') || $(e.target).closest('.ver-detalle-btn').length) return;
+  
+  const btn = $(this).find('.ver-detalle-btn');
+  if (btn.length) {
+    btn.trigger('click');
+  }
 });
 </script>
   <!-- Script para inicializar animaciones -->
