@@ -44,9 +44,10 @@
       background-color: rgba(226, 156, 163, 0.1);
       border: 1px solid #e29ca3;
       border-radius: 0.5rem;
-      padding: 1.2rem;
-      max-height: 650px;
+      padding: 1.5rem;
+      max-height: 700px;
       overflow-y: auto;
+      width: 100%;
     }
     .order-item {
       border-bottom: 1px solid #e29ca3;
@@ -64,6 +65,31 @@
       background: linear-gradient(135deg, rgba(226, 156, 163, 0.1) 0%, rgba(255, 255, 255, 1) 50%);
       min-height: 100vh;
       padding: 2rem 0;
+    }
+    
+    /* Mejor ancho y centrado en pantallas grandes */
+    @media (min-width: 1200px) {
+      .container-fluid {
+        padding-left: 3%;
+        padding-right: 3%;
+      }
+      
+      /* Más espacio entre columnas */
+      .row[style*="gap"] > .col-lg-7,
+      .row[style*="gap"] > .col-lg-5 {
+        flex: 0 0 auto;
+      }
+    }
+    
+    /* Panel de datos de envío más ancho */
+    #seccionDatosEnvio {
+      max-width: 100%;
+      width: 100%;
+      padding: 2rem !important;
+    }
+    
+    #seccionDatosEnvio.show {
+      padding: 2rem !important;
     }
     
     /* Animaciones específicas para checkout */
@@ -84,12 +110,14 @@
       border-radius: 0.5rem;
       padding: 0;
       margin-top: 1rem;
+      width: 100%;
     }
     
     #seccionDatosEnvio.show {
-      max-height: 800px;
+      max-height: 1000px;
       opacity: 1;
-      padding: 1.5rem;
+      padding: 2rem;
+      width: 100%;
     }
     
     #seccionDatosEnvio h5 {
@@ -103,12 +131,50 @@
       max-height: 0;
       opacity: 0;
       overflow: hidden;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-top: 1rem;
+      padding: 0;
+      width: 100%;
+    }
+    
+    #opcionesEnvio > div {
+      margin-bottom: 0.5rem;
     }
     
     #opcionesEnvio.show {
-      max-height: 500px;
+      max-height: 1000px;
       opacity: 1;
+    }
+    
+    /* Estilos específicos para los alerts de envío */
+    #opcionesEnvio .alert {
+      border-radius: 0.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+    
+    /* Asegurar que el mensaje informativo sea visible */
+    #opcionesEnvio .alert-info {
+      background-color: #d1ecf1 !important;
+      border-color: #bee5eb !important;
+      color: #0c5460 !important;
+      padding: 1rem !important;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    
+    /* Clase específica para mensaje informativo de envío */
+    .mensaje-informativo-envio {
+      background: linear-gradient(45deg, #d1ecf1, #e8f5f8) !important;
+      border: 2px solid #bee5eb !important;
+      border-radius: 0.75rem !important;
+      color: #0c5460 !important;
+      font-weight: 500 !important;
+      padding: 1.2rem !important;
+      margin: 1rem 0 !important;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(12, 84, 96, 0.15) !important;
     }
 
     /* Campos deshabilitados */
@@ -183,12 +249,12 @@
   <div id="cartSidenavOverlay" onclick="closeCartSidenav()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1999;"></div>
 
   <!-- Main Checkout Content -->
-  <main class="container main-section py-5 fade-in">
+  <main class="container-fluid main-section py-5 fade-in" style="max-width: 1600px;">
     <h1 class="text-vino-tinto display-4 font-weight-bold mb-5 text-center section-title">Finalizar Compra</h1>
     
-    <div class="row">
+    <div class="row justify-content-center" style="gap: 3rem;">
       <!-- Formulario de Checkout -->
-      <div class="col-lg-6 mb-4 fade-in-left">
+      <div class="col-lg-7 col-xl-6 mb-4 fade-in-left">
         <form id="checkout-form" novalidate>
           <!-- Datos Personales -->
           <section class="mb-5 checkout-section">
@@ -320,7 +386,7 @@
               </div>
               
               <!-- Opciones de envío (se llenarán dinámicamente) -->
-              <div id="opcionesEnvio" class="mt-4" style="display: none;">
+              <div id="opcionesEnvio" class="mt-4">
                 <div class="alert alert-info">
                   <i class="fas fa-info-circle mr-2"></i>
                   Las opciones de envío se mostrarán después de completar los datos de dirección.
@@ -332,7 +398,7 @@
       </div>
 
       <!-- Resumen de Compra -->
-      <div class="col-lg-6 fade-in-right">
+      <div class="col-lg-5 col-xl-5 fade-in-right">
         <section class="checkout-summary checkout-section">
           <h2 class="text-vino-tinto h3 font-weight-bold section-title mb-4">Resumen de Compra</h2>
           
@@ -632,55 +698,100 @@
       }
     }
 
-    // Generar opciones básicas de envío
-    function generarOpcionesBasicas(codigoPostal, ciudad = '', provincia = '') {
+    // Tabla de precios de envío por código postal y provincia
+    const TABLA_PRECIOS_ENVIO = [
+      { rangos: [[1001, 1440]], provincia: 'Buenos Aires', minimo: 10614.47, maximo: 15863.14 },
+      { rangos: [[1439, 2942], [6400, 8180]], provincia: 'Buenos Aires', minimo: 10614.47, maximo: 15863.14 },
+      { rangos: [[2000, 2300], [2440, 2520], [3000, 3080]], provincia: 'Santa Fe', minimo: 10614.47, maximo: 15863.14 },
+      { rangos: [[2354, 2357], [3740, 3763], [4184, 4354]], provincia: 'Santiago del Estero', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[2820, 2840], [3100, 3280]], provincia: 'Entre Ríos', minimo: 10614.47, maximo: 15863.14 },
+      { rangos: [[3300, 3384]], provincia: 'Misiones', minimo: 16494.76, maximo: 18340.92 },
+      { rangos: [[3400, 3485]], provincia: 'Corrientes', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[3500, 3541], [3700, 3734]], provincia: 'Chaco', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[3600, 3636]], provincia: 'Formosa', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[4000, 4178]], provincia: 'Tucumán', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[4400, 4651]], provincia: 'Salta', minimo: 15303.95, maximo: 17410.44 },
+      { rangos: [[4500, 4514], [4600, 4655]], provincia: 'Jujuy', minimo: 15303.95, maximo: 17410.44 },
+      { rangos: [[4700, 4750]], provincia: 'Catamarca', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[5300, 5386]], provincia: 'La Rioja', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[5400, 5467]], provincia: 'San Juan', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[5500, 5620]], provincia: 'Mendoza', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[5700, 5883]], provincia: 'San Luis', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[6200, 6221], [6300, 6387], [8200, 8307]], provincia: 'La Pampa', minimo: 10614.47, maximo: 15863.14 },
+      { rangos: [[8300, 8407]], provincia: 'Neuquén', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[8400, 8536]], provincia: 'Río Negro', minimo: 12893.99, maximo: 15810.47 },
+      { rangos: [[9000, 9220]], provincia: 'Chubut', minimo: 15303.95, maximo: 17410.44 },
+      { rangos: [[9300, 9407]], provincia: 'Santa Cruz', minimo: 15303.95, maximo: 17410.44 }
+    ];
+
+    // Función para buscar precio de envío por CP y provincia
+    function buscarPrecioEnvio(codigoPostal, provincia) {
       const cp = parseInt(codigoPostal);
-      let costoBase = 800;
       
-      // Si tenemos provincia, usar lógica más precisa
-      if (provincia) {
-        if (provincia === 'Buenos Aires') {
-          if (cp >= 2800 && cp <= 2900) costoBase = 600;  // Zárate y alrededores
-          else if (cp >= 1000 && cp <= 1999) costoBase = 800;  // CABA y GBA
-          else costoBase = 900;  // Resto de Buenos Aires
-        } else if (provincia === 'CABA') {
-          costoBase = 800;  // Ciudad Autónoma de Buenos Aires
-        } else if (['Córdoba', 'Santa Fe', 'Entre Ríos'].includes(provincia)) {
-          costoBase = 1200; // Provincias centrales
-        } else if (['Mendoza', 'San Juan', 'San Luis', 'La Rioja'].includes(provincia)) {
-          costoBase = 1400; // Cuyo
-        } else if (['Salta', 'Jujuy', 'Tucumán', 'Santiago del Estero', 'Catamarca'].includes(provincia)) {
-          costoBase = 1500; // NOA
-        } else if (['Chubut', 'Santa Cruz', 'Río Negro', 'Neuquén', 'Tierra del Fuego'].includes(provincia)) {
-          costoBase = 1800; // Patagonia
-        } else {
-          costoBase = 1200; // Otras provincias
+      // Normalizar nombres de provincia para coincidencias
+      const provinciaNormalizada = provincia.toLowerCase()
+        .replace(/^provincia\s+(de\s+|del\s+)?/, '') // Quitar "Provincia de/del"
+        .replace(/\s*\(argentina\)/, '') // Quitar "(Argentina)"
+        .trim();
+      
+      // Buscar en la tabla de precios
+      for (const entrada of TABLA_PRECIOS_ENVIO) {
+        const provinciaTabla = entrada.provincia.toLowerCase()
+          .replace(/^provincia\s+(de\s+|del\s+)?/, '')
+          .replace(/\s*\(argentina\)/, '')
+          .trim();
+        
+        // Verificar si la provincia coincide
+        if (provinciaTabla === provinciaNormalizada || 
+            provinciaTabla.includes(provinciaNormalizada) || 
+            provinciaNormalizada.includes(provinciaTabla)) {
+          
+          // Verificar si el CP está en alguno de los rangos
+          for (const [min, max] of entrada.rangos) {
+            if (cp >= min && cp <= max) {
+              return {
+                minimo: entrada.minimo,
+                maximo: entrada.maximo,
+                encontrado: true
+              };
+            }
+          }
         }
-      } else {
-        // Lógica original basada solo en código postal
-        if (cp >= 2800 && cp <= 2900) costoBase = 600;  // Zárate y alrededores
-        else if (cp >= 1000 && cp <= 1999) costoBase = 800;  // CABA y GBA
-        else if (cp >= 2000 && cp <= 2999) costoBase = 900;  // Provincia de Buenos Aires
-        else if (cp >= 3000 && cp <= 3999) costoBase = 1200; // Córdoba, Santa Fe
-        else if (cp >= 4000 && cp <= 4999) costoBase = 1500; // NOA
-        else if (cp >= 5000 && cp <= 5999) costoBase = 1400; // Cuyo
-        else if (cp >= 8000 && cp <= 9999) costoBase = 1800; // Patagonia
       }
       
+      // Si no se encuentra, devolver precio por defecto
+      return {
+        minimo: 12000,
+        maximo: 18000,
+        encontrado: false
+      };
+    }
+
+    // Generar opciones básicas de envío
+    function generarOpcionesBasicas(codigoPostal, ciudad = '', provincia = '') {
+      const precios = buscarPrecioEnvio(codigoPostal, provincia);
+      
+      // Usar el precio mínimo como base para standard y el máximo para express
+      const costoStandard = Math.round(precios.minimo);
+      const costoExpress = Math.round(precios.maximo);
+      
       const destinoText = ciudad && provincia ? ` - ${ciudad}, ${provincia}` : '';
+      const estatusPrecio = precios.encontrado ? 'Precio confirmado' : 'Precio estimado';
       
       return [
         {
           codigo: 'standard',
           nombre: 'Envío Standard',
           descripcion: `Entrega en 3-5 días hábiles${destinoText}`,
-          tarifa: costoBase
+          tarifa: costoStandard,
+          estado: estatusPrecio
         },
         {
           codigo: 'express',
           nombre: 'Envío Express',
           descripcion: `Entrega en 1-2 días hábiles${destinoText}`,
-          tarifa: Math.round(costoBase * 1.5)
+          tarifa: costoExpress,
+          estado: estatusPrecio
         }
       ];
     }
@@ -689,62 +800,62 @@
     function mostrarOpcionesEnvio(cotizaciones, datosEnvio) {
       const opcionesEnvio = document.getElementById('opcionesEnvio');
       
+      if (!opcionesEnvio) {
+        console.error('Elemento #opcionesEnvio no encontrado');
+        return;
+      }
+      
       // Determinar si tenemos datos completos de dirección o solo código postal
       const destinoInfo = typeof datosEnvio === 'object' && datosEnvio.ciudad
         ? `${datosEnvio.ciudad}, ${datosEnvio.provincia} (CP: ${datosEnvio.codigoPostal})`
         : `CP: ${datosEnvio}`;
       
+      // Verificar si el precio fue encontrado en la tabla oficial
+      const precioConfirmado = cotizaciones.length > 0 && cotizaciones[0].estado === 'Precio confirmado';
+      
       let opcionesHTML = `
         <div class="alert alert-success">
           <i class="fas fa-check-circle mr-2"></i>
-          Opciones de envío disponibles para: <strong>${destinoInfo}</strong>
-        </div>
-        <div class="alert alert-info">
-          <i class="fas fa-info-circle mr-2"></i>
-          Tarifas estimadas. Para cotización exacta contactanos directamente.
+          <strong>Costo de envío estimado</strong> para: ${destinoInfo}
         </div>
       `;
       
-      cotizaciones.forEach((servicio, index) => {
-        const isChecked = index === 0 ? 'checked' : '';
-        const costo = servicio.tarifa || 0;
+      // Mostrar solo el rango de precios sin permitir selección
+      if (cotizaciones.length > 0) {
+        const minPrice = Math.min(...cotizaciones.map(c => c.tarifa));
+        const maxPrice = Math.max(...cotizaciones.map(c => c.tarifa));
         
         opcionesHTML += `
-          <div class="form-check mb-3 p-3 border rounded">
-            <input class="form-check-input" type="radio" name="metodoEnvio" 
-                   id="envio${index}" value="${servicio.codigo}" 
-                   data-costo="${costo}" ${isChecked}>
-            <label class="form-check-label w-100" for="envio${index}">
-              <div class="d-flex justify-content-between align-items-start">
-                <div>
-                  <strong class="text-vino-tinto">${servicio.nombre}</strong>
-                  <br><small class="text-muted">${servicio.descripcion}</small>
-                </div>
-                <div class="text-right">
-                  <strong class="text-rosado">$${costo} ARS</strong>
-                </div>
-              </div>
-            </label>
+          <div class="card border-info">
+            <div class="card-body text-center">
+              <h5 class="card-title text-vino-tinto">Rango de precios estimado</h5>
+              <h3 class="text-rosado mb-3">$${minPrice.toFixed(2)} - $${maxPrice.toFixed(2)} ARS</h3>
+              <p class="text-muted mb-0">${precioConfirmado ? 'Precio confirmado' : 'Precio estimado'}</p>
+            </div>
           </div>
         `;
-      });
+      }
+
+      opcionesHTML += `
+        <div class="alert mensaje-informativo-envio mt-3">
+          <div class="d-flex align-items-center justify-content-center">
+            <i class="fas fa-info-circle mr-3" style="color: #0c5460; font-size: 1.3rem;"></i>
+            <div class="text-center">
+              <strong style="color: #0c5460;">Importante:</strong> 
+              <p class="mb-0" style="color: #0c5460; line-height: 1.6; font-size: 0.95rem;">
+                El costo de envío es estimado. Cuando se haya efectuado la compra, nos pondremos en contacto para coordinar el envío e informar el costo final.
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
 
       opcionesEnvio.innerHTML = opcionesHTML;
+      opcionesEnvio.style.display = 'block'; // Forzar visibilidad
       opcionesEnvio.classList.add('show');
       
-      // Establecer costo inicial (primer servicio)
-      if (cotizaciones.length > 0) {
-        costoEnvio = cotizaciones[0].tarifa || 0;
-        cargarResumenCompra();
-      }
-      
-      // Agregar event listeners a las opciones de envío
-      document.querySelectorAll('input[name="metodoEnvio"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-          costoEnvio = Number(this.getAttribute('data-costo'));
-          cargarResumenCompra();
-        });
-      });
+      // NO modificar costoEnvio - mantenerlo en 0
+      // NO llamar cargarResumenCompra para evitar afectar el carrito
     }
 
     // Iniciar proceso de pago
