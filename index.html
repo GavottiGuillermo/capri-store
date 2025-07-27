@@ -28,6 +28,34 @@
     .btn-outline-vino-tinto:hover { background-color: #6b0a0a; color: #fff; }
     .card-product img { height: 250px; object-fit: cover; }
     .card-product { min-height: 100%; }
+    
+    /* Estilos para dropdown de productos */
+    .dropdown-menu {
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .dropdown-item:hover {
+      background-color: #e29ca3 !important;
+      color: #fff !important;
+    }
+    
+    .dropdown-item.active {
+      background-color: #e29ca3 !important;
+      color: #fff !important;
+      font-weight: bold;
+    }
+    
+    .dropdown-divider {
+      margin: 0.25rem 0;
+    }
+    
+    /* Estilo para título de categoría activa */
+    .categoria-titulo {
+      border-bottom: 3px solid #e29ca3;
+      padding-bottom: 0.5rem;
+      margin-bottom: 2rem;
+    }
   </style>
 </head>
 <body class="bg-white text-vino">
@@ -44,7 +72,22 @@
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ml-auto font-weight-bold">
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#novedades">Novedades</a></li>
-          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#productos">Productos</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="productosDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Productos
+            </a>
+            <div class="dropdown-menu bg-vino-tinto border-rosado" aria-labelledby="productosDropdown">
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('todos')" id="menu-todos">Todos los Productos</a>
+              <div class="dropdown-divider bg-rosado"></div>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Tops')" id="menu-tops">Tops</a>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Polleras')" id="menu-polleras">Polleras</a>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Pantalones')" id="menu-pantalones">Pantalones</a>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Minis')" id="menu-minis">Minis</a>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Vestidos')" id="menu-vestidos">Vestidos</a>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Accesorios')" id="menu-accesorios">Accesorios</a>
+              <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Remeras')" id="menu-remeras">Remeras</a>
+            </div>
+          </li>
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#nosotros">Nosotros</a></li>
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#contacto">Contacto</a></li>
           <li class="nav-item">
@@ -85,7 +128,7 @@
   </section>
   <section class="bg-light main-section py-5 fade-in" id="productos">
     <div class="container">
-      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title">Productos</h2>
+      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title categoria-titulo" id="titulo-productos">Productos</h2>
       <div class="row" id="productos-list">
         <!-- Aquí se insertan los productos dinámicamente -->
       </div>
@@ -184,6 +227,8 @@
   // Variables globales para paginación
   let todosLosProductos = [];
   let todasLasNovedades = [];
+  let productosFiltrados = []; // Para almacenar productos filtrados por categoría
+  let categoriaActiva = 'todos'; // Categoría actualmente seleccionada
   const ITEMS_POR_PAGINA_NOVEDADES = 6; // 2 filas de 3 productos
   const ITEMS_POR_PAGINA_PRODUCTOS = 8; // 2 filas de 4 productos
   let paginaActualNovedades = 1;
@@ -215,10 +260,14 @@
 
     // Separar novedades y productos
     todasLasNovedades = productos.filter(p => p.categoria && p.categoria.toLowerCase() === 'novedades');
-    todosLosProductos = productos.filter(p => !p.categoria || p.categoria.toLowerCase() !== 'novedades');
+    todosLosProductos = productos.filter(p => p.categoria && p.categoria.toLowerCase() !== 'novedades');
+    
+    // Inicializar productos filtrados con todos los productos
+    productosFiltrados = [...todosLosProductos];
     
     console.log('Novedades encontradas:', todasLasNovedades);
     console.log('Productos encontrados:', todosLosProductos);
+    console.log('Categorías disponibles:', [...new Set(todosLosProductos.map(p => p.categoria))]);
 
     // Actualizar navegación
     actualizarNavegacion();
@@ -226,6 +275,9 @@
     // Renderizar la primera página
     await renderizarNovedades();
     await renderizarProductos();
+    
+    // Marcar "Todos los Productos" como activo inicialmente
+    actualizarMenuActivo('todos');
   }
 
   // Función para mostrar/ocultar links de navegación
@@ -304,9 +356,10 @@
     
     const inicio = (paginaActualProductos - 1) * ITEMS_POR_PAGINA_PRODUCTOS;
     const fin = inicio + ITEMS_POR_PAGINA_PRODUCTOS;
-    const productosPagina = todosLosProductos.slice(inicio, fin);
+    const productosPagina = productosFiltrados.slice(inicio, fin);
     
-    console.log('Productos para esta página:', productosPagina);
+    console.log('Productos filtrados para esta página:', productosPagina);
+    console.log('Total productos filtrados:', productosFiltrados.length);
     console.log('Inicio:', inicio, 'Fin:', fin);
 
     // Solo limpiar si es la primera página
@@ -324,7 +377,7 @@
     }
 
     // Mostrar/ocultar botón "Ver más"
-    actualizarBotonVerMas('productos', fin < todosLosProductos.length);
+    actualizarBotonVerMas('productos', fin < productosFiltrados.length);
     console.log('=== RENDERIZADO DE PRODUCTOS COMPLETADO ===');
   }
 
@@ -432,6 +485,82 @@
     // Verificar el estado del DOM después del renderizado
     const productosList = document.getElementById('productos-list');
     console.log('Total de tarjetas de productos en DOM después de cargar más:', productosList.children.length);
+  }
+
+  // Función para mostrar productos por categoría
+  async function mostrarCategoria(categoria) {
+    console.log('=== MOSTRANDO CATEGORÍA:', categoria, '===');
+    
+    // Actualizar categoría activa
+    categoriaActiva = categoria;
+    
+    // Actualizar estado visual del menú
+    actualizarMenuActivo(categoria);
+    
+    // Filtrar productos según la categoría
+    if (categoria === 'todos') {
+      productosFiltrados = [...todosLosProductos];
+    } else {
+      productosFiltrados = todosLosProductos.filter(p => 
+        p.categoria && p.categoria.toLowerCase() === categoria.toLowerCase()
+      );
+    }
+    
+    console.log('Productos filtrados:', productosFiltrados);
+    console.log('Total productos en categoría:', productosFiltrados.length);
+    
+    // Resetear paginación
+    paginaActualProductos = 1;
+    
+    // Actualizar título de la sección
+    const tituloProductos = document.getElementById('titulo-productos');
+    if (categoria === 'todos') {
+      tituloProductos.textContent = 'Todos los Productos';
+    } else {
+      tituloProductos.textContent = categoria;
+    }
+    
+    // Renderizar productos filtrados
+    await renderizarProductos();
+    
+    // Scroll hacia la sección de productos
+    document.getElementById('productos').scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+
+  // Función para actualizar el estado visual del menú
+  function actualizarMenuActivo(categoria) {
+    // Remover clase active de todos los elementos del menú
+    const menuItems = document.querySelectorAll('.dropdown-item');
+    menuItems.forEach(item => item.classList.remove('active'));
+    
+    // Agregar clase active al elemento seleccionado
+    let menuId = '';
+    switch(categoria.toLowerCase()) {
+      case 'todos': menuId = 'menu-todos'; break;
+      case 'tops': menuId = 'menu-tops'; break;
+      case 'polleras': menuId = 'menu-polleras'; break;
+      case 'pantalones': menuId = 'menu-pantalones'; break;
+      case 'minis': menuId = 'menu-minis'; break;
+      case 'vestidos': menuId = 'menu-vestidos'; break;
+      case 'accesorios': menuId = 'menu-accesorios'; break;
+      case 'remeras': menuId = 'menu-remeras'; break;
+    }
+    
+    if (menuId) {
+      const activeMenuItem = document.getElementById(menuId);
+      if (activeMenuItem) {
+        activeMenuItem.classList.add('active');
+      }
+    }
+  }
+
+  // Función para obtener categorías disponibles
+  function obtenerCategoriasDisponibles() {
+    const categorias = [...new Set(todosLosProductos.map(p => p.categoria))];
+    return categorias.filter(cat => cat && cat.toLowerCase() !== 'novedades');
   }  // Guardar producto en localStorage y redirigir
   function verDetalleCapri(prod) {
     // Leer el .txt para obtener nombre, precio, desc y guardar junto con las urls
@@ -473,6 +602,12 @@
   }
 
   document.addEventListener('DOMContentLoaded', cargarProductosCapri);
+
+  // Hacer disponibles las funciones globalmente
+  window.mostrarCategoria = mostrarCategoria;
+  window.cargarMasNovedades = cargarMasNovedades;
+  window.cargarMasProductos = cargarMasProductos;
+  window.verDetalleCapri = verDetalleCapri;
   </script>
   <script>
 document.addEventListener('DOMContentLoaded', function() {
