@@ -389,13 +389,19 @@
       const txt = await txtResp.text();
       console.log('Contenido del .txt:', txt);
       
-      const nombreMatch = txt.match(/Nombre:\s*\{([^}]+)\}/i);
-      const textoMatch = txt.match(/Texto\s+Tarjeta:\s*\{([^}]+)\}/i);
-      const precioMatch = txt.match(/Precio:\s*\{([^}]+)\}/i);
+      // Extraer información entre llaves en formato secuencial
+      // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
+      const matches = txt.match(/\{([^}]+)\}/g);
       
-      nombre = nombreMatch ? nombreMatch[1].trim() : '';
-      textoTarjeta = textoMatch ? textoMatch[1].trim() : '';
-      precio = precioMatch ? precioMatch[1].trim() : '';
+      if (matches && matches.length >= 3) {
+        nombre = matches[0].replace(/[{}]/g, '').trim();
+        textoTarjeta = matches[1].replace(/[{}]/g, '').trim();
+        precio = matches[2].replace(/[{}]/g, '').trim();
+      } else {
+        nombre = '';
+        textoTarjeta = '';
+        precio = '';
+      }
       
       console.log('Datos extraídos:', { nombre, textoTarjeta, precio });
     } catch (e) {
@@ -565,21 +571,24 @@
   function verDetalleCapri(prod) {
     // Leer el .txt para obtener nombre, precio, desc y guardar junto con las urls
     fetch(prod.txt).then(r => r.text()).then(txt => {
-      // Extraer información entre llaves
-      const nombreMatch = txt.match(/Nombre:\s*\{([^}]+)\}/);
-      const textoMatch = txt.match(/Texto Tarjeta:\s*\{([^}]+)\}/);
-      const precioMatch = txt.match(/Precio:\s*\{([^}]+)\}/);
-      const detalleMatch = txt.match(/Detalle:\s*\{([^}]+)\}/);
+      // Extraer información entre llaves en formato secuencial
+      // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
+      const matches = txt.match(/\{([^}]+)\}/g);
       
-      const nombre = nombreMatch ? nombreMatch[1].trim() : '';
-      const textoTarjeta = textoMatch ? textoMatch[1].trim() : '';
-      const precio = precioMatch ? precioMatch[1].trim() : '';
-      const detalle = detalleMatch ? detalleMatch[1].trim() : '';
+      let nombre = '', textoTarjeta = '', precio = '', talle = '', detalle = '';
+      if (matches && matches.length >= 5) {
+        nombre = matches[0].replace(/[{}]/g, '').trim();
+        textoTarjeta = matches[1].replace(/[{}]/g, '').trim();
+        precio = matches[2].replace(/[{}]/g, '').trim();
+        talle = matches[3].replace(/[{}]/g, '').trim();
+        detalle = matches[4].replace(/[{}]/g, '').trim();
+      }
       
       const productoDetalle = {
         nombre: nombre,
         precio: precio,
         desc: textoTarjeta,
+        talle: talle,
         detalle: detalle,
         img: prod.imagen,
         txt: prod.txt

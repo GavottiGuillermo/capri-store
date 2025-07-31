@@ -175,22 +175,43 @@ document.addEventListener('DOMContentLoaded', function() {
           // Obtener los datos actualizados desde el .txt del producto
           const resp = await fetch(producto.txt);
           const txt = await resp.text();
-          // Extraer información entre llaves
-          const nombreMatch = txt.match(/Nombre:\s*\{([^}]+)\}/);
-          const textoMatch = txt.match(/Texto Tarjeta:\s*\{([^}]+)\}/);
-          const precioMatch = txt.match(/Precio:\s*\{([^}]+)\}/);
-          const detalleMatch = txt.match(/Detalle:\s*\{([^}]+)\}/);
           
-          const nombre = nombreMatch ? nombreMatch[1].trim() : producto.nombre;
-          const textoTarjeta = textoMatch ? textoMatch[1].trim() : producto.desc;
-          const precio = precioMatch ? precioMatch[1].trim() : producto.precio;
-          const detalle = detalleMatch ? detalleMatch[1].trim() : '';
+          // Extraer información entre llaves en formato secuencial
+          // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
+          const matches = txt.match(/\{([^}]+)\}/g);
+          
+          let nombre = producto.nombre, textoTarjeta = producto.desc, precio = producto.precio, talle = producto.talle || 'M', detalle = '';
+          if (matches && matches.length >= 5) {
+            nombre = matches[0].replace(/[{}]/g, '').trim();
+            textoTarjeta = matches[1].replace(/[{}]/g, '').trim();
+            precio = matches[2].replace(/[{}]/g, '').trim();
+            talle = matches[3].replace(/[{}]/g, '').trim();
+            detalle = matches[4].replace(/[{}]/g, '').trim();
+          }
           
           document.getElementById('mainImage').src = producto.img;
           document.getElementById('mainImage').alt = nombre;
           document.getElementById('nombre-producto').textContent = nombre;
           document.getElementById('precio-producto').textContent = precio ? ('$' + precio + ' ARS') : '';
           document.querySelector('.descripcion-producto').textContent = textoTarjeta;
+          
+          // Configurar talle y cantidad fijos
+          const selectTalle = document.getElementById('size');
+          const inputCantidad = document.getElementById('quantity');
+          
+          if (selectTalle && talle) {
+            selectTalle.value = talle;
+            selectTalle.disabled = true;
+            selectTalle.style.backgroundColor = '#f8f9fa';
+            selectTalle.style.cursor = 'not-allowed';
+          }
+          
+          if (inputCantidad) {
+            inputCantidad.value = 1;
+            inputCantidad.disabled = true;
+            inputCantidad.style.backgroundColor = '#f8f9fa';
+            inputCantidad.style.cursor = 'not-allowed';
+          }
           
           // Actualizar la sección de detalles si existe información de detalle
           if (detalle) {
@@ -215,6 +236,26 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('nombre-producto').textContent = producto.nombre;
           document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
           document.querySelector('.descripcion-producto').textContent = producto.desc;
+          
+          // Configurar talle y cantidad fijos (fallback)
+          const selectTalle = document.getElementById('size');
+          const inputCantidad = document.getElementById('quantity');
+          
+          if (selectTalle) {
+            if (producto.talle) {
+              selectTalle.value = producto.talle;
+            }
+            selectTalle.disabled = true;
+            selectTalle.style.backgroundColor = '#f8f9fa';
+            selectTalle.style.cursor = 'not-allowed';
+          }
+          
+          if (inputCantidad) {
+            inputCantidad.value = 1;
+            inputCantidad.disabled = true;
+            inputCantidad.style.backgroundColor = '#f8f9fa';
+            inputCantidad.style.cursor = 'not-allowed';
+          }
         }
       } else if (producto) {
         // Si no hay txt, usar los datos guardados
@@ -223,10 +264,47 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('nombre-producto').textContent = producto.nombre;
         document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
         document.querySelector('.descripcion-producto').textContent = producto.desc;
+        
+        // Configurar talle y cantidad fijos
+        const selectTalle = document.getElementById('size');
+        const inputCantidad = document.getElementById('quantity');
+        
+        if (selectTalle) {
+          if (producto.talle) {
+            selectTalle.value = producto.talle;
+          }
+          selectTalle.disabled = true;
+          selectTalle.style.backgroundColor = '#f8f9fa';
+          selectTalle.style.cursor = 'not-allowed';
+        }
+        
+        if (inputCantidad) {
+          inputCantidad.value = 1;
+          inputCantidad.disabled = true;
+          inputCantidad.style.backgroundColor = '#f8f9fa';
+          inputCantidad.style.cursor = 'not-allowed';
+        }
       } else {
         document.getElementById('nombre-producto').textContent = 'Producto no encontrado';
         document.getElementById('precio-producto').textContent = '';
         document.querySelector('.descripcion-producto').textContent = '';
+        
+        // Deshabilitar campos cuando no hay producto
+        const selectTalle = document.getElementById('size');
+        const inputCantidad = document.getElementById('quantity');
+        
+        if (selectTalle) {
+          selectTalle.disabled = true;
+          selectTalle.style.backgroundColor = '#f8f9fa';
+          selectTalle.style.cursor = 'not-allowed';
+        }
+        
+        if (inputCantidad) {
+          inputCantidad.value = 1;
+          inputCantidad.disabled = true;
+          inputCantidad.style.backgroundColor = '#f8f9fa';
+          inputCantidad.style.cursor = 'not-allowed';
+        }
       }
     });
   </script>
