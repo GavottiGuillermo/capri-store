@@ -26,6 +26,79 @@
     .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
     .btn-outline-vino-tinto { border: 2px solid #6b0a0a; color: #6b0a0a; background: transparent; }
     .btn-outline-vino-tinto:hover { background-color: #6b0a0a; color: #fff; }
+    
+    /* Asegurar que los botones de novedades tengan prioridad - ESTILOS FINALES */
+    .btn-rosado, .btn-rosado:active, .btn-rosado:focus, .btn-rosado:visited {
+      background-color: #e29ca3 !important;
+      color: #fff !important;
+      border-color: #e29ca3 !important;
+      opacity: 1 !important;
+      transform: none !important;
+      box-shadow: none !important;
+      transition: background-color 0.2s ease !important;
+      pointer-events: auto !important;
+      cursor: pointer !important;
+      text-decoration: none !important;
+    }
+    .btn-rosado:hover {
+      background-color: #d1848d !important;
+      color: #fff !important;
+      border-color: #d1848d !important;
+      transform: none !important;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    .btn-rosado::before, .btn-rosado::after {
+      display: none !important;
+    }
+    
+    .btn-vino-tinto, .btn-vino-tinto:active, .btn-vino-tinto:focus, .btn-vino-tinto:visited {
+      background-color: #6b0a0a !important;
+      color: #fff !important;
+      border-color: #6b0a0a !important;
+      opacity: 1 !important;
+      transform: none !important;
+      box-shadow: none !important;
+      transition: background-color 0.2s ease !important;
+      pointer-events: auto !important;
+      cursor: pointer !important;
+      text-decoration: none !important;
+    }
+    .btn-vino-tinto:hover {
+      background-color: #4a0707 !important;
+      color: #fff !important;
+      border-color: #4a0707 !important;
+      transform: none !important;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    .btn-vino-tinto::before, .btn-vino-tinto::after {
+      display: none !important;
+    }
+    
+    /* Reglas específicas para botones en sección novedades - MÁXIMA PRIORIDAD */
+    #novedades .card-footer .btn-rosado,
+    #novedades .btn-rosado,
+    #novedades button.btn-rosado,
+    #novedades .ver-detalle-btn.btn-rosado {
+      background-color: #e29ca3 !important;
+      background: #e29ca3 !important;
+      border-color: #e29ca3 !important;
+      color: #fff !important;
+      opacity: 1 !important;
+      filter: none !important;
+      pointer-events: auto !important;
+      cursor: pointer !important;
+    }
+    
+    #novedades .card-footer .btn-rosado:hover,
+    #novedades .btn-rosado:hover,
+    #novedades button.btn-rosado:hover,
+    #novedades .ver-detalle-btn.btn-rosado:hover {
+      background-color: #d1848d !important;
+      background: #d1848d !important;
+      border-color: #d1848d !important;
+      color: #fff !important;
+    }
+    
     .card-product img { height: 250px; object-fit: cover; }
     .card-product { min-height: 100%; }
     
@@ -258,8 +331,15 @@
       return;
     }
 
-    // Separar novedades y productos
-    todasLasNovedades = productos.filter(p => p.categoria && p.categoria.toLowerCase() === 'novedades');
+    // Separar novedades y productos con la nueva lógica
+    // Novedades: categoría "novedades" O que contenga "-Novedad"
+    todasLasNovedades = productos.filter(p => {
+      if (!p.categoria) return false;
+      const categoria = p.categoria.toLowerCase();
+      return categoria === 'novedades' || categoria.includes('-novedad');
+    });
+    
+    // Todos los productos (incluyendo los que tienen "-Novedad")
     todosLosProductos = productos.filter(p => p.categoria && p.categoria.toLowerCase() !== 'novedades');
     
     // Inicializar productos filtrados con todos los productos
@@ -345,6 +425,29 @@
 
     // Mostrar/ocultar botón "Ver más"
     actualizarBotonVerMas('novedades', fin < todasLasNovedades.length);
+    
+    // Forzar estilos de botones en novedades después del renderizado
+    setTimeout(() => {
+      const botonesNovedades = document.querySelectorAll('#novedades .btn-rosado');
+      botonesNovedades.forEach(btn => {
+        btn.style.backgroundColor = '#e29ca3';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#e29ca3';
+        btn.style.opacity = '1';
+        btn.style.filter = 'none';
+        btn.style.pointerEvents = 'auto';
+        btn.style.cursor = 'pointer';
+        
+        // Agregar event listener para hover
+        btn.addEventListener('mouseenter', function() {
+          this.style.backgroundColor = '#d1848d';
+        });
+        btn.addEventListener('mouseleave', function() {
+          this.style.backgroundColor = '#e29ca3';
+        });
+      });
+    }, 100);
+    
     console.log('=== RENDERIZADO DE NOVEDADES COMPLETADO ===');
   }
 
@@ -422,7 +525,9 @@
             <span class="text-rosado font-weight-bold h5 mb-3">${precio ? '$' + precio + ' ARS' : ''}</span>
           </div>
           <div class="card-footer bg-white border-0">
-            <button class="btn ${btnClass} btn-block ver-detalle-btn" onclick='verDetalleCapri(${JSON.stringify(prod)})'>Ver detalle</button>
+            <button class="btn ${btnClass} btn-block ver-detalle-btn" 
+                    style="${tipo === 'novedad' ? 'background-color: #e29ca3 !important; color: #fff !important; border-color: #e29ca3 !important;' : ''}"
+                    onclick='verDetalleCapri(${JSON.stringify(prod)})'>Ver detalle</button>
           </div>
         </div>
       </div>
@@ -507,9 +612,20 @@
     if (categoria === 'todos') {
       productosFiltrados = [...todosLosProductos];
     } else {
-      productosFiltrados = todosLosProductos.filter(p => 
-        p.categoria && p.categoria.toLowerCase() === categoria.toLowerCase()
-      );
+      // Filtrar por categoría base (antes del guión) o categoría exacta
+      productosFiltrados = todosLosProductos.filter(p => {
+        if (!p.categoria) return false;
+        
+        const categoriaProducto = p.categoria.toLowerCase();
+        const categoriaBuscada = categoria.toLowerCase();
+        
+        // Verificar si coincide exactamente
+        if (categoriaProducto === categoriaBuscada) return true;
+        
+        // Verificar si la categoría base coincide (antes del guión)
+        const categoriaBase = categoriaProducto.split('-')[0];
+        return categoriaBase === categoriaBuscada;
+      });
     }
     
     console.log('Productos filtrados:', productosFiltrados);
@@ -565,8 +681,24 @@
 
   // Función para obtener categorías disponibles
   function obtenerCategoriasDisponibles() {
-    const categorias = [...new Set(todosLosProductos.map(p => p.categoria))];
-    return categorias.filter(cat => cat && cat.toLowerCase() !== 'novedades');
+    const categorias = todosLosProductos.map(p => {
+      if (!p.categoria) return null;
+      
+      const categoria = p.categoria.toLowerCase();
+      // Si contiene "-novedad", tomar solo la parte antes del guión
+      if (categoria.includes('-novedad')) {
+        return p.categoria.split('-')[0];
+      }
+      // Si es "novedades", no incluir
+      if (categoria === 'novedades') {
+        return null;
+      }
+      
+      return p.categoria;
+    }).filter(cat => cat); // Eliminar nulls
+    
+    // Obtener categorías únicas
+    return [...new Set(categorias)];
   }  // Guardar producto en localStorage y redirigir
   function verDetalleCapri(prod) {
     // Leer el .txt para obtener nombre, precio, desc y guardar junto con las urls
@@ -618,41 +750,36 @@
   window.cargarMasProductos = cargarMasProductos;
   window.verDetalleCapri = verDetalleCapri;
   </script>
-  <script>
-document.addEventListener('DOMContentLoaded', function() {
-  var cartLink = document.getElementById('navbar-cart-link');
-  if (cartLink) {
-    cartLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      if (typeof openCartSidenav === 'function') {
-        openCartSidenav();
-      }
-    });
-  }
-});
-</script>
-<script>
-// Usar event delegation para botones que se crean dinámicamente
-$(document).on('click', '.ver-detalle-btn', function() {
-  // El evento onclick del HTML se encarga de esto
-  console.log('Clic en ver detalle detectado');
-});
-</script>
-<script>
-// Permitir acceder al detalle desde toda la tarjeta usando event delegation
-$(document).on('click', '.card-product', function(e) {
-  // Evitar doble trigger si se hace clic en el botón
-  if ($(e.target).hasClass('ver-detalle-btn') || $(e.target).closest('.ver-detalle-btn').length) return;
-  
-  const btn = $(this).find('.ver-detalle-btn');
-  if (btn.length) {
-    btn.trigger('click');
-  }
-});
-</script>
   <!-- Script para inicializar animaciones -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Manejar carrito sidebar
+      var cartLink = document.getElementById('navbar-cart-link');
+      if (cartLink) {
+        cartLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (typeof openCartSidenav === 'function') {
+            openCartSidenav();
+          }
+        });
+      }
+      
+      // Usar event delegation para botones que se crean dinámicamente
+      $(document).on('click', '.ver-detalle-btn', function() {
+        console.log('Clic en ver detalle detectado');
+      });
+      
+      // Permitir acceder al detalle desde toda la tarjeta usando event delegation
+      $(document).on('click', '.card-product', function(e) {
+        // Evitar doble trigger si se hace clic en el botón
+        if ($(e.target).hasClass('ver-detalle-btn') || $(e.target).closest('.ver-detalle-btn').length) return;
+        
+        const btn = $(this).find('.ver-detalle-btn');
+        if (btn.length) {
+          btn.trigger('click');
+        }
+      });
+      
       // Inicializar animaciones de aparición
       setTimeout(() => {
         const elements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right, .section-title, .progressive-reveal');
