@@ -1,8 +1,12 @@
 const express = require('express');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
+const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const path = require('path');
+
+// Cargar variables de entorno desde .env en la carpeta padre
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 
@@ -52,14 +56,84 @@ app.get('/health', (req, res) => {
 });
 
 // Configura Mercado Pago con la nueva sintaxis
-const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || 'TEST-4916429126604774-122016-29a7e1b7c38cb7a5c96b0962b4e6ec1b-2142598569';
+const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN_TEST;
 console.log('Access Token configurado:', accessToken ? 'Sí' : 'No');
+console.log('Access Token (primeros 20 chars):', accessToken ? accessToken.substring(0, 20) + '...' : 'No disponible');
+
+// Configuración de la base de datos PostgreSQL con variables de entorno
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20, // Máximo número de conexiones en el pool
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Verificar conexión a la base de datos al iniciar
+async function verificarConexionBD() {
+  try {
+    const client = await pool.connect();
+    console.log('✅ Conexión exitosa a PostgreSQL (Neon)');
+    await client.query('SELECT NOW()');
+    client.release();
+  } catch (error) {
+    console.error('❌ Error al conectar con PostgreSQL:', error.message);
+    // En desarrollo, no es crítico que falle la BD
+    if (process.env.NODE_ENV === 'development') {
+      console.log('⚠️ Modo desarrollo: Continuando sin base de datos...');
+    }
+  }
+}
+
+// Verificar conexión al iniciar el servidor
+verificarConexionBD();
 
 const client = new MercadoPagoConfig({
   accessToken: accessToken,
   options: {
     timeout: 10000,
     idempotencyKey: 'capri-store-' + Date.now()
+  }
+});
+
+// Endpoint de prueba simple para crear preferencia
+app.post('/test-crear-preferencia', async (req, res) => {
+  try {
+    console.log('=== TEST CREAR PREFERENCIA SIMPLE ===');
+    
+    const testPreference = {
+      items: [{
+        title: 'Producto de Prueba',
+        quantity: 1,
+        currency_id: 'ARS',
+        unit_price: 100
+      }],
+      back_urls: {
+        success: 'http://localhost:3001/success.html',
+        failure: 'http://localhost:3001/failure.html',
+        pending: 'http://localhost:3001/pending.html'
+      }
+      // Sin auto_return para testing local
+    };
+    
+    console.log('Creando preferencia de prueba...');
+    const preferenceObj = new Preference(client);
+    const response = await preferenceObj.create({ body: testPreference });
+    
+    console.log('Respuesta exitosa:', response.init_point);
+    res.json({ 
+      success: true, 
+      init_point: response.init_point,
+      id: response.id 
+    });
+    
+  } catch (error) {
+    console.error('Error en test:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: error.response?.data 
+    });
   }
 });
 
@@ -87,9 +161,9 @@ app.get('/test-mp', async (req, res) => {
           unit_price: 100
         }],
         back_urls: {
-          success: 'https://www.capristorezte.com.ar/success.html',
-          failure: 'https://www.capristorezte.com.ar/failure.html',
-          pending: 'https://www.capristorezte.com.ar/pending.html'
+          success: 'http://localhost:3001/success.html',
+          failure: 'http://localhost:3001/failure.html',
+          pending: 'http://localhost:3001/pending.html'
         }
       };
       
@@ -162,6 +236,7 @@ app.post('/crear-preferencia', async (req, res) => {
     const baseUrl = isProduction
       ? 'https://www.capristorezte.com.ar'
       : 'http://localhost:3001';
+    
     const preference = {
       items: items.map(item => ({
         title: item.title,
@@ -174,28 +249,63 @@ app.post('/crear-preferencia', async (req, res) => {
         failure: `${baseUrl}/failure.html?status=failure`,
         pending: `${baseUrl}/pending.html?status=pending`
       },
+      // Solo usar auto_return en producción, no en localhost
       ...(isProduction ? { auto_return: "approved" } : {}),
+      // Forzar binary_mode false para asegurar que se muestren los enlaces de retorno
+      binary_mode: false,
       statement_descriptor: "CAPRI STORE",
       external_reference: "capri-" + Date.now(),
       payment_methods: {
         excluded_payment_types: [], // Permitir todos los tipos
         installments: 12 // Permitir hasta 12 cuotas
-      }
+      },
+      // notification_url solo en producción donde MercadoPago pueda acceder
+      ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
     };
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
+    console.log('🔍 Configuración específica:');
+    console.log('- Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
+    console.log('- Base URL:', baseUrl);
+    console.log('- Auto return:', preference.auto_return || 'NO CONFIGURADO');
+    console.log('- Binary mode:', preference.binary_mode);
+    console.log('- Back URLs configuradas:', !!preference.back_urls);
+    
     // Crear preferencia con la nueva sintaxis del SDK
     const preferenceObj = new Preference(client);
     console.log('Creando preferencia...');
+    console.log('Client configurado:', !!client);
+    console.log('Access token presente:', !!client.accessToken);
+    
     let response;
     try {
       response = await Promise.race([
         preferenceObj.create({ body: preference }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout al crear preferencia')), 15000)
+          setTimeout(() => reject(new Error('Timeout al crear preferencia después de 15 segundos')), 15000)
         )
       ]);
+      console.log('Respuesta de MercadoPago recibida:', JSON.stringify(response, null, 2));
     } catch (err) {
-      const errorResponse = { error: 'Error al crear preferencia', log: err.message, timestamp: new Date().toISOString() };
+      console.error('=== ERROR DETALLADO AL CREAR PREFERENCIA ===');
+      console.error('Error message:', err.message);
+      console.error('Error stack:', err.stack);
+      
+      if (err.response) {
+        console.error('HTTP Status:', err.response.status);
+        console.error('HTTP Headers:', err.response.headers);
+        console.error('Response data:', err.response.data);
+      }
+      
+      if (err.cause) {
+        console.error('Error cause:', err.cause);
+      }
+      
+      const errorResponse = { 
+        error: 'Error al crear preferencia', 
+        log: err.message, 
+        details: err.response?.data || 'Sin detalles adicionales',
+        timestamp: new Date().toISOString() 
+      };
       res.status(500).type('application/json').json(errorResponse);
       return;
     }
@@ -287,6 +397,110 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 });
 
 const PORT = process.env.PORT || 3001;
+
+// Webhook para notificaciones de Mercado Pago
+app.post('/webhook', (req, res) => {
+  console.log('Webhook recibido:', req.body);
+  
+  // Verificar si es una notificación de pago
+  if (req.body.type === 'payment') {
+    const paymentId = req.body.data.id;
+    console.log('ID de pago recibido:', paymentId);
+    
+    // Aquí puedes agregar lógica adicional para procesar el pago
+    // Por ejemplo, actualizar el estado del pedido en la base de datos
+  }
+  
+  res.status(200).send('OK');
+});
+
+// Endpoint para crear un pedido en la base de datos después del pago exitoso
+app.post('/crear-pedido', async (req, res) => {
+  try {
+    const { paymentId, productos, total, datosComprador } = req.body;
+    
+    // Validar datos requeridos
+    if (!paymentId || !productos || !total || !datosComprador) {
+      return res.status(400).json({ 
+        error: 'Faltan datos requeridos para crear el pedido' 
+      });
+    }
+
+    // Ejecutar stored procedure para crear el pedido
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Llamar al stored procedure sp_crear_pedido_web
+      const result = await client.query(
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+        [
+          datosComprador.nombre,
+          datosComprador.email,
+          datosComprador.telefono,
+          datosComprador.direccion,
+          JSON.stringify(productos), // Productos como JSON
+          total,
+          paymentId,
+          'CONFIRMADO' // Estado del pedido
+        ]
+      );
+      
+      await client.query('COMMIT');
+      
+      console.log('✅ Pedido creado exitosamente en la base de datos');
+      res.status(200).json({ 
+        success: true, 
+        message: 'Pedido creado exitosamente',
+        orderId: result.rows[0]?.order_id 
+      });
+      
+    } catch (dbError) {
+      await client.query('ROLLBACK');
+      throw dbError;
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error al crear pedido:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor al crear pedido',
+      details: error.message 
+    });
+  }
+});
+
+// Endpoint para consultar el estado de un pedido
+app.get('/pedido/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      'SELECT * FROM pedidos WHERE payment_id = $1',
+      [paymentId]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Pedido no encontrado' 
+      });
+    }
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('❌ Error al consultar pedido:', error);
+    res.status(500).json({ 
+      error: 'Error al consultar pedido',
+      details: error.message 
+    });
+  }
+});
+
 // Servir archivos estáticos desde la carpeta raíz del proyecto (al final)
 app.use(express.static(path.join(__dirname, '..')));
 

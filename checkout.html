@@ -982,8 +982,44 @@
         }
 
         if (data.init_point) {
-          // Guardar datos del checkout para después del pago
+          // Guardar datos para después del pago exitoso
+          const datosCompra = {
+            nombre: formData.get('nombre'),
+            apellido: formData.get('apellido'),
+            email: formData.get('email'),
+            telefono: formData.get('telefono'),
+            tipoEntrega: tipoEntrega,
+            direccion: tipoEntrega === 'envio' && datosEnvio 
+              ? `${datosEnvio.calleNumero}, ${datosEnvio.ciudad}, ${datosEnvio.provincia}, CP: ${datosEnvio.codigoPostal}`
+              : 'Retiro en local - Justa Lima 123, Zárate, Buenos Aires'
+          };
+          
+          const productosCompra = cartItems.map(item => ({
+            nombre: item.nombre,
+            cantidad: item.cantidad,
+            precio: item.precio,
+            talle: item.talle || '',
+            categoria: item.categoria || '',
+            total: item.cantidad * item.precio
+          }));
+          
+          const totalCompra = cartItems.reduce((total, item) => total + (item.cantidad * item.precio), 0) + costoEnvio;
+          
+          // Guardar en localStorage para la página de éxito
+          localStorage.setItem('datosCompra', JSON.stringify(datosCompra));
+          localStorage.setItem('productosCompra', JSON.stringify(productosCompra));
+          localStorage.setItem('totalCompra', totalCompra.toString());
+          localStorage.setItem('costoEnvio', costoEnvio.toString());
+          
+          // También guardar los datos originales del checkout
           localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+          
+          console.log('Datos guardados para post-pago:', {
+            datosCompra,
+            productosCompra,
+            totalCompra,
+            costoEnvio
+          });
           
           // Redirigir a Mercado Pago usando el init_point recibido
           console.log('Redirigiendo a Mercado Pago:', data.init_point);

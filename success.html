@@ -65,11 +65,26 @@
                             
                             <h2 class="card-title text-success mb-4">¡Gracias por tu compra!</h2>
                             
-                            <div class="alert alert-success" role="alert">
+                            <div id="procesando-pedido" class="alert alert-info" role="alert">
                                 <h5 class="alert-heading">
-                                    <i class="fas fa-envelope me-2"></i>Confirmación enviada
+                                    <i class="fas fa-clock me-2"></i>Procesando tu pedido...
                                 </h5>
-                                <p class="mb-0">Se ha enviado un correo de confirmación con los detalles de tu pedido.</p>
+                                <p class="mb-0">Estamos registrando tu compra en nuestro sistema. Por favor espera unos momentos.</p>
+                            </div>
+
+                            <div id="pedido-confirmado" class="alert alert-success d-none" role="alert">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-envelope me-2"></i>¡Pedido confirmado!
+                                </h5>
+                                <p class="mb-0">Tu pedido ha sido registrado exitosamente. Se ha enviado un correo de confirmación con los detalles.</p>
+                                <div id="numero-pedido" class="mt-2"></div>
+                            </div>
+
+                            <div id="detalles-compra" class="mt-4 text-start d-none">
+                                <h5 class="text-primary mb-3">Resumen de tu compra</h5>
+                                <div id="productos-comprados"></div>
+                                <hr>
+                                <div id="total-compra" class="h5 text-end"></div>
                             </div>
 
                             <div class="row mt-4">
@@ -129,10 +144,159 @@
         const urlParams = new URLSearchParams(window.location.search);
         const paymentId = urlParams.get('payment_id');
         const status = urlParams.get('status');
+        const preferenceId = urlParams.get('preference_id');
         
-        if (paymentId) {
+        console.log('Parámetros de URL:', { paymentId, status, preferenceId });
+        
+        // Mostrar detalles de la compra
+        mostrarDetallesCompra();
+        
+        if (paymentId && status === 'approved') {
             console.log('Payment ID:', paymentId);
             console.log('Status:', status);
+            
+            // Obtener datos del pedido del localStorage si están disponibles
+            const datosCompra = JSON.parse(localStorage.getItem('datosCompra') || '{}');
+            const productosCompra = JSON.parse(localStorage.getItem('productosCompra') || '[]');
+            const totalCompra = localStorage.getItem('totalCompra');
+            
+            console.log('Datos para crear pedido:', { datosCompra, productosCompra, totalCompra });
+            
+            // Si tenemos todos los datos, crear el pedido en la base de datos
+            if (paymentId && productosCompra.length > 0 && datosCompra.nombre && totalCompra) {
+                crearPedidoEnBD(paymentId, productosCompra, totalCompra, datosCompra);
+            } else {
+                // Si no tenemos todos los datos, solo confirmar que el pago fue exitoso
+                console.warn('No se pudieron obtener todos los datos del pedido desde localStorage');
+                mostrarPedidoConfirmado();
+            }
+        } else {
+            // Si no hay payment_id o el status no es approved, solo mostrar mensaje general
+            console.log('No se detectó pago exitoso, mostrando mensaje general');
+            mostrarPedidoConfirmado();
+        }
+        
+        // Función para mostrar los detalles de la compra
+        function mostrarDetallesCompra() {
+            const productosCompra = JSON.parse(localStorage.getItem('productosCompra') || '[]');
+            const totalCompra = localStorage.getItem('totalCompra');
+            const costoEnvio = parseFloat(localStorage.getItem('costoEnvio') || '0');
+            
+            if (productosCompra.length > 0) {
+                const detallesDiv = document.getElementById('detalles-compra');
+                const productosDiv = document.getElementById('productos-comprados');
+                const totalDiv = document.getElementById('total-compra');
+                
+                let productosHTML = '';
+                let subtotal = 0;
+                
+                productosCompra.forEach(producto => {
+                    const totalProducto = producto.cantidad * producto.precio;
+                    subtotal += totalProducto;
+                    
+                    productosHTML += `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>${producto.nombre}</strong>
+                                ${producto.talle ? `<br><small class="text-muted">Talle: ${producto.talle}</small>` : ''}
+                                <br><small class="text-muted">Cantidad: ${producto.cantidad} x $${producto.precio.toFixed(2)}</small>
+                            </div>
+                            <span class="fw-bold">$${totalProducto.toFixed(2)}</span>
+                        </div>
+                    `;
+                });
+                
+                productosDiv.innerHTML = productosHTML;
+                
+                let totalHTML = `
+                    <div class="d-flex justify-content-between">
+                        <span>Subtotal:</span>
+                        <span>$${subtotal.toFixed(2)} ARS</span>
+                    </div>
+                `;
+                
+                if (costoEnvio > 0) {
+                    totalHTML += `
+                        <div class="d-flex justify-content-between">
+                            <span>Envío:</span>
+                            <span>$${costoEnvio.toFixed(2)} ARS</span>
+                        </div>
+                    `;
+                }
+                
+                totalHTML += `
+                    <div class="d-flex justify-content-between border-top pt-2 mt-2">
+                        <strong>Total:</strong>
+                        <strong>$${totalCompra ? parseFloat(totalCompra).toFixed(2) : (subtotal + costoEnvio).toFixed(2)} ARS</strong>
+                    </div>
+                `;
+                
+                totalDiv.innerHTML = totalHTML;
+                detallesDiv.classList.remove('d-none');
+            }
+        }
+        
+        // Función para crear el pedido en la base de datos
+        async function crearPedidoEnBD(paymentId, productos, total, datosComprador) {
+            try {
+                console.log('Creando pedido en la base de datos...');
+                
+                // Detectar entorno y armar URL del backend
+                const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+                    ? 'https://capri-store.onrender.com'
+                    : '';
+                
+                const response = await fetch(`${API_BASE}/crear-pedido`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        paymentId: paymentId,
+                        productos: productos,
+                        total: parseFloat(total),
+                        datosComprador: datosComprador
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ Pedido creado exitosamente en la base de datos');
+                    mostrarPedidoConfirmado(result.orderId);
+                    
+                    // Limpiar datos temporales del localStorage después de un tiempo
+                    setTimeout(() => {
+                        localStorage.removeItem('datosCompra');
+                        localStorage.removeItem('productosCompra');
+                        localStorage.removeItem('totalCompra');
+                        localStorage.removeItem('costoEnvio');
+                        localStorage.removeItem('checkoutData');
+                    }, 10000); // Limpiar después de 10 segundos
+                    
+                } else {
+                    console.error('❌ Error al crear pedido:', result.error);
+                    mostrarPedidoConfirmado();
+                }
+                
+            } catch (error) {
+                console.error('❌ Error al procesar pedido:', error);
+                mostrarPedidoConfirmado();
+            }
+        }
+        
+        // Función para mostrar el pedido como confirmado
+        function mostrarPedidoConfirmado(orderId = null) {
+            const procesandoDiv = document.getElementById('procesando-pedido');
+            const confirmadoDiv = document.getElementById('pedido-confirmado');
+            
+            procesandoDiv.classList.add('d-none');
+            confirmadoDiv.classList.remove('d-none');
+            
+            if (orderId) {
+                const numeroPedidoDiv = document.getElementById('numero-pedido');
+                numeroPedidoDiv.innerHTML = `<strong>Número de orden:</strong> ${orderId}`;
+            }
         }
     </script>
 </body>

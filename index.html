@@ -7,7 +7,7 @@
   <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
-  <link href="css/styles.css" rel="stylesheet" />
+  <!-- <link href="css/styles.css" rel="stylesheet" /> -->
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
     body { font-family: 'Montserrat', sans-serif; }
@@ -20,83 +20,81 @@
     .border-rosado { border-color: #e29ca3 !important; }
     .shadow-lg { box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important; }
     .rounded-lg { border-radius: 1rem !important; }
-    .btn-rosado { background-color: #e29ca3; color: #fff; }
-    .btn-rosado:hover { background-color: #d1848d; color: #fff; }
-    .btn-vino-tinto { background-color: #6b0a0a; color: #fff; }
-    .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    
+    /* Estilos de botones limpios y sin conflictos */
+    .btn-rosado { 
+      background-color: #e29ca3 !important; 
+      color: #fff !important; 
+      border-color: #e29ca3 !important;
+      border: 1px solid #e29ca3 !important;
+      padding: 0.375rem 0.75rem !important;
+      font-size: 1rem !important;
+      line-height: 1.5 !important;
+      border-radius: 0.25rem !important;
+      cursor: pointer !important;
+      text-decoration: none !important;
+      display: inline-block !important;
+      font-weight: 400 !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out !important;
+    }
+    .btn-rosado:hover { 
+      background-color: #d1848d !important; 
+      color: #fff !important; 
+      border-color: #d1848d !important;
+    }
+    .btn-rosado:focus, .btn-rosado:active {
+      background-color: #d1848d !important; 
+      color: #fff !important; 
+      border-color: #d1848d !important;
+      box-shadow: 0 0 0 0.2rem rgba(226, 156, 163, 0.5) !important;
+    }
+    
+    .btn-vino-tinto { 
+      background-color: #6b0a0a !important; 
+      color: #fff !important; 
+      border-color: #6b0a0a !important;
+      border: 1px solid #6b0a0a !important;
+      padding: 0.375rem 0.75rem !important;
+      font-size: 1rem !important;
+      line-height: 1.5 !important;
+      border-radius: 0.25rem !important;
+      cursor: pointer !important;
+      text-decoration: none !important;
+      display: inline-block !important;
+      font-weight: 400 !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out !important;
+    }
+    .btn-vino-tinto:hover { 
+      background-color: #4a0707 !important; 
+      color: #fff !important; 
+      border-color: #4a0707 !important;
+    }
+    .btn-vino-tinto:focus, .btn-vino-tinto:active {
+      background-color: #4a0707 !important; 
+      color: #fff !important; 
+      border-color: #4a0707 !important;
+      box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5) !important;
+    }
+    
     .btn-outline-vino-tinto { border: 2px solid #6b0a0a; color: #6b0a0a; background: transparent; }
     .btn-outline-vino-tinto:hover { background-color: #6b0a0a; color: #fff; }
     
-    /* Asegurar que los botones de novedades tengan prioridad - ESTILOS FINALES */
-    .btn-rosado, .btn-rosado:active, .btn-rosado:focus, .btn-rosado:visited {
-      background-color: #e29ca3 !important;
-      color: #fff !important;
-      border-color: #e29ca3 !important;
-      opacity: 1 !important;
-      transform: none !important;
-      box-shadow: none !important;
-      transition: background-color 0.2s ease !important;
-      pointer-events: auto !important;
-      cursor: pointer !important;
-      text-decoration: none !important;
-    }
-    .btn-rosado:hover {
-      background-color: #d1848d !important;
-      color: #fff !important;
-      border-color: #d1848d !important;
-      transform: none !important;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-    .btn-rosado::before, .btn-rosado::after {
-      display: none !important;
-    }
-    
-    .btn-vino-tinto, .btn-vino-tinto:active, .btn-vino-tinto:focus, .btn-vino-tinto:visited {
-      background-color: #6b0a0a !important;
-      color: #fff !important;
-      border-color: #6b0a0a !important;
-      opacity: 1 !important;
-      transform: none !important;
-      box-shadow: none !important;
-      transition: background-color 0.2s ease !important;
-      pointer-events: auto !important;
-      cursor: pointer !important;
-      text-decoration: none !important;
-    }
-    .btn-vino-tinto:hover {
-      background-color: #4a0707 !important;
-      color: #fff !important;
-      border-color: #4a0707 !important;
-      transform: none !important;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
+    /* Eliminar cualquier pseudo-elemento problemático */
+    .btn::before, .btn::after,
+    .btn-rosado::before, .btn-rosado::after,
     .btn-vino-tinto::before, .btn-vino-tinto::after {
       display: none !important;
+      content: none !important;
     }
     
-    /* Reglas específicas para botones en sección novedades - MÁXIMA PRIORIDAD */
-    #novedades .card-footer .btn-rosado,
-    #novedades .btn-rosado,
-    #novedades button.btn-rosado,
-    #novedades .ver-detalle-btn.btn-rosado {
-      background-color: #e29ca3 !important;
-      background: #e29ca3 !important;
-      border-color: #e29ca3 !important;
-      color: #fff !important;
-      opacity: 1 !important;
-      filter: none !important;
-      pointer-events: auto !important;
-      cursor: pointer !important;
-    }
-    
-    #novedades .card-footer .btn-rosado:hover,
-    #novedades .btn-rosado:hover,
-    #novedades button.btn-rosado:hover,
-    #novedades .ver-detalle-btn.btn-rosado:hover {
-      background-color: #d1848d !important;
-      background: #d1848d !important;
-      border-color: #d1848d !important;
-      color: #fff !important;
+    /* Asegurar que todos los botones tengan estilos limpios */
+    .btn {
+      position: relative !important;
+      overflow: visible !important;
     }
     
     .card-product img { height: 250px; object-fit: cover; }
@@ -128,6 +126,17 @@
       border-bottom: 3px solid #e29ca3;
       padding-bottom: 0.5rem;
       margin-bottom: 2rem;
+    }
+    
+    /* Estilos adicionales necesarios para el funcionamiento */
+    .fade-in { animation: fadeIn 0.6s ease-out; }
+    .section-title { margin-bottom: 2rem; }
+    .progressive-reveal { opacity: 1; }
+    .animate-delay-1 { animation-delay: 0.1s; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
   </style>
 </head>
@@ -295,7 +304,7 @@
   <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
-  <script src="js/scripts.js"></script>
+  <!-- <script src="js/scripts.js"></script> -->
   <script>
   // Variables globales para paginación
   let todosLosProductos = [];
@@ -426,27 +435,37 @@
     // Mostrar/ocultar botón "Ver más"
     actualizarBotonVerMas('novedades', fin < todasLasNovedades.length);
     
-    // Forzar estilos de botones en novedades después del renderizado
+    // Forzar estilos de botones después del renderizado - SIN CONFLICTOS
     setTimeout(() => {
       const botonesNovedades = document.querySelectorAll('#novedades .btn-rosado');
-      botonesNovedades.forEach(btn => {
-        btn.style.backgroundColor = '#e29ca3';
-        btn.style.color = '#fff';
-        btn.style.borderColor = '#e29ca3';
-        btn.style.opacity = '1';
-        btn.style.filter = 'none';
-        btn.style.pointerEvents = 'auto';
-        btn.style.cursor = 'pointer';
+      console.log('Botones encontrados en novedades:', botonesNovedades.length);
+      
+      botonesNovedades.forEach((btn, index) => {
+        console.log(`Aplicando estilos al botón ${index + 1}`);
         
-        // Agregar event listener para hover
-        btn.addEventListener('mouseenter', function() {
-          this.style.backgroundColor = '#d1848d';
+        // Forzar estilos directamente
+        btn.style.setProperty('background-color', '#e29ca3', 'important');
+        btn.style.setProperty('color', '#fff', 'important');
+        btn.style.setProperty('border-color', '#e29ca3', 'important');
+        btn.style.setProperty('opacity', '1', 'important');
+        btn.style.setProperty('filter', 'none', 'important');
+        btn.style.setProperty('pointer-events', 'auto', 'important');
+        btn.style.setProperty('cursor', 'pointer', 'important');
+        
+        // Limpiar event listeners previos y agregar nuevos
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        newBtn.addEventListener('mouseenter', function() {
+          this.style.setProperty('background-color', '#d1848d', 'important');
         });
-        btn.addEventListener('mouseleave', function() {
-          this.style.backgroundColor = '#e29ca3';
+        newBtn.addEventListener('mouseleave', function() {
+          this.style.setProperty('background-color', '#e29ca3', 'important');
         });
+        
+        console.log(`Botón ${index + 1} configurado correctamente`);
       });
-    }, 100);
+    }, 200);
     
     console.log('=== RENDERIZADO DE NOVEDADES COMPLETADO ===');
   }
