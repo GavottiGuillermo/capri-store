@@ -398,6 +398,99 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 
 const PORT = process.env.PORT || 3001;
 
+// Función para enviar correo de confirmación
+async function enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido) {
+  try {
+    console.log('=== ENVIANDO CORREO DE CONFIRMACIÓN ===');
+    
+    // Verificar que tenemos las credenciales de email
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('❌ Credenciales de email no configuradas');
+      throw new Error('Credenciales de email no configuradas');
+    }
+
+    // Configura tu transporter de nodemailer (Zoho Mail)
+    const transporter = nodemailer.createTransporter({
+      host: 'smtp.zoho.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    // Crear resumen de productos
+    let resumenProductos = '';
+    let subtotal = 0;
+    
+    productos.forEach((producto, index) => {
+      const totalProducto = producto.cantidad * producto.precio;
+      subtotal += totalProducto;
+      resumenProductos += `${index + 1}. ${producto.nombre}`;
+      if (producto.talle) {
+        resumenProductos += ` (Talle: ${producto.talle})`;
+      }
+      resumenProductos += `\n   Cantidad: ${producto.cantidad} x $${producto.precio.toFixed(2)} = $${totalProducto.toFixed(2)}\n`;
+    });
+
+    // Determinar tipo de entrega
+    const tipoEntrega = datosComprador.tipoEntrega || 'retiro'; // Por defecto retiro
+    let mensajeEntrega = '';
+    
+    if (tipoEntrega === 'domicilio') {
+      mensajeEntrega = 'Nos comunicaremos contigo para coordinar el envío a tu domicilio.';
+    } else {
+      mensajeEntrega = 'Podes retirarlo por Justa Lima 123, Zárate.';
+    }
+
+    // Contenido del email
+    const emailContent = `¡Hola ${datosComprador.nombre}!
+
+Gracias por tu compra en Capri Store. Tu pedido ha sido confirmado exitosamente.
+
+🛍️ RESUMEN DE TU COMPRA:
+${resumenProductos}
+-----------------------------------
+Subtotal: $${subtotal.toFixed(2)}
+${subtotal !== parseFloat(total) ? `Envío: $${(parseFloat(total) - subtotal).toFixed(2)}\n` : ''}Total: $${parseFloat(total).toFixed(2)}
+
+📋 NÚMERO DE PEDIDO: ${numeroPedido}
+
+📍 ENTREGA:
+${mensajeEntrega}
+
+📞 CONTACTO:
+Si tenes alguna consulta, no dudes en contactarnos.
+
+¡Gracias por elegirnos!
+
+Capri Store
+Justa Lima 123, Zárate`;
+
+    const mailOptions = {
+      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      to: datosComprador.email,
+      subject: `Confirmación de compra #${numeroPedido} - Capri Store`,
+      text: emailContent
+    };
+
+    console.log('Enviando email a:', datosComprador.email);
+    console.log('Contenido del email:', emailContent);
+
+    // Enviar el correo
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email enviado exitosamente:', info.messageId);
+    
+    return { success: true, messageId: info.messageId };
+    
+  } catch (error) {
+    console.error('❌ Error al enviar correo:', error);
+    // No fallar todo el proceso si el email falla
+    return { success: false, error: error.message };
+  }
+}
+
 // Webhook para notificaciones de Mercado Pago
 app.post('/webhook', (req, res) => {
   console.log('Webhook recibido:', req.body);
@@ -416,60 +509,88 @@ app.post('/webhook', (req, res) => {
 
 // Endpoint para crear un pedido en la base de datos después del pago exitoso
 app.post('/crear-pedido', async (req, res) => {
+  console.log('=== INICIO /crear-pedido ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const { paymentId, productos, total, datosComprador } = req.body;
     
     // Validar datos requeridos
     if (!paymentId || !productos || !total || !datosComprador) {
+      console.error('❌ Faltan datos requeridos:', { paymentId: !!paymentId, productos: !!productos, total: !!total, datosComprador: !!datosComprador });
       return res.status(400).json({ 
         error: 'Faltan datos requeridos para crear el pedido' 
       });
     }
 
+    console.log('✅ Datos validados correctamente');
+    console.log('Payment ID:', paymentId);
+    console.log('Total:', total);
+    console.log('Datos comprador:', datosComprador);
+    console.log('Productos:', productos);
+
+    // Generar número de pedido único
+    const numeroPedido = Math.floor(100000 + Math.random() * 900000);
+    console.log('Número de pedido generado:', numeroPedido);
+
     // Ejecutar stored procedure para crear el pedido
     const client = await pool.connect();
+    console.log('✅ Conexión a BD establecida');
     
     try {
       await client.query('BEGIN');
+      console.log('✅ Transacción iniciada');
       
       // Llamar al stored procedure sp_crear_pedido_web
+      console.log('Ejecutando stored procedure sp_crear_pedido_web...');
       const result = await client.query(
         'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
         [
           datosComprador.nombre,
           datosComprador.email,
-          datosComprador.telefono,
-          datosComprador.direccion,
+          datosComprador.telefono || '',
+          datosComprador.direccion || '',
           JSON.stringify(productos), // Productos como JSON
-          total,
+          parseFloat(total),
           paymentId,
           'CONFIRMADO' // Estado del pedido
         ]
       );
+      console.log('✅ Stored procedure ejecutado exitosamente');
       
       await client.query('COMMIT');
+      console.log('✅ Transacción confirmada');
+      
+      // Enviar correo de confirmación
+      console.log('Enviando correo de confirmación...');
+      await enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido);
       
       console.log('✅ Pedido creado exitosamente en la base de datos');
       res.status(200).json({ 
         success: true, 
         message: 'Pedido creado exitosamente',
-        orderId: result.rows[0]?.order_id 
+        orderId: numeroPedido,
+        paymentId: paymentId
       });
       
     } catch (dbError) {
+      console.error('❌ Error en stored procedure:', dbError);
       await client.query('ROLLBACK');
       throw dbError;
     } finally {
       client.release();
+      console.log('✅ Conexión BD liberada');
     }
     
   } catch (error) {
     console.error('❌ Error al crear pedido:', error);
+    console.error('Stack trace:', error.stack);
     res.status(500).json({ 
       error: 'Error interno del servidor al crear pedido',
       details: error.message 
     });
   }
+  console.log('=== FIN /crear-pedido ===');
 });
 
 // Endpoint para consultar el estado de un pedido
