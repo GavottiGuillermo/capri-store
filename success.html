@@ -238,51 +238,164 @@
         
         // Función para crear el pedido en la base de datos
         async function crearPedidoEnBD(paymentId, productos, total, datosComprador) {
+            const startTime = Date.now();
+            console.log('🚀 === INICIANDO CREACIÓN PEDIDO EN BD ===');
+            console.log('⏰ Timestamp:', new Date().toISOString());
+            console.log('🌐 Location:', window.location.href);
+            console.log('🌍 Hostname:', window.location.hostname);
+            
             try {
-                console.log('Creando pedido en la base de datos...');
+                // Validación detallada de datos
+                console.log('🔍 === VALIDACIÓN DATOS ENTRADA ===');
+                console.log('paymentId:', paymentId, typeof paymentId);
+                console.log('productos:', productos ? 'Array con ' + productos.length + ' items' : 'undefined/null');
+                console.log('total:', total, typeof total);
+                console.log('datosComprador:', datosComprador ? Object.keys(datosComprador) : 'undefined/null');
                 
-                // Detectar entorno y armar URL del backend
-                const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+                if (!paymentId) {
+                    throw new Error('Payment ID faltante');
+                }
+                if (!productos || productos.length === 0) {
+                    throw new Error('Lista de productos vacía o faltante');
+                }
+                if (!total) {
+                    throw new Error('Total faltante');
+                }
+                if (!datosComprador || !datosComprador.nombre || !datosComprador.email) {
+                    throw new Error('Datos del comprador incompletos');
+                }
+                
+                console.log('✅ Validación de datos exitosa');
+                
+                // Detectar entorno y configurar API
+                console.log('🌐 === CONFIGURACIÓN ENTORNO ===');
+                const isProduction = window.location.hostname.includes('capristorezte.com.ar');
+                const API_BASE = isProduction
                     ? 'https://capri-store.onrender.com'
-                    : '';
+                    : window.location.origin;
                 
+                console.log('Entorno detectado:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
+                console.log('API Base URL:', API_BASE);
+                console.log('URL completa:', `${API_BASE}/crear-pedido`);
+                
+                // Preparar datos del request
+                console.log('📦 === PREPARACIÓN REQUEST ===');
+                const requestData = {
+                    paymentId: paymentId,
+                    productos: productos,
+                    total: parseFloat(total),
+                    datosComprador: datosComprador
+                };
+                console.log('Request data:', JSON.stringify(requestData, null, 2));
+                
+                // Configurar fetch con timeout
+                console.log('🌐 === ENVIANDO REQUEST ===');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    console.log('⏰ Timeout de 30 segundos alcanzado');
+                    controller.abort();
+                }, 30000);
+                
+                console.log('Realizando fetch a:', `${API_BASE}/crear-pedido`);
                 const response = await fetch(`${API_BASE}/crear-pedido`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        paymentId: paymentId,
-                        productos: productos,
-                        total: parseFloat(total),
-                        datosComprador: datosComprador
-                    })
+                    body: JSON.stringify(requestData),
+                    signal: controller.signal
                 });
                 
-                const result = await response.json();
+                clearTimeout(timeoutId);
+                
+                console.log('📥 === RESPUESTA RECIBIDA ===');
+                console.log('Status:', response.status);
+                console.log('Status Text:', response.statusText);
+                console.log('Headers:', Object.fromEntries(response.headers.entries()));
+                console.log('OK:', response.ok);
+                
+                // Leer respuesta
+                const responseText = await response.text();
+                console.log('Response raw text:', responseText);
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                    console.log('Response parsed:', result);
+                } catch (parseError) {
+                    console.error('❌ Error parsing JSON response:', parseError);
+                    console.error('Raw response:', responseText);
+                    throw new Error('Respuesta del servidor no es JSON válido: ' + responseText.substring(0, 100));
+                }
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
                 
                 if (result.success) {
-                    console.log('✅ Pedido creado exitosamente en la base de datos');
+                    console.log('🎉 === PEDIDO CREADO EXITOSAMENTE ===');
+                    console.log('⏱️ Tiempo total:', duration + 'ms');
+                    console.log('🔢 Order ID:', result.orderId);
+                    console.log('💳 Payment ID confirmado:', result.paymentId);
+                    console.log('⚡ Processing time del servidor:', result.processingTime);
+                    
                     mostrarPedidoConfirmado(result.orderId);
                     
                     // Limpiar datos temporales del localStorage después de un tiempo
                     setTimeout(() => {
+                        console.log('🧹 Limpiando localStorage...');
                         localStorage.removeItem('datosCompra');
                         localStorage.removeItem('productosCompra');
                         localStorage.removeItem('totalCompra');
                         localStorage.removeItem('costoEnvio');
                         localStorage.removeItem('checkoutData');
-                    }, 10000); // Limpiar después de 10 segundos
+                        console.log('✅ localStorage limpiado');
+                    }, 10000);
                     
                 } else {
-                    console.error('❌ Error al crear pedido:', result.error);
+                    console.error('❌ === ERROR DEL SERVIDOR ===');
+                    console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+                    console.error('Error:', result.error);
+                    console.error('Details:', result.details);
+                    console.error('Code:', result.code);
+                    console.error('Server processing time:', result.processingTime);
+                    
+                    // Mostrar mensaje de confirmación genérico aunque haya fallado
                     mostrarPedidoConfirmado();
+                    
+                    // Mostrar alerta al usuario sobre el error
+                    setTimeout(() => {
+                        alert('Tu pago fue exitoso, pero hubo un problema al registrar el pedido. Por favor contactanos con tu comprobante de pago.');
+                    }, 2000);
                 }
                 
             } catch (error) {
-                console.error('❌ Error al procesar pedido:', error);
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                console.error('💥 === ERROR CRÍTICO EN FRONTEND ===');
+                console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+                console.error('Error tipo:', error.constructor.name);
+                console.error('Error mensaje:', error.message);
+                console.error('Error stack:', error.stack);
+                
+                if (error.name === 'AbortError') {
+                    console.error('❌ Request cancelado por timeout');
+                } else if (error.name === 'TypeError') {
+                    console.error('❌ Error de red o conectividad');
+                } else {
+                    console.error('❌ Error no identificado');
+                }
+                
+                // Mostrar mensaje de confirmación genérico
                 mostrarPedidoConfirmado();
+                
+                // Notificar al usuario
+                setTimeout(() => {
+                    alert('Tu pago fue exitoso. Si no recibes un correo de confirmación en unos minutos, por favor contactanos.');
+                }, 2000);
             }
+            
+            console.log('🏁 === FIN CREACIÓN PEDIDO ===');
         }
         
         // Función para mostrar el pedido como confirmado

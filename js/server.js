@@ -400,16 +400,40 @@ const PORT = process.env.PORT || 3001;
 
 // Función para enviar correo de confirmación
 async function enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido) {
+  const startTime = Date.now();
+  console.log('📧 === INICIANDO ENVÍO DE CORREO ===');
+  console.log('⏰ Timestamp:', new Date().toISOString());
+  
   try {
-    console.log('=== ENVIANDO CORREO DE CONFIRMACIÓN ===');
+    // Verificar credenciales con detalle
+    console.log('🔐 === VERIFICACIÓN CREDENCIALES EMAIL ===');
+    console.log('EMAIL_USER presente:', !!process.env.EMAIL_USER);
+    console.log('EMAIL_USER valor:', process.env.EMAIL_USER ? process.env.EMAIL_USER.substring(0, 10) + '...' : 'NO CONFIGURADO');
+    console.log('EMAIL_PASS presente:', !!process.env.EMAIL_PASS);
+    console.log('EMAIL_PASS longitud:', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length + ' caracteres' : 'NO CONFIGURADO');
     
-    // Verificar que tenemos las credenciales de email
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.error('❌ Credenciales de email no configuradas');
+      console.error('❌ CREDENCIALES FALTANTES:');
+      console.error('- EMAIL_USER:', !!process.env.EMAIL_USER);
+      console.error('- EMAIL_PASS:', !!process.env.EMAIL_PASS);
       throw new Error('Credenciales de email no configuradas');
     }
 
-    // Configura tu transporter de nodemailer (Zoho Mail)
+    console.log('✅ Credenciales verificadas correctamente');
+
+    // Validar datos de entrada
+    console.log('📋 === VALIDACIÓN DATOS ENTRADA ===');
+    console.log('datosComprador:', JSON.stringify(datosComprador, null, 2));
+    console.log('productos count:', productos ? productos.length : 'undefined');
+    console.log('total:', total, typeof total);
+    console.log('numeroPedido:', numeroPedido);
+
+    if (!datosComprador || !datosComprador.email || !datosComprador.nombre) {
+      throw new Error('Datos del comprador incompletos para envío de correo');
+    }
+
+    // Configurar transporter con logging
+    console.log('⚙️ === CONFIGURACIÓN TRANSPORTER ===');
     const transporter = nodemailer.createTransporter({
       host: 'smtp.zoho.com',
       port: 465,
@@ -417,14 +441,35 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      }
+      },
+      debug: true, // Habilitar debug de SMTP
+      logger: true // Habilitar logger
     });
 
-    // Crear resumen de productos
+    console.log('✅ Transporter configurado');
+
+    // Verificar conexión SMTP
+    console.log('🔌 === VERIFICACIÓN CONEXIÓN SMTP ===');
+    try {
+      await transporter.verify();
+      console.log('✅ Conexión SMTP verificada exitosamente');
+    } catch (verifyError) {
+      console.error('❌ Error en verificación SMTP:', verifyError.message);
+      throw new Error(`Error de conexión SMTP: ${verifyError.message}`);
+    }
+
+    // Crear resumen de productos con logging
+    console.log('📝 === CREACIÓN RESUMEN PRODUCTOS ===');
     let resumenProductos = '';
     let subtotal = 0;
     
+    if (!productos || !Array.isArray(productos)) {
+      console.error('❌ Productos no válidos para resumen:', productos);
+      throw new Error('Lista de productos no válida');
+    }
+    
     productos.forEach((producto, index) => {
+      console.log(`Procesando producto ${index + 1}:`, producto);
       const totalProducto = producto.cantidad * producto.precio;
       subtotal += totalProducto;
       resumenProductos += `${index + 1}. ${producto.nombre}`;
@@ -434,17 +479,24 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
       resumenProductos += `\n   Cantidad: ${producto.cantidad} x $${producto.precio.toFixed(2)} = $${totalProducto.toFixed(2)}\n`;
     });
 
+    console.log('Resumen productos generado:', resumenProductos);
+    console.log('Subtotal calculado:', subtotal);
+
     // Determinar tipo de entrega
-    const tipoEntrega = datosComprador.tipoEntrega || 'retiro'; // Por defecto retiro
-    let mensajeEntrega = '';
+    console.log('🚚 === CONFIGURACIÓN ENTREGA ===');
+    const tipoEntrega = datosComprador.tipoEntrega || 'retiro';
+    console.log('Tipo de entrega:', tipoEntrega);
     
+    let mensajeEntrega = '';
     if (tipoEntrega === 'domicilio') {
       mensajeEntrega = 'Nos comunicaremos contigo para coordinar el envío a tu domicilio.';
     } else {
       mensajeEntrega = 'Podes retirarlo por Justa Lima 123, Zárate.';
     }
+    console.log('Mensaje entrega:', mensajeEntrega);
 
-    // Contenido del email
+    // Crear contenido del email
+    console.log('✍️ === CREACIÓN CONTENIDO EMAIL ===');
     const emailContent = `¡Hola ${datosComprador.nombre}!
 
 Gracias por tu compra en Capri Store. Tu pedido ha sido confirmado exitosamente.
@@ -475,19 +527,58 @@ Justa Lima 123, Zárate`;
       text: emailContent
     };
 
-    console.log('Enviando email a:', datosComprador.email);
-    console.log('Contenido del email:', emailContent);
+    console.log('📬 === CONFIGURACIÓN FINAL EMAIL ===');
+    console.log('From:', mailOptions.from);
+    console.log('To:', mailOptions.to);
+    console.log('Subject:', mailOptions.subject);
+    console.log('Content length:', emailContent.length, 'caracteres');
 
-    // Enviar el correo
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email enviado exitosamente:', info.messageId);
+    // Enviar el correo con timeout
+    console.log('🚀 === ENVIANDO EMAIL ===');
+    const emailPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout al enviar email después de 30 segundos')), 30000)
+    );
+
+    const info = await Promise.race([emailPromise, timeoutPromise]);
     
-    return { success: true, messageId: info.messageId };
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log('🎉 === EMAIL ENVIADO EXITOSAMENTE ===');
+    console.log('⏱️ Tiempo de envío:', duration + 'ms');
+    console.log('📧 Message ID:', info.messageId);
+    console.log('📊 Response:', info.response);
+    console.log('✅ Email enviado a:', datosComprador.email);
+    
+    return { 
+      success: true, 
+      messageId: info.messageId,
+      response: info.response,
+      duration: duration + 'ms'
+    };
     
   } catch (error) {
-    console.error('❌ Error al enviar correo:', error);
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.error('💥 === ERROR AL ENVIAR CORREO ===');
+    console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+    console.error('Error tipo:', error.constructor.name);
+    console.error('Error código:', error.code);
+    console.error('Error mensaje:', error.message);
+    console.error('Error response:', error.response);
+    console.error('Error responseCode:', error.responseCode);
+    console.error('Error command:', error.command);
+    console.error('Error stack:', error.stack);
+    
     // No fallar todo el proceso si el email falla
-    return { success: false, error: error.message };
+    return { 
+      success: false, 
+      error: error.message,
+      code: error.code,
+      duration: duration + 'ms'
+    };
   }
 }
 
@@ -509,88 +600,186 @@ app.post('/webhook', (req, res) => {
 
 // Endpoint para crear un pedido en la base de datos después del pago exitoso
 app.post('/crear-pedido', async (req, res) => {
-  console.log('=== INICIO /crear-pedido ===');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  const startTime = Date.now();
+  console.log('🚀 === INICIO /crear-pedido ===');
+  console.log('⏰ Timestamp:', new Date().toISOString());
+  console.log('📥 Request headers:', JSON.stringify(req.headers, null, 2));
+  console.log('📊 Request body completo:', JSON.stringify(req.body, null, 2));
   
   try {
     const { paymentId, productos, total, datosComprador } = req.body;
     
-    // Validar datos requeridos
+    // Validación detallada con trazas específicas
+    console.log('🔍 === VALIDACIÓN DE DATOS ===');
+    console.log('paymentId presente:', !!paymentId, paymentId);
+    console.log('productos presente:', !!productos, Array.isArray(productos) ? `Array con ${productos.length} items` : typeof productos);
+    console.log('total presente:', !!total, total, typeof total);
+    console.log('datosComprador presente:', !!datosComprador, Object.keys(datosComprador || {}));
+    
     if (!paymentId || !productos || !total || !datosComprador) {
-      console.error('❌ Faltan datos requeridos:', { paymentId: !!paymentId, productos: !!productos, total: !!total, datosComprador: !!datosComprador });
+      console.error('❌ VALIDACIÓN FALLIDA - Faltan datos requeridos:');
+      console.error('- paymentId:', !!paymentId);
+      console.error('- productos:', !!productos);
+      console.error('- total:', !!total);
+      console.error('- datosComprador:', !!datosComprador);
+      
       return res.status(400).json({ 
-        error: 'Faltan datos requeridos para crear el pedido' 
+        success: false,
+        error: 'Faltan datos requeridos para crear el pedido',
+        detalles: {
+          paymentId: !!paymentId,
+          productos: !!productos,
+          total: !!total,
+          datosComprador: !!datosComprador
+        }
       });
     }
 
-    console.log('✅ Datos validados correctamente');
-    console.log('Payment ID:', paymentId);
-    console.log('Total:', total);
-    console.log('Datos comprador:', datosComprador);
-    console.log('Productos:', productos);
+    console.log('✅ VALIDACIÓN EXITOSA - Todos los datos están presentes');
+    console.log('📋 Payment ID:', paymentId);
+    console.log('💰 Total a procesar:', total, 'Tipo:', typeof total);
+    console.log('👤 Comprador:', datosComprador.nombre, datosComprador.email);
+    console.log('🛍️ Productos:', productos.length, 'items');
+
+    // Validar que tenemos conexión a BD
+    console.log('🔌 === VERIFICACIÓN CONEXIÓN BD ===');
+    console.log('Pool configurado:', !!pool);
+    console.log('Variables de entorno BD:');
+    console.log('- DATABASE_URL presente:', !!process.env.DATABASE_URL);
+    console.log('- NODE_ENV:', process.env.NODE_ENV);
 
     // Generar número de pedido único
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
-    console.log('Número de pedido generado:', numeroPedido);
+    console.log('🔢 Número de pedido generado:', numeroPedido);
+
+    // Preparar datos para el stored procedure
+    console.log('📝 === PREPARACIÓN DATOS SP ===');
+    const spParams = [
+      datosComprador.nombre,
+      datosComprador.email,
+      datosComprador.telefono || '',
+      datosComprador.direccion || '',
+      JSON.stringify(productos),
+      parseFloat(total),
+      paymentId,
+      'CONFIRMADO'
+    ];
+    console.log('Parámetros para SP:', spParams);
 
     // Ejecutar stored procedure para crear el pedido
-    const client = await pool.connect();
-    console.log('✅ Conexión a BD establecida');
+    console.log('💾 === EJECUCIÓN STORED PROCEDURE ===');
     
+    let client;
     try {
+      console.log('Obteniendo conexión del pool...');
+      client = await pool.connect();
+      console.log('✅ Conexión a BD establecida exitosamente');
+      
+      console.log('Iniciando transacción...');
       await client.query('BEGIN');
       console.log('✅ Transacción iniciada');
       
-      // Llamar al stored procedure sp_crear_pedido_web
-      console.log('Ejecutando stored procedure sp_crear_pedido_web...');
+      // Verificar que el stored procedure existe
+      console.log('🔍 Verificando existencia del stored procedure...');
+      const spCheck = await client.query(
+        "SELECT proname FROM pg_proc WHERE proname = 'sp_crear_pedido_web'"
+      );
+      console.log('SP existe:', spCheck.rows.length > 0, spCheck.rows);
+      
+      if (spCheck.rows.length === 0) {
+        throw new Error('El stored procedure sp_crear_pedido_web no existe en la base de datos');
+      }
+      
+      // Ejecutar el stored procedure
+      console.log('⚡ Ejecutando stored procedure sp_crear_pedido_web...');
+      console.log('Parámetros finales:', spParams);
+      
       const result = await client.query(
         'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
-        [
-          datosComprador.nombre,
-          datosComprador.email,
-          datosComprador.telefono || '',
-          datosComprador.direccion || '',
-          JSON.stringify(productos), // Productos como JSON
-          parseFloat(total),
-          paymentId,
-          'CONFIRMADO' // Estado del pedido
-        ]
+        spParams
       );
+      
       console.log('✅ Stored procedure ejecutado exitosamente');
+      console.log('Resultado SP:', result);
       
       await client.query('COMMIT');
       console.log('✅ Transacción confirmada');
       
-      // Enviar correo de confirmación
-      console.log('Enviando correo de confirmación...');
-      await enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido);
-      
-      console.log('✅ Pedido creado exitosamente en la base de datos');
-      res.status(200).json({ 
-        success: true, 
-        message: 'Pedido creado exitosamente',
-        orderId: numeroPedido,
-        paymentId: paymentId
-      });
-      
     } catch (dbError) {
-      console.error('❌ Error en stored procedure:', dbError);
-      await client.query('ROLLBACK');
+      console.error('❌ === ERROR EN BASE DE DATOS ===');
+      console.error('Error tipo:', dbError.constructor.name);
+      console.error('Error código:', dbError.code);
+      console.error('Error mensaje:', dbError.message);
+      console.error('Error detalle:', dbError.detail);
+      console.error('Error stack:', dbError.stack);
+      
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+          console.log('✅ Rollback ejecutado');
+        } catch (rollbackError) {
+          console.error('❌ Error en rollback:', rollbackError.message);
+        }
+      }
+      
       throw dbError;
     } finally {
-      client.release();
-      console.log('✅ Conexión BD liberada');
+      if (client) {
+        client.release();
+        console.log('✅ Conexión BD liberada');
+      }
     }
     
+    // Enviar correo de confirmación
+    console.log('📧 === ENVÍO DE CORREO ===');
+    try {
+      const emailResult = await enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido);
+      if (emailResult.success) {
+        console.log('✅ Correo enviado exitosamente:', emailResult.messageId);
+      } else {
+        console.error('⚠️ Error al enviar correo (continuando):', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('⚠️ Error crítico en correo (continuando):', emailError.message);
+    }
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log('🎉 === PEDIDO CREADO EXITOSAMENTE ===');
+    console.log('⏱️ Tiempo total:', duration + 'ms');
+    console.log('🔢 Número de pedido:', numeroPedido);
+    console.log('💳 Payment ID:', paymentId);
+    
+    res.status(200).json({ 
+      success: true, 
+      message: 'Pedido creado exitosamente',
+      orderId: numeroPedido,
+      paymentId: paymentId,
+      processingTime: duration + 'ms'
+    });
+    
   } catch (error) {
-    console.error('❌ Error al crear pedido:', error);
-    console.error('Stack trace:', error.stack);
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.error('💥 === ERROR CRÍTICO EN /crear-pedido ===');
+    console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+    console.error('Error tipo:', error.constructor.name);
+    console.error('Error mensaje:', error.message);
+    console.error('Error código:', error.code);
+    console.error('Error stack completo:', error.stack);
+    
     res.status(500).json({ 
+      success: false,
       error: 'Error interno del servidor al crear pedido',
-      details: error.message 
+      details: error.message,
+      code: error.code,
+      processingTime: duration + 'ms'
     });
   }
-  console.log('=== FIN /crear-pedido ===');
+  
+  console.log('🏁 === FIN /crear-pedido ===');
 });
 
 // Endpoint para consultar el estado de un pedido

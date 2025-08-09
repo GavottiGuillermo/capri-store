@@ -321,22 +321,17 @@
     const urlJson = 'https://storage.googleapis.com/imagenes-web-capri/productos.json';
     let productos = [];
     try {
-      console.log('Intentando cargar productos desde:', urlJson);
       const resp = await fetch(urlJson);
-      console.log('Respuesta del fetch:', resp.status, resp.statusText);
       
       if (!resp.ok) {
         throw new Error(`HTTP error! status: ${resp.status}`);
       }
       
       const text = await resp.text();
-      console.log('Contenido crudo del JSON:', text);
-      
       productos = JSON.parse(text);
-      console.log('Productos cargados:', productos);
-      console.log('Total de productos:', productos.length);
+      console.log('✅ Productos cargados exitosamente:', productos.length, 'items');
     } catch (e) {
-      console.error('No se pudo cargar productos.json', e);
+      console.error('❌ Error al cargar productos:', e.message);
       return;
     }
 
@@ -354,9 +349,7 @@
     // Inicializar productos filtrados con todos los productos
     productosFiltrados = [...todosLosProductos];
     
-    console.log('Novedades encontradas:', todasLasNovedades);
-    console.log('Productos encontrados:', todosLosProductos);
-    console.log('Categorías disponibles:', [...new Set(todosLosProductos.map(p => p.categoria))]);
+    console.log('📊 Resumen:', todasLasNovedades.length, 'novedades,', todosLosProductos.length, 'productos');
 
     // Actualizar navegación
     actualizarNavegacion();
@@ -376,21 +369,16 @@
       const liNovedades = linkNovedades.closest('li');
       if (todasLasNovedades.length === 0) {
         liNovedades.style.display = 'none';
-        console.log('Link de Novedades oculto - no hay elementos');
       } else {
         liNovedades.style.display = 'block';
-        console.log('Link de Novedades visible - hay elementos');
       }
     }
   }
 
   // Renderizar novedades con paginación
   async function renderizarNovedades() {
-    console.log('=== INICIANDO RENDERIZADO DE NOVEDADES ===');
-    
     // Verificar si hay novedades disponibles
     if (todasLasNovedades.length === 0) {
-      console.log('No hay novedades disponibles, ocultando sección');
       const seccionNovedades = document.getElementById('novedades');
       if (seccionNovedades) {
         seccionNovedades.style.display = 'none';
@@ -405,31 +393,19 @@
     }
     
     const novedadesList = document.getElementById('novedades-list');
-    console.log('Elemento novedades-list encontrado:', novedadesList);
     
     const inicio = (paginaActualNovedades - 1) * ITEMS_POR_PAGINA_NOVEDADES;
     const fin = inicio + ITEMS_POR_PAGINA_NOVEDADES;
     const novedadesPagina = todasLasNovedades.slice(inicio, fin);
-    
-    console.log('Novedades para esta página:', novedadesPagina);
-    console.log('Inicio:', inicio, 'Fin:', fin);
 
     // Solo limpiar si es la primera página
     if (paginaActualNovedades === 1) {
       novedadesList.innerHTML = '';
-      console.log('Lista limpiada para primera página');
     }
 
     for (const prod of novedadesPagina) {
-      console.log('Procesando producto:', prod);
       const cardHtml = await crearTarjetaProducto(prod, 'novedad');
-      console.log('HTML generado:', cardHtml);
       novedadesList.insertAdjacentHTML('beforeend', cardHtml);
-      console.log('Producto agregado al DOM');
-      
-      // Verificar inmediatamente que se agregó
-      console.log('Total de hijos después de agregar:', novedadesList.children.length);
-      console.log('Último elemento agregado:', novedadesList.lastElementChild);
     }
 
     // Mostrar/ocultar botón "Ver más"
@@ -438,11 +414,8 @@
     // Forzar estilos de botones después del renderizado - SIN CONFLICTOS
     setTimeout(() => {
       const botonesNovedades = document.querySelectorAll('#novedades .btn-rosado');
-      console.log('Botones encontrados en novedades:', botonesNovedades.length);
       
       botonesNovedades.forEach((btn, index) => {
-        console.log(`Aplicando estilos al botón ${index + 1}`);
-        
         // Forzar estilos directamente
         btn.style.setProperty('background-color', '#e29ca3', 'important');
         btn.style.setProperty('color', '#fff', 'important');
@@ -487,20 +460,15 @@
     // Solo limpiar si es la primera página
     if (paginaActualProductos === 1) {
       productosList.innerHTML = '';
-      console.log('Lista de productos limpiada para primera página');
     }
 
     for (const prod of productosPagina) {
-      console.log('Procesando producto:', prod);
       const cardHtml = await crearTarjetaProducto(prod, 'producto');
-      console.log('HTML de producto generado:', cardHtml);
       productosList.insertAdjacentHTML('beforeend', cardHtml);
-      console.log('Producto agregado al DOM');
     }
 
     // Mostrar/ocultar botón "Ver más"
     actualizarBotonVerMas('productos', fin < productosFiltrados.length);
-    console.log('=== RENDERIZADO DE PRODUCTOS COMPLETADO ===');
   }
 
   // Crear HTML de tarjeta de producto
@@ -568,10 +536,8 @@
         ? document.querySelector('#novedades .container')
         : document.querySelector('#productos .container');
       
-      console.log('Contenedor encontrado para botón:', container);
       if (container) {
         container.appendChild(btnContainer);
-        console.log('Botón agregado al contenedor');
       } else {
         console.error('No se encontró contenedor para el botón');
         return;
@@ -600,21 +566,18 @@
     console.log('Página actual después:', paginaActualNovedades);
     await renderizarNovedades();
     
-    // Verificar el estado del DOM después del renderizado
-    const novedadesList = document.getElementById('novedades-list');
-    console.log('Total de tarjetas en DOM después de cargar más:', novedadesList.children.length);
+    // Actualizar contador de productos mostrados
+    const totalMostrado = paginaActualNovedades * ITEMS_POR_PAGINA_NOVEDADES;
+    const totalTexto = Math.min(totalMostrado, todasLasNovedades.length);
   }
 
   async function cargarMasProductos() {
-    console.log('=== CARGANDO MÁS PRODUCTOS ===');
-    console.log('Página actual antes:', paginaActualProductos);
     paginaActualProductos++;
-    console.log('Página actual después:', paginaActualProductos);
     await renderizarProductos();
     
-    // Verificar el estado del DOM después del renderizado
-    const productosList = document.getElementById('productos-list');
-    console.log('Total de tarjetas de productos en DOM después de cargar más:', productosList.children.length);
+    // Actualizar contador de productos mostrados
+    const totalMostrado = paginaActualProductos * ITEMS_POR_PAGINA_PRODUCTOS;
+    const totalTexto = Math.min(totalMostrado, productosFiltrados.length);
   }
 
   // Función para mostrar productos por categoría
