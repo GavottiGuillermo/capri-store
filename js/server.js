@@ -434,7 +434,7 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
 
     // Configurar transporter con logging
     console.log('⚙️ === CONFIGURACIÓN TRANSPORTER ===');
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,
@@ -598,6 +598,36 @@ app.post('/webhook', (req, res) => {
   res.status(200).send('OK');
 });
 
+// Endpoint temporal para debugging de stored procedures
+app.get('/debug-sp', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    // Consultar información del stored procedure con más detalle
+    const result = await client.query(`
+      SELECT 
+        p.proname,
+        pg_catalog.pg_get_function_arguments(p.oid) as argumentos,
+        p.prokind,
+        pg_catalog.oidvectortypes(p.proargtypes) as tipos_argumentos
+      FROM pg_proc p 
+      WHERE p.proname = 'sp_crear_pedido_web'
+    `);
+    
+    client.release();
+    
+    res.json({
+      procedure_info: result.rows,
+      timestamp: new Date().toISOString(),
+      total_procedures: result.rows.length
+    });
+    
+  } catch (error) {
+    console.error('Error en debug-sp:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint para crear un pedido en la base de datos después del pago exitoso
 app.post('/crear-pedido', async (req, res) => {
   const startTime = Date.now();
@@ -648,21 +678,114 @@ app.post('/crear-pedido', async (req, res) => {
     console.log('- DATABASE_URL presente:', !!process.env.DATABASE_URL);
     console.log('- NODE_ENV:', process.env.NODE_ENV);
 
-    // Generar número de pedido único
-    const numeroPedido = Math.floor(100000 + Math.random() * 900000);
-    console.log('🔢 Número de pedido generado:', numeroPedido);
+    // Generar número de pedido de respaldo (solo para email/response si no podemos leer el real)
+    const fallbackNumeroPedido = Math.floor(100000 + Math.random() * 900000);
+    console.log('🔢 Número de pedido fallback generado:', fallbackNumeroPedido);
 
     // Preparar datos para el stored procedure
     console.log('📝 === PREPARACIÓN DATOS SP ===');
+    // Determinar tipo de entrega según lo que espera el SP
+    let tipoEntregaSP = 'Retiro'; // Por defecto
+    if ((datosComprador.tipoEntrega || '').toLowerCase() === 'domicilio' || (datosComprador.tipoEntrega || '').toLowerCase() === 'envio') {
+      tipoEntregaSP = 'Envio';
+    }
+    console.log('Tipo entrega original:', datosComprador.tipoEntrega);
+    console.log('Tipo entrega para SP:', tipoEntregaSP);
+
+    // Convertir productos del carrito a IDs de la tabla productos
+    // 1) Intentar extraer id_articulo desde el nombre (incluye el número en el nombre)
+    // 2) Fallback: buscar por descripcion + precio en BD
+    function parseIdFromItem(item) {
+      // 1) Intentar desde la URL de imagen o txt: carpeta/archivo con prefijo "<id>-<nombre>"
+      const tryParseFromUrl = (url) => {
+        if (!url || typeof url !== 'string') return null;
+        try {
+          const decoded = decodeURIComponent(url);
+          // Buscar patrón "/<id>-<algo>" en cualquier segmento
+          const m = decoded.match(/\/(\d+)-[^\/]+/);
+          if (m && m[1]) {
+            const id = parseInt(m[1], 10);
+            return isNaN(id) ? null : id;
+          }
+        } catch (_) { /* ignore decode errors */ }
+        return null;
+      };
+
+      let id = tryParseFromUrl(item?.img) || tryParseFromUrl(item?.txt);
+      if (id) return id;
+
+      // 2) Fallback: intentar desde el nombre mostrado (sin talle)
+      const nombre = item?.nombre || '';
+      const base = nombre.split('(Talle')[0].trim();
+      const matches = base.match(/\b(\d{1,6})\b/);
+      if (matches && matches[1]) {
+        const idNum = parseInt(matches[1], 10);
+        if (!isNaN(idNum)) return idNum;
+      }
+      return null;
+    }
+
+    let idList = [];
+    const fallbackItems = [];
+    for (const item of productos) {
+      const parsedId = parseIdFromItem(item);
+      const cant = parseInt(item.cantidad || 1, 10);
+      if (parsedId) {
+        console.log('🆔 ID detectado en nombre:', item.nombre, '=>', parsedId, 'x', cant);
+        for (let i = 0; i < cant; i++) idList.push(parsedId);
+      } else {
+        fallbackItems.push(item);
+      }
+    }
+
+    if (fallbackItems.length > 0) {
+      try {
+        console.log('🔎 IDs no detectados en nombre, buscando en BD por descripcion+precio...', fallbackItems.length, 'items');
+        const dbClientLookup = await pool.connect();
+        try {
+          for (const item of fallbackItems) {
+            const nombreBase = (item.nombre || '').split('(Talle')[0].trim();
+            const precioNum = parseFloat(item.precio);
+            const cantidadNum = parseInt(item.cantidad || 1, 10);
+            console.log('Buscando coincidencias para:', { nombreBase, precioNum, cantidadNum });
+
+            const query = `
+              SELECT id_articulo
+              FROM productos
+              WHERE lower(descripcion) = lower($1)
+                AND ABS(precio - $2) < 0.01
+                AND (id_pedido IS NULL)
+              LIMIT $3
+            `;
+            const { rows } = await dbClientLookup.query(query, [nombreBase, precioNum, cantidadNum]);
+            if (!rows || rows.length === 0) {
+              console.warn('⚠️ No se encontraron coincidencias para', nombreBase, 'con precio', precioNum);
+              continue;
+            }
+            for (const r of rows) idList.push(r.id_articulo);
+          }
+        } finally {
+          dbClientLookup.release();
+        }
+      } catch (lookupErr) {
+        console.error('❌ Error buscando IDs de productos:', lookupErr.message);
+      }
+    }
+
+    if (idList.length === 0) {
+      console.warn('⚠️ No se pudieron resolver IDs de productos; construyendo lista desde nombres como fallback');
+    }
+
+    const idProductosTexto = idList.join(',');
+    console.log('IDs de productos para SP:', idProductosTexto);
+
     const spParams = [
-      datosComprador.nombre,
-      datosComprador.email,
-      datosComprador.telefono || '',
-      datosComprador.direccion || '',
-      JSON.stringify(productos),
-      parseFloat(total),
-      paymentId,
-      'CONFIRMADO'
+      idProductosTexto,                  // in_id_productos (text) - lista "1,2,3"
+      parseFloat(total),                 // in_monto_total (double precision)
+      datosComprador.nombre,             // in_nombre_cliente (text)
+      datosComprador.email,              // in_correo_cliente (text)
+      'MercadoPago - ' + paymentId,      // in_metodo_pago (text)
+      tipoEntregaSP                      // in_tipo_entrega (text) - "Retiro" o "Envio"
     ];
     console.log('Parámetros para SP:', spParams);
 
@@ -694,16 +817,71 @@ app.post('/crear-pedido', async (req, res) => {
       console.log('⚡ Ejecutando stored procedure sp_crear_pedido_web...');
       console.log('Parámetros finales:', spParams);
       
-      const result = await client.query(
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+      await client.query(
+        'CALL sp_crear_pedido_web($1::TEXT, $2::DOUBLE PRECISION, $3::TEXT, $4::TEXT, $5::TEXT, $6::TEXT)',
         spParams
       );
-      
       console.log('✅ Stored procedure ejecutado exitosamente');
-      console.log('Resultado SP:', result);
-      
+
+      // Intentar leer el id_pedido asignado a esos productos
+      let numeroPedidoReal = null;
+      try {
+        if (idList.length > 0) {
+          const { rows: pedidoRows } = await client.query(
+            `SELECT id_pedido
+             FROM productos
+             WHERE id_articulo = ANY($1::int[])
+               AND id_pedido IS NOT NULL
+             LIMIT 1`,
+            [idList]
+          );
+          numeroPedidoReal = (pedidoRows && pedidoRows[0] && pedidoRows[0].id_pedido) || null;
+        } else {
+          // Fallback: tomar el máximo id_pedido recién asignado
+          const { rows: maxRows } = await client.query(
+            `SELECT id_pedido
+             FROM productos
+             WHERE id_pedido IS NOT NULL
+             ORDER BY CAST(SUBSTRING(id_pedido FROM 2) AS INT) DESC
+             LIMIT 1`
+          );
+          numeroPedidoReal = (maxRows && maxRows[0] && maxRows[0].id_pedido) || null;
+        }
+      } catch (readErr) {
+        console.error('⚠️ Error leyendo id_pedido luego del SP:', readErr.message);
+      }
+
       await client.query('COMMIT');
       console.log('✅ Transacción confirmada');
+
+      // Enviar correo de confirmación antes de responder
+      console.log('📧 === ENVÍO DE CORREO ===');
+      try {
+        const emailResult = await enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedidoReal || fallbackNumeroPedido);
+        if (emailResult.success) {
+          console.log('✅ Correo enviado exitosamente:', emailResult.messageId);
+        } else {
+          console.error('⚠️ Error al enviar correo (continuando):', emailResult.error);
+        }
+      } catch (emailError) {
+        console.error('⚠️ Error crítico en correo (continuando):', emailError.message);
+      }
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      const responseOrderId = numeroPedidoReal || fallbackNumeroPedido;
+      console.log('🎉 === PEDIDO CREADO EXITOSAMENTE ===');
+      console.log('⏱️ Tiempo total:', duration + 'ms');
+      console.log('🔢 Número de pedido:', responseOrderId);
+      console.log('💳 Payment ID:', paymentId);
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Pedido creado exitosamente',
+        orderId: responseOrderId,
+        paymentId: paymentId,
+        processingTime: duration + 'ms'
+      });
       
     } catch (dbError) {
       console.error('❌ === ERROR EN BASE DE DATOS ===');
@@ -730,34 +908,7 @@ app.post('/crear-pedido', async (req, res) => {
       }
     }
     
-    // Enviar correo de confirmación
-    console.log('📧 === ENVÍO DE CORREO ===');
-    try {
-      const emailResult = await enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido);
-      if (emailResult.success) {
-        console.log('✅ Correo enviado exitosamente:', emailResult.messageId);
-      } else {
-        console.error('⚠️ Error al enviar correo (continuando):', emailResult.error);
-      }
-    } catch (emailError) {
-      console.error('⚠️ Error crítico en correo (continuando):', emailError.message);
-    }
-    
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    
-    console.log('🎉 === PEDIDO CREADO EXITOSAMENTE ===');
-    console.log('⏱️ Tiempo total:', duration + 'ms');
-    console.log('🔢 Número de pedido:', numeroPedido);
-    console.log('💳 Payment ID:', paymentId);
-    
-    res.status(200).json({ 
-      success: true, 
-      message: 'Pedido creado exitosamente',
-      orderId: numeroPedido,
-      paymentId: paymentId,
-      processingTime: duration + 'ms'
-    });
+  // Nota: el flujo happy path ya retornó dentro del bloque de transacción tras COMMIT
     
   } catch (error) {
     const endTime = Date.now();
