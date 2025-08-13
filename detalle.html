@@ -213,14 +213,32 @@ document.addEventListener('DOMContentLoaded', function() {
             inputCantidad.style.cursor = 'not-allowed';
           }
           
-          // Marcar sin stock si corresponde y deshabilitar Agregar al carrito
+          // Marcar sin stock consultando servidor (fallback a cache)
           try {
             const path = decodeURIComponent((producto.img || producto.txt || ''));
             const m = path.match(/\/(\d+)-[^/]+/);
             const id = m && m[1] ? parseInt(m[1], 10) : null;
-            if (id && window.localStorage) {
-              const agotados = new Set(JSON.parse(localStorage.getItem('agotados') || '[]'));
-              if (agotados.has(id)) {
+            if (id) {
+              const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+                ? 'https://capri-store.onrender.com'
+                : '';
+              let agotado = false;
+              try {
+                const respAg = await fetch(`${API_BASE}/stock-agotado`, { cache: 'no-store' });
+                if (respAg.ok) {
+                  const js = await respAg.json();
+                  agotado = Array.isArray(js.ids) && js.ids.includes(id);
+                  if (Array.isArray(js.ids)) {
+                    localStorage.setItem('agotados', JSON.stringify(js.ids));
+                    localStorage.setItem('agotados_last_sync', String(Date.now()));
+                  }
+                }
+              } catch {}
+              if (!agotado) {
+                const cached = new Set(JSON.parse(localStorage.getItem('agotados') || '[]'));
+                agotado = cached.has(id);
+              }
+              if (agotado) {
                 const btn = document.getElementById('btnAgregarCarrito');
                 if (btn) {
                   btn.disabled = true;

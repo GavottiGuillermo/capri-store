@@ -348,7 +348,9 @@
                                         try {
                                             const agotados = Array.isArray(result.agotados) ? result.agotados : [];
                                             if (agotados.length) {
+                                                // Reemplazar la lista local con la devuelta por el backend
                                                 localStorage.setItem('agotados', JSON.stringify(agotados));
+                                                localStorage.setItem('agotados_last_sync', String(Date.now()));
                                             }
                                         } catch {}
                                         mostrarPedidoConfirmado(result.orderId);
