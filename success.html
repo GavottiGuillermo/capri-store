@@ -136,9 +136,8 @@
     <script src="js/scripts.js"></script>
     
     <script>
-        // Limpiar carrito después del pago exitoso
-        localStorage.removeItem('carrito');
-        updateCartCount();
+        // Nota: No limpiamos el carrito aquí. Se limpia luego de registrar el pedido exitosamente.
+        // updateCartCount(); // Opcional: mantener contador si se muestra en Success
         
         // Obtener parámetros de la URL para información adicional
         const urlParams = new URLSearchParams(window.location.search);
@@ -151,20 +150,23 @@
         // Mostrar detalles de la compra
         mostrarDetallesCompra();
         
-        if (paymentId && status === 'approved') {
+                if (paymentId && status === 'approved') {
             console.log('Payment ID:', paymentId);
             console.log('Status:', status);
             
-            // Obtener datos del pedido del localStorage si están disponibles
-            const datosCompra = JSON.parse(localStorage.getItem('datosCompra') || '{}');
-            const productosCompra = JSON.parse(localStorage.getItem('productosCompra') || '[]');
-            const totalCompra = localStorage.getItem('totalCompra');
-            
-            console.log('Datos para crear pedido:', { datosCompra, productosCompra, totalCompra });
-            
-            // Si tenemos todos los datos, crear el pedido en la base de datos
-            if (paymentId && productosCompra.length > 0 && datosCompra.nombre && totalCompra) {
-                crearPedidoEnBD(paymentId, productosCompra, totalCompra, datosCompra);
+                        // Preferir los datos completos de checkout guardados antes de ir a MP
+                        const checkoutData = JSON.parse(localStorage.getItem('checkoutData') || 'null');
+                        const carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+                        const productos = (checkoutData && Array.isArray(checkoutData.items) && checkoutData.items.length > 0)
+                            ? checkoutData.items
+                            : carrito; // fallback
+                        const totalCompra = localStorage.getItem('totalCompra');
+
+                        console.log('Datos para crear pedido:', { checkoutData, productosCount: productos.length, totalCompra });
+
+                        // Si tenemos todos los datos, crear el pedido en la base de datos
+                        if (paymentId && productos.length > 0 && checkoutData && checkoutData.nombre && totalCompra) {
+                                crearPedidoEnBD(paymentId, productos, totalCompra, checkoutData);
             } else {
                 // Si no tenemos todos los datos, solo confirmar que el pago fue exitoso
                 console.warn('No se pudieron obtener todos los datos del pedido desde localStorage');
@@ -237,7 +239,7 @@
         }
         
         // Función para crear el pedido en la base de datos
-        async function crearPedidoEnBD(paymentId, productos, total, datosComprador) {
+    async function crearPedidoEnBD(paymentId, productos, total, datosComprador) {
             const startTime = Date.now();
             console.log('🚀 === INICIANDO CREACIÓN PEDIDO EN BD ===');
             console.log('⏰ Timestamp:', new Date().toISOString());
@@ -348,6 +350,7 @@
                         localStorage.removeItem('totalCompra');
                         localStorage.removeItem('costoEnvio');
                         localStorage.removeItem('checkoutData');
+                        localStorage.removeItem('carrito'); // limpiar carrito una vez registrado
                         console.log('✅ localStorage limpiado');
                     }, 10000);
                     
