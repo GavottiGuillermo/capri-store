@@ -15,6 +15,10 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
     <!-- Custom CSS -->
     <link href="css/styles.css" rel="stylesheet" />
+    <style>
+        /* Color institucional Capri */
+        .capri-color { color: #6b0a0a !important; }
+    </style>
 </head>
 
 <body>
@@ -81,16 +85,16 @@
                             </div>
 
                             <div id="detalles-compra" class="mt-4 text-start d-none">
-                                <h5 class="text-primary mb-3">Resumen de tu compra</h5>
+                                <h5 class="mb-3 capri-color">Resumen de tu compra</h5>
                                 <div id="productos-comprados"></div>
                                 <hr>
                                 <div id="total-compra" class="h5 text-end"></div>
                             </div>
 
                             <div class="row mt-4">
-                                <div class="col-md-6 mb-3">
+                                <div id="bloque-envio" class="col-md-6 mb-3" style="display: none;">
                                     <div class="d-flex align-items-center">
-                                        <i class="fas fa-truck text-primary me-3" style="font-size: 2rem;"></i>
+                                        <i class="fas fa-truck me-3 capri-color" style="font-size: 2rem;"></i>
                                         <div>
                                             <h6 class="mb-1">Envío</h6>
                                             <small class="text-muted">Procesaremos tu pedido en 24-48 horas</small>
@@ -99,7 +103,7 @@
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <div class="d-flex align-items-center">
-                                        <i class="fas fa-headset text-primary me-3" style="font-size: 2rem;"></i>
+                                        <i class="fas fa-headset me-3 capri-color" style="font-size: 2rem;"></i>
                                         <div>
                                             <h6 class="mb-1">Soporte</h6>
                                             <small class="text-muted">¿Necesitas ayuda? Contáctanos</small>
@@ -419,9 +423,31 @@
             if (orderId) {
                 const numeroPedidoDiv = document.getElementById('numero-pedido');
                 const mostrado = typeof orderId === 'string' ? orderId.slice(-2) : String(orderId).slice(-2);
-                numeroPedidoDiv.innerHTML = `<strong>Número de orden (termina en):</strong> ${mostrado}`;
+                numeroPedidoDiv.innerHTML = `<strong>Número de orden:</strong> ${mostrado}`;
             }
         }
+
+        // Mostrar u ocultar el bloque de Envío según el tipo de entrega elegido
+        (function mostrarBloqueEnvioSiCorresponde() {
+            try {
+                const bloqueEnvio = document.getElementById('bloque-envio');
+                if (!bloqueEnvio) return;
+
+                const checkoutData = JSON.parse(localStorage.getItem('checkoutData') || 'null');
+                const datosCompra = JSON.parse(localStorage.getItem('datosCompra') || 'null');
+                const tipoLS = localStorage.getItem('tipoEntrega');
+                const tipo = (checkoutData?.tipoEntrega || datosCompra?.tipoEntrega || tipoLS || '').toString().toLowerCase();
+
+                if (tipo === 'domicilio' || tipo === 'envio') {
+                    bloqueEnvio.style.display = '';
+                } else {
+                    bloqueEnvio.style.display = 'none';
+                }
+            } catch (_) {
+                const bloqueEnvio = document.getElementById('bloque-envio');
+                if (bloqueEnvio) bloqueEnvio.style.display = 'none';
+            }
+        })();
     </script>
 </body>
 
