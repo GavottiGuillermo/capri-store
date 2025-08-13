@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
-    // Cargar datos del producto en el detalle
+  // Cargar datos del producto en el detalle
     document.addEventListener('DOMContentLoaded', async function() {
       // Obtener el producto seleccionado desde localStorage
       const producto = JSON.parse(localStorage.getItem('productoDetalle'));
@@ -213,6 +213,25 @@ document.addEventListener('DOMContentLoaded', function() {
             inputCantidad.style.cursor = 'not-allowed';
           }
           
+          // Marcar sin stock si corresponde y deshabilitar Agregar al carrito
+          try {
+            const path = decodeURIComponent((producto.img || producto.txt || ''));
+            const m = path.match(/\/(\d+)-[^/]+/);
+            const id = m && m[1] ? parseInt(m[1], 10) : null;
+            if (id && window.localStorage) {
+              const agotados = new Set(JSON.parse(localStorage.getItem('agotados') || '[]'));
+              if (agotados.has(id)) {
+                const btn = document.getElementById('btnAgregarCarrito');
+                if (btn) {
+                  btn.disabled = true;
+                  btn.textContent = 'Sin stock';
+                  btn.classList.remove('btn-vino-tinto');
+                  btn.classList.add('btn-secondary');
+                }
+              }
+            }
+          } catch {}
+
           // Actualizar la sección de detalles si existe información de detalle
           if (detalle) {
             const detallesList = document.querySelector('.list-unstyled');
@@ -236,6 +255,24 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('nombre-producto').textContent = producto.nombre;
           document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
           document.querySelector('.descripcion-producto').textContent = producto.desc;
+          // Fallback: marcar sin stock si está en cache
+          try {
+            const path = decodeURIComponent((producto.img || producto.txt || ''));
+            const m = path.match(/\/(\d+)-[^/]+/);
+            const id = m && m[1] ? parseInt(m[1], 10) : null;
+            if (id && window.localStorage) {
+              const agotados = new Set(JSON.parse(localStorage.getItem('agotados') || '[]'));
+              if (agotados.has(id)) {
+                const btn = document.getElementById('btnAgregarCarrito');
+                if (btn) {
+                  btn.disabled = true;
+                  btn.textContent = 'Sin stock';
+                  btn.classList.remove('btn-vino-tinto');
+                  btn.classList.add('btn-secondary');
+                }
+              }
+            }
+          } catch {}
           
           // Configurar talle y cantidad fijos (fallback)
           const selectTalle = document.getElementById('size');
@@ -285,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
           inputCantidad.style.cursor = 'not-allowed';
         }
       } else {
-        document.getElementById('nombre-producto').textContent = 'Producto no encontrado';
+  document.getElementById('nombre-producto').textContent = 'Producto no encontrado';
         document.getElementById('precio-producto').textContent = '';
         document.querySelector('.descripcion-producto').textContent = '';
         

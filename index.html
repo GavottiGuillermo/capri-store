@@ -429,6 +429,33 @@
     for (const prod of novedadesPagina) {
       const cardHtml = await crearTarjetaProducto(prod, 'novedad');
       novedadesList.insertAdjacentHTML('beforeend', cardHtml);
+
+      // Marcar sin stock en Novedades sin bloquear el detalle
+      try {
+        const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+        const m = path.match(/\/(\d+)-[^/]+/);
+        const id = m && m[1] ? parseInt(m[1], 10) : null;
+        const last = novedadesList.lastElementChild;
+        if (id && window.__CAPRI_SOLD_OUT__ && window.__CAPRI_SOLD_OUT__.has(id) && last) {
+          const card = last.querySelector('.card');
+          if (card) {
+            card.style.filter = 'grayscale(0.6)';
+            card.style.opacity = '0.8';
+            // Badge
+            const badge = document.createElement('div');
+            badge.textContent = 'Sin stock';
+            badge.style.position = 'absolute';
+            badge.style.top = '10px';
+            badge.style.left = '10px';
+            badge.style.background = '#dc3545';
+            badge.style.color = '#fff';
+            badge.style.padding = '6px 10px';
+            badge.style.borderRadius = '8px';
+            badge.style.fontWeight = 'bold';
+            card.appendChild(badge);
+          }
+        }
+      } catch {}
     }
 
     // Mostrar/ocultar botón "Ver más"
@@ -436,30 +463,15 @@
     
     // Forzar estilos de botones después del renderizado - SIN CONFLICTOS
     setTimeout(() => {
-      const botonesNovedades = document.querySelectorAll('#novedades .btn-rosado');
-      
-      botonesNovedades.forEach((btn, index) => {
-        // Forzar estilos directamente
-        btn.style.setProperty('background-color', '#e29ca3', 'important');
+      const botonesNovedades = document.querySelectorAll('#novedades .btn-vino-tinto');
+      botonesNovedades.forEach((btn) => {
+        btn.style.setProperty('background-color', '#6b0a0a', 'important');
         btn.style.setProperty('color', '#fff', 'important');
-        btn.style.setProperty('border-color', '#e29ca3', 'important');
+        btn.style.setProperty('border-color', '#6b0a0a', 'important');
         btn.style.setProperty('opacity', '1', 'important');
         btn.style.setProperty('filter', 'none', 'important');
         btn.style.setProperty('pointer-events', 'auto', 'important');
         btn.style.setProperty('cursor', 'pointer', 'important');
-        
-        // Limpiar event listeners previos y agregar nuevos
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        
-        newBtn.addEventListener('mouseenter', function() {
-          this.style.setProperty('background-color', '#d1848d', 'important');
-        });
-        newBtn.addEventListener('mouseleave', function() {
-          this.style.setProperty('background-color', '#e29ca3', 'important');
-        });
-        
-        console.log(`Botón ${index + 1} configurado correctamente`);
       });
     }, 200);
     
@@ -488,7 +500,7 @@
     for (const prod of productosPagina) {
       const cardHtml = await crearTarjetaProducto(prod, 'producto');
       productosList.insertAdjacentHTML('beforeend', cardHtml);
-      // Marcar sin stock si corresponde
+      // Marcar sin stock si corresponde (sin bloquear el detalle)
       try {
         const path = decodeURIComponent((prod.imagen || prod.txt || ''));
         const m = path.match(/\/(\d+)-[^/]+/);
@@ -498,15 +510,7 @@
           const card = last.querySelector('.card');
           if (card) {
             card.style.filter = 'grayscale(0.6)';
-            card.style.opacity = '0.7';
-            const btn = card.querySelector('.ver-detalle-btn');
-            if (btn) {
-              btn.disabled = true;
-              btn.textContent = 'Sin stock';
-              btn.style.backgroundColor = '#6c757d';
-              btn.style.borderColor = '#6c757d';
-              btn.style.color = '#fff';
-            }
+            card.style.opacity = '0.8';
             const badge = document.createElement('div');
             badge.textContent = 'Sin stock';
             badge.style.position = 'absolute';
@@ -554,9 +558,9 @@
       console.error('Error al cargar .txt:', e);
     }
 
-    const colClass = tipo === 'novedad' ? 'col-md-4' : 'col-md-3';
-    const borderClass = tipo === 'novedad' ? 'border-rosado' : 'border-vino-tinto';
-    const btnClass = tipo === 'novedad' ? 'btn-rosado' : 'btn-vino-tinto';
+  const colClass = tipo === 'novedad' ? 'col-md-4' : 'col-md-3';
+  const borderClass = tipo === 'novedad' ? 'border-rosado' : 'border-vino-tinto';
+  const btnClass = 'btn-vino-tinto';
 
     return `
       <div class="${colClass} mb-4">
@@ -569,7 +573,6 @@
           </div>
           <div class="card-footer bg-white border-0">
             <button class="btn ${btnClass} btn-block ver-detalle-btn" 
-                    style="${tipo === 'novedad' ? 'background-color: #e29ca3 !important; color: #fff !important; border-color: #e29ca3 !important;' : ''}"
                     onclick='verDetalleCapri(${JSON.stringify(prod)})'>Ver detalle</button>
           </div>
         </div>
@@ -739,17 +742,7 @@
     return [...new Set(categorias)];
   }  // Guardar producto en localStorage y redirigir
   function verDetalleCapri(prod) {
-    // Bloquear si sin stock
-    try {
-      const path = decodeURIComponent((prod.imagen || prod.txt || ''));
-      const m = path.match(/\/(\d+)-[^/]+/);
-      const id = m && m[1] ? parseInt(m[1], 10) : null;
-      if (id && window.__CAPRI_SOLD_OUT__ && window.__CAPRI_SOLD_OUT__.has(id)) {
-        alert('Este artículo está sin stock.');
-        return;
-      }
-    } catch {}
-    // Leer el .txt para obtener nombre, precio, desc y guardar junto con las urls
+    // Permitir ver el detalle incluso si está sin stock
     fetch(prod.txt).then(r => r.text()).then(txt => {
       // Extraer información entre llaves en formato secuencial
       // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
