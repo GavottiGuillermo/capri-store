@@ -335,6 +335,29 @@
       return;
     }
 
+    // Obtener IDs vendidos (sin stock) desde backend o cache local
+    let soldOutIds = [];
+    try {
+      const cached = JSON.parse(localStorage.getItem('agotados') || '[]');
+      soldOutIds = Array.isArray(cached) ? cached : [];
+      const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+        ? 'https://capri-store.onrender.com'
+        : '';
+      const respAg = await fetch(`${API_BASE}/stock-agotado`);
+      if (respAg.ok) {
+        const js = await respAg.json();
+        if (Array.isArray(js.ids)) {
+          // Unir y de-duplicar
+          const set = new Set([...(soldOutIds||[]), ...js.ids]);
+          soldOutIds = Array.from(set);
+          localStorage.setItem('agotados', JSON.stringify(soldOutIds));
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo obtener stock agotado:', e.message);
+    }
+    window.__CAPRI_SOLD_OUT__ = new Set(soldOutIds);
+
     // Separar novedades y productos con la nueva lógica
     // Novedades: categoría "novedades" O que contenga "-Novedad"
     todasLasNovedades = productos.filter(p => {
@@ -465,6 +488,39 @@
     for (const prod of productosPagina) {
       const cardHtml = await crearTarjetaProducto(prod, 'producto');
       productosList.insertAdjacentHTML('beforeend', cardHtml);
+      // Marcar sin stock si corresponde
+      try {
+        const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+        const m = path.match(/\/(\d+)-[^/]+/);
+        const id = m && m[1] ? parseInt(m[1], 10) : null;
+        const last = productosList.lastElementChild;
+        if (id && window.__CAPRI_SOLD_OUT__ && window.__CAPRI_SOLD_OUT__.has(id) && last) {
+          const card = last.querySelector('.card');
+          if (card) {
+            card.style.filter = 'grayscale(0.6)';
+            card.style.opacity = '0.7';
+            const btn = card.querySelector('.ver-detalle-btn');
+            if (btn) {
+              btn.disabled = true;
+              btn.textContent = 'Sin stock';
+              btn.style.backgroundColor = '#6c757d';
+              btn.style.borderColor = '#6c757d';
+              btn.style.color = '#fff';
+            }
+            const badge = document.createElement('div');
+            badge.textContent = 'Sin stock';
+            badge.style.position = 'absolute';
+            badge.style.top = '10px';
+            badge.style.left = '10px';
+            badge.style.background = '#dc3545';
+            badge.style.color = '#fff';
+            badge.style.padding = '6px 10px';
+            badge.style.borderRadius = '8px';
+            badge.style.fontWeight = 'bold';
+            card.appendChild(badge);
+          }
+        }
+      } catch {}
     }
 
     // Mostrar/ocultar botón "Ver más"
@@ -683,6 +739,16 @@
     return [...new Set(categorias)];
   }  // Guardar producto en localStorage y redirigir
   function verDetalleCapri(prod) {
+    // Bloquear si sin stock
+    try {
+      const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+      const m = path.match(/\/(\d+)-[^/]+/);
+      const id = m && m[1] ? parseInt(m[1], 10) : null;
+      if (id && window.__CAPRI_SOLD_OUT__ && window.__CAPRI_SOLD_OUT__.has(id)) {
+        alert('Este artículo está sin stock.');
+        return;
+      }
+    } catch {}
     // Leer el .txt para obtener nombre, precio, desc y guardar junto con las urls
     fetch(prod.txt).then(r => r.text()).then(txt => {
       // Extraer información entre llaves en formato secuencial

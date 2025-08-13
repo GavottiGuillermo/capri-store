@@ -878,9 +878,10 @@ app.post('/crear-pedido', async (req, res) => {
       return res.status(200).json({ 
         success: true, 
         message: 'Pedido creado exitosamente',
-        orderId: responseOrderId,
+  orderId: responseOrderId,
         paymentId: paymentId,
-        processingTime: duration + 'ms'
+  processingTime: duration + 'ms',
+  agotados: idList // devolver ids comprados para que el front pueda marcar sin stock
       });
       
     } catch (dbError) {
@@ -959,6 +960,27 @@ app.get('/pedido/:paymentId', async (req, res) => {
       error: 'Error al consultar pedido',
       details: error.message 
     });
+  }
+});
+
+// Endpoint para consultar productos sin stock (vendidos)
+app.get('/stock-agotado', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        `SELECT DISTINCT id_articulo
+         FROM productos
+         WHERE id_pedido IS NOT NULL`
+      );
+      const ids = rows.map(r => r.id_articulo);
+      res.json({ ids });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Error en /stock-agotado:', err.message);
+    res.status(500).json({ error: 'Error consultando stock', message: err.message });
   }
 });
 

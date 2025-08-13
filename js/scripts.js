@@ -74,6 +74,25 @@
 
 // Cargar carrito desde localStorage o iniciar vacío
 let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+// Al cargar, verificar si hay items sin stock y alertar
+try {
+  const agotados = JSON.parse(localStorage.getItem('agotados') || '[]');
+  if (Array.isArray(agotados) && agotados.length && Array.isArray(cartItems) && cartItems.length) {
+    const originales = cartItems.length;
+    cartItems = cartItems.filter(it => {
+      try {
+        const path = decodeURIComponent(it.img || '');
+        const m = path.match(/\/(\d+)-[^/]+/);
+        const id = m && m[1] ? parseInt(m[1], 10) : null;
+        return !(id && agotados.includes(id));
+      } catch { return true; }
+    });
+    if (cartItems.length !== originales) {
+      guardarCarrito();
+      setTimeout(() => alert('Algunos artículos de tu carrito quedaron sin stock y fueron removidos.'), 100);
+    }
+  }
+} catch {}
 
 // Guardar el carrito en localStorage
 function guardarCarrito() {
@@ -82,6 +101,17 @@ function guardarCarrito() {
 
 // Agregar un producto al carrito (permite repetidos con cantidad)
 function agregarAlCarrito(nombre, precio, img, cantidad = 1) {
+  // Evitar agregar si agotado
+  try {
+    const path = decodeURIComponent(img || '');
+    const m = path.match(/\/(\d+)-[^/]+/);
+    const id = m && m[1] ? parseInt(m[1], 10) : null;
+    const agotados = JSON.parse(localStorage.getItem('agotados') || '[]');
+    if (id && Array.isArray(agotados) && agotados.includes(id)) {
+      mostrarPopup('Este artículo está sin stock');
+      return;
+    }
+  } catch {}
   // Validar datos antes de agregar
   if (!nombre || isNaN(Number(precio)) || !img || isNaN(Number(cantidad)) || Number(cantidad) < 1) return;
   precio = Number(precio);
