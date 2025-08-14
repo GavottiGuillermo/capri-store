@@ -502,7 +502,12 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
 
     // Crear contenido del email
     console.log('✍️ === CREACIÓN CONTENIDO EMAIL ===');
-    const emailContent = `¡Hola ${datosComprador.nombre}!
+    const nombreCompletoSaludo = [datosComprador.nombre, datosComprador.apellido]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || datosComprador.nombre;
+
+    const emailText = `¡Hola ${nombreCompletoSaludo}!
 
 Gracias por tu compra en Capri Store. Tu pedido ha sido confirmado exitosamente.
 
@@ -525,27 +530,22 @@ Si tenes alguna consulta, no dudes en contactarnos.
 Capri Store
 Justa Lima 123, Zárate`;
 
-        const nombreCompletoSaludo = [datosComprador.nombre, datosComprador.apellido]
-          .filter(Boolean)
-          .join(' ')
-          .trim() || datosComprador.nombre;
-
-        const emailContent = `¡Hola ${nombreCompletoSaludo}!
+    const mailOptions = {
       from: `"Capri Store" <${process.env.EMAIL_USER}>`,
       to: datosComprador.email,
       subject: `Confirmación de compra #${numeroPedido} - Capri Store`,
-      text: emailContent
+      text: emailText
     };
 
     console.log('📬 === CONFIGURACIÓN FINAL EMAIL ===');
     console.log('From:', mailOptions.from);
     console.log('To:', mailOptions.to);
     console.log('Subject:', mailOptions.subject);
-    console.log('Content length:', emailContent.length, 'caracteres');
+    console.log('Content length:', mailOptions.text.length, 'caracteres');
 
     // Enviar el correo con timeout
     console.log('🚀 === ENVIANDO EMAIL ===');
-    const emailPromise = transporter.sendMail(mailOptions);
+  const emailPromise = transporter.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Timeout al enviar email después de 30 segundos')), 30000)
     );
