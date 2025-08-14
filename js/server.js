@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const crypto = require('crypto');
 
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -486,6 +487,40 @@ Justa Lima 123, Zárate`;
 app.post('/webhook', async (req, res) => {
   try {
     console.log('🔔 Webhook recibido:', JSON.stringify(req.body));
+    console.log('🔐 Headers recibidos:', JSON.stringify(req.headers, null, 2));
+
+    // Validar clave secreta si está configurada
+    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const signature = req.headers['x-signature'];
+      const requestId = req.headers['x-request-id'];
+      
+      if (!signature || !requestId) {
+        console.warn('❌ Webhook rechazado: falta signature o request-id');
+        return res.status(401).send('UNAUTHORIZED - Missing signature');
+      }
+      
+      // Validar signature de MercadoPago
+      const dataId = req.body.data?.id || req.query['data.id'];
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(dataId + requestId)
+        .digest('hex');
+      
+      // Extraer signature del header (formato: "ts=timestamp,v1=signature")
+      const signatureHash = signature.split(',').find(s => s.startsWith('v1='))?.replace('v1=', '');
+      
+      if (signatureHash !== expectedSignature) {
+        console.warn('❌ Webhook rechazado: signature inválida');
+        console.warn('Expected:', expectedSignature);
+        console.warn('Received:', signatureHash);
+        return res.status(401).send('UNAUTHORIZED - Invalid signature');
+      }
+      
+      console.log('✅ Signature validada correctamente');
+    } else {
+      console.warn('⚠️ WEBHOOK_SECRET no configurado - webhook sin validación de signature');
+    }
 
     const topic = req.body.type || req.query.type || req.headers['x-mp-topic'];
     if ((topic || '').toLowerCase() !== 'payment') {
