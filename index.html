@@ -97,8 +97,14 @@
       overflow: visible !important;
     }
     
-    .card-product img { height: 250px; object-fit: cover; }
-    .card-product { min-height: 100%; }
+  .card-product img { height: 250px; object-fit: cover; }
+  .card-product { min-height: 100%; border-radius: 1rem; overflow: hidden; }
+  /* Forzar borde sólido y color uniforme en tarjetas */
+  .card.card-product { border-width: 2px !important; border-style: solid !important; }
+  .border-rosado { border-color: #e29ca3 !important; }
+  .border-vino-tinto { border-color: #6b0a0a !important; }
+  /* Redondear esquinas de la imagen superior para evitar "cuadrados" */
+  .card-product .card-img-top { border-top-left-radius: 1rem; border-top-right-radius: 1rem; }
     
     /* Estilos para dropdown de productos */
     .dropdown-menu {
@@ -170,7 +176,7 @@
               <a class="dropdown-item text-white" href="#" onclick="mostrarCategoria('Remeras')" id="menu-remeras">Remeras</a>
             </div>
           </li>
-          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#nosotros">Nosotros</a></li>
+          
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#contacto">Contacto</a></li>
           <li class="nav-item"><a class="nav-link" href="#" id="link-refrescar">Refrescar stock</a></li>
           <li class="nav-item">
@@ -218,26 +224,7 @@
     </div>
   </section>
 
-  <!-- Nosotros -->
-  <section class="container main-section py-5" id="nosotros">
-    <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center">Nosotros</h2>
-    <div class="row align-items-center">
-      <div class="col-md-6 mb-4 mb-md-0">
-        <img src="https://storage.googleapis.com/a1aa/image/cc32c7bb-aa8f-4273-bbb0-6233c0569dfb.jpg" class="img-fluid rounded-lg shadow-lg" alt="Equipo de Capri Store">
-      </div>
-      <div class="col-md-6 text-secondary">
-        <p>
-          En <span class="font-weight-bold text-vino-tinto">Capri Store</span> nos apasiona la moda femenina que combina elegancia y comodidad. Nuestra misión es ofrecer prendas de alta calidad en tonos vino tinto, blanco y rosado, que reflejen la personalidad y estilo de cada mujer.
-        </p>
-        <p>
-          Desde nuestros inicios, trabajamos con diseñadores locales y materiales seleccionados para garantizar productos duraderos y con diseño único. Creemos que la moda es una forma de expresión y queremos acompañarte en cada momento especial.
-        </p>
-        <p class="font-weight-bold text-vino-tinto">
-          ¡Gracias por elegirnos y ser parte de la familia Capri!
-        </p>
-      </div>
-    </div>
-  </section>
+  
 
   <!-- Contacto -->
   <section class="bg-vino-tinto text-white main-section py-5" id="contacto">
@@ -305,7 +292,7 @@
   <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
-  <!-- <script src="js/scripts.js"></script> -->
+  <script src="js/scripts.js"></script>
   <script>
   // Variables globales para paginación
   let todosLosProductos = [];
@@ -599,7 +586,7 @@
 
     return `
       <div class="${colClass} mb-4">
-        <div class="card card-product ${borderClass} rounded-lg shadow h-100 progressive-reveal visible animate-delay-1">
+  <div class="card card-product ${borderClass} rounded-lg shadow h-100 progressive-reveal visible animate-delay-1 border-2">
           <img src="${prod.imagen}" class="card-img-top" alt="${nombre || ''}" style="height: 250px; object-fit: cover;">
           <div class="card-body d-flex flex-column">
             <h5 class="card-title text-vino-tinto font-weight-bold">${nombre || ''}</h5>

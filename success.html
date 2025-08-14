@@ -420,9 +420,13 @@
             confirmadoDiv.classList.remove('d-none');
             
             if (orderId) {
-                const numeroPedidoDiv = document.getElementById('numero-pedido');
-                const mostrado = typeof orderId === 'string' ? orderId.slice(-2) : String(orderId).slice(-2);
-                numeroPedidoDiv.innerHTML = `<strong>Número de orden:</strong> ${mostrado}`;
+                                const numeroPedidoDiv = document.getElementById('numero-pedido');
+                                const mostrado = typeof orderId === 'string' ? orderId.slice(-2) : String(orderId).slice(-2);
+                                numeroPedidoDiv.innerHTML = `
+                                    <div class="mt-2">
+                                        <span class="me-2" style="color:#6b0a0a; font-weight:700;">Número de pedido:</span>
+                                        <span class="display-6 fw-bold" style="color:#6b0a0a;">${mostrado}</span>
+                                    </div>`;
             }
         }
 
