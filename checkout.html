@@ -211,7 +211,6 @@
         <ul class="navbar-nav ml-auto font-weight-bold">
           <li class="nav-item"><a class="nav-link" href="index.html#novedades">Novedades</a></li>
           <li class="nav-item"><a class="nav-link" href="index.html#productos">Productos</a></li>
-          <li class="nav-item"><a class="nav-link" href="index.html#nosotros">Nosotros</a></li>
           <li class="nav-item"><a class="nav-link" href="index.html#contacto">Contacto</a></li>
           <li class="nav-item">
             <a class="nav-link position-relative d-flex align-items-center justify-content-center" href="#" id="navbar-cart-link">
@@ -930,21 +929,31 @@
       pagarBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
       pagarBtn.disabled = true;
 
-      // Integración REAL con Mercado Pago a través del backend
-      try {
-        console.log('Enviando datos a backend:', { items });
+        // Integración REAL con Mercado Pago a través del backend
+        try {
+          console.log('Enviando datos a backend:', { items, datosComprador: checkoutData });
 
-        // Detectar entorno y armar URL del backend
-        const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
-          ? 'https://capri-store.onrender.com'
-          : '';
-        const response = await fetch(`${API_BASE}/crear-preferencia`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items })
-        });
-
-        console.log('Response status:', response.status);
+          // Detectar entorno y armar URL del backend
+          const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+            ? 'https://capri-store.onrender.com'
+            : '';
+          const response = await fetch(`${API_BASE}/crear-preferencia`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              items,
+              datosComprador: {
+                nombre: checkoutData.nombre,
+                apellido: checkoutData.apellido,
+                email: checkoutData.email,
+                telefono: checkoutData.telefono,
+                tipoEntrega: checkoutData.tipoEntrega,
+                datosEnvio: checkoutData.datosEnvio,
+                metodoEnvio: checkoutData.metodoEnvio,
+                costoEnvio: checkoutData.costoEnvio
+              }
+            })
+          });        console.log('Response status:', response.status);
         console.log('Response content-type:', response.headers.get('content-type'));
 
         // Verificar el content-type antes de procesar

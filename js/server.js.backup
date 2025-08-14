@@ -41,9 +41,10 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:8080',
     'http://localhost:3001',
-    'http://127.0.0.1:5500'
+    'http://127.0.0.1:5500' // <--- agrega esta línea
   ]
 }));
+
 
 // Endpoint de salud para verificar que el servidor está funcionando
 app.get('/health', (req, res) => {
@@ -63,7 +64,7 @@ console.log('Access Token (primeros 20 chars):', accessToken ? accessToken.subst
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
+  max: 20, // Máximo número de conexiones en el pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
@@ -77,6 +78,7 @@ async function verificarConexionBD() {
     client.release();
   } catch (error) {
     console.error('❌ Error al conectar con PostgreSQL:', error.message);
+    // En desarrollo, no es crítico que falle la BD
     if (process.env.NODE_ENV === 'development') {
       console.log('⚠️ Modo desarrollo: Continuando sin base de datos...');
     }
@@ -111,6 +113,7 @@ app.post('/test-crear-preferencia', async (req, res) => {
         failure: 'http://localhost:3001/failure.html',
         pending: 'http://localhost:3001/pending.html'
       }
+      // Sin auto_return para testing local
     };
     
     console.log('Creando preferencia de prueba...');
@@ -139,6 +142,7 @@ app.get('/test-mp', async (req, res) => {
   try {
     console.log('=== TEST MERCADO PAGO ===');
     
+    // Test básico de configuración
     const basicTest = {
       sdk_loaded: !!Preference,
       client_configured: !!client,
@@ -147,6 +151,7 @@ app.get('/test-mp', async (req, res) => {
     
     console.log('Test básico:', basicTest);
     
+    // Test de creación de preferencia simple
     try {
       const testPreference = {
         items: [{
@@ -195,26 +200,21 @@ app.get('/test-mp', async (req, res) => {
 app.post('/crear-preferencia', async (req, res) => {
   console.log('=== INICIO /crear-preferencia ===');
   console.log('Request body (raw):', JSON.stringify(req.body, null, 2));
-  
+  console.log('Tipo de req.body:', typeof req.body, req.body);
+  if (req.headers) {
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+  }
   try {
-    const items = req.body.items;
-    const datosCompradorMeta = req.body.datosComprador || null;
-    
+  const items = req.body.items;
+  const datosCompradorMeta = req.body.datosComprador || null; // opcional: nombre, apellido, email, tipoEntrega
     console.log('Items recibidos:', JSON.stringify(items, null, 2));
-    console.log('Datos comprador:', JSON.stringify(datosCompradorMeta, null, 2));
-    
-    // Validación de items
+    // Validación extra de items
     if (!Array.isArray(items) || items.length === 0) {
-      const errorResponse = { 
-        error: "No hay productos en el carrito.", 
-        log: 'Items no válidos', 
-        timestamp: new Date().toISOString() 
-      };
-      res.status(400).json(errorResponse);
+      const errorResponse = { error: "No hay productos en el carrito.", log: 'Items no válidos', timestamp: new Date().toISOString() };
+      res.status(400).type('application/json').json(errorResponse);
       return;
     }
-    
-    // Validar cada item
+    // Validar que cada item tenga los campos requeridos y sean del tipo correcto
     for (const [i, item] of items.entries()) {
       if (
         !item ||
@@ -228,11 +228,10 @@ app.post('/crear-preferencia', async (req, res) => {
           log: `Item inválido: ${JSON.stringify(item)}`,
           timestamp: new Date().toISOString()
         };
-        res.status(400).json(errorResponse);
+        res.status(400).type('application/json').json(errorResponse);
         return;
       }
     }
-    
     // Determinar URL base según el entorno
     const isProduction = process.env.NODE_ENV === 'production';
     const baseUrl = isProduction
@@ -247,11 +246,7 @@ app.post('/crear-preferencia', async (req, res) => {
         unit_price: item.unit_price
       })),
       metadata: {
-        itemsSimple: items.map(i => ({ 
-          title: i.title, 
-          quantity: i.quantity, 
-          unit_price: i.unit_price 
-        })),
+        itemsSimple: items.map(i => ({ title: i.title, quantity: i.quantity, unit_price: i.unit_price })),
         datosComprador: datosCompradorMeta || null
       },
       back_urls: {
@@ -259,29 +254,33 @@ app.post('/crear-preferencia', async (req, res) => {
         failure: `${baseUrl}/failure.html?status=failure`,
         pending: `${baseUrl}/pending.html?status=pending`
       },
+      // Solo usar auto_return en producción, no en localhost
       ...(isProduction ? { auto_return: "approved" } : {}),
+      // Forzar binary_mode false para asegurar que se muestren los enlaces de retorno
       binary_mode: false,
       statement_descriptor: "CAPRI STORE",
       external_reference: "capri-" + Date.now(),
-      expires: false,
+      expires: false, // No expirar la preferencia
       payment_methods: {
-        excluded_payment_types: [],
-        installments: 12
+        excluded_payment_types: [], // Permitir todos los tipos
+        installments: 12 // Permitir hasta 12 cuotas
       },
-      ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
+  // notification_url solo en producción donde MercadoPago pueda acceder
+  ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
     };
-    
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
     console.log('🔍 Configuración específica:');
     console.log('- Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
     console.log('- Base URL:', baseUrl);
     console.log('- Auto return:', preference.auto_return || 'NO CONFIGURADO');
     console.log('- Binary mode:', preference.binary_mode);
-    console.log('- Notification URL:', preference.notification_url || 'NO CONFIGURADO');
+    console.log('- Back URLs configuradas:', !!preference.back_urls);
     
-    // Crear preferencia
+    // Crear preferencia con la nueva sintaxis del SDK
     const preferenceObj = new Preference(client);
     console.log('Creando preferencia...');
+    console.log('Client configurado:', !!client);
+    console.log('Access token presente:', !!client.accessToken);
     
     let response;
     try {
@@ -299,7 +298,12 @@ app.post('/crear-preferencia', async (req, res) => {
       
       if (err.response) {
         console.error('HTTP Status:', err.response.status);
+        console.error('HTTP Headers:', err.response.headers);
         console.error('Response data:', err.response.data);
+      }
+      
+      if (err.cause) {
+        console.error('Error cause:', err.cause);
       }
       
       const errorResponse = { 
@@ -308,65 +312,55 @@ app.post('/crear-preferencia', async (req, res) => {
         details: err.response?.data || 'Sin detalles adicionales',
         timestamp: new Date().toISOString() 
       };
-      res.status(500).json(errorResponse);
+      res.status(500).type('application/json').json(errorResponse);
       return;
     }
-    
     if (!response || !response.init_point) {
-      const errorResponse = { 
-        error: 'Mercado Pago no devolvió un link de pago válido', 
-        log: 'init_point faltante', 
-        response, 
-        timestamp: new Date().toISOString() 
-      };
-      res.status(500).json(errorResponse);
+      const errorResponse = { error: 'Mercado Pago no devolvió un link de pago válido', log: 'init_point faltante', response, timestamp: new Date().toISOString() };
+      res.status(500).type('application/json').json(errorResponse);
       return;
     }
-    
     const result = { 
       init_point: response.init_point,
       id: response.id
     };
-    
-    res.json(result);
+    res.type('application/json').json(result);
     console.log('Enviando respuesta al frontend:', JSON.stringify(result, null, 2));
     console.log('=== FIN /crear-preferencia EXITOSO ===');
-    
   } catch (error) {
     console.error('=== ERROR en /crear-preferencia ===');
     console.error('Error completo:', error);
-    
+    if (error.response && error.response.data) {
+      console.error('Mercado Pago response data:', error.response.data);
+    }
     const errorResponse = {
       error: 'Error al procesar el pago',
       message: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      mercadoPagoData: error.response && error.response.data ? error.response.data : null
     };
-    
-    res.status(500).json(errorResponse);
+    try {
+      res.status(500).type('application/json').json(errorResponse);
+    } catch (jsonErr) {
+      res.status(500).type('text/plain').send('Error interno al procesar el pago');
+    }
     console.log('=== FIN /crear-preferencia CON ERROR ===');
   }
 });
 
-// Función para enviar correo de confirmación
-async function enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido) {
-  const startTime = Date.now();
-  console.log('📧 === INICIANDO ENVÍO DE CORREO ===');
-  console.log('⏰ Timestamp:', new Date().toISOString());
-  
+// Nuevo endpoint para confirmar compra y enviar correo
+app.post('/confirmar-compra', async (req, res) => {
   try {
-    // Verificar credenciales
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.error('❌ Credenciales de email no configuradas');
-      throw new Error('Credenciales de email no configuradas');
+    const { nombre, apellido, email, resumen, total } = req.body;
+    if (!nombre || !apellido || !email || !resumen || !total) {
+      const errorResponse = { success: false, error: "Faltan datos." };
+      console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+      return res.status(400).json(errorResponse);
     }
-
-    // Validar datos de entrada
-    if (!datosComprador || !datosComprador.email || !datosComprador.nombre) {
-      throw new Error('Datos del comprador incompletos para envío de correo');
-    }
-
-    // Configurar transporter
-    const transporter = nodemailer.createTransporter({
+    // Generar número de pedido único
+    const numeroPedido = Math.floor(100000 + Math.random() * 900000);
+    // Configura tu transporter de nodemailer (Zoho Mail)
+    const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,
@@ -375,20 +369,113 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
         pass: process.env.EMAIL_PASS
       }
     });
+    //  Email content
+    const mailOptions = {
+      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Confirmación de compra - Capri Store',
+      text: 
+`¡Gracias por tu compra, ${nombre} ${apellido}!
+
+Resumen de tu pedido:
+${resumen}
+Total: $${total}
+
+Tu número de pedido es: ${numeroPedido}
+
+Para abonar por transferencia, utiliza el siguiente alias de Mercado Pago:
+capristore.mp
+
+O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
+
+¡Te esperamos!`
+    };
+    // Enviar el correo
+    await transporter.sendMail(mailOptions);
+    const successResponse = { success: true, numeroPedido };
+    console.log('Enviando respuesta exitosa al frontend:', JSON.stringify(successResponse, null, 2));
+    res.json(successResponse);
+  } catch (error) {
+    const errorResponse = { success: false, error: error.message };
+    console.log('Enviando respuesta de error al frontend:', JSON.stringify(errorResponse, null, 2));
+    res.status(500).json(errorResponse);
+  }
+});
+
+const PORT = process.env.PORT || 3001;
+
+// Función para enviar correo de confirmación
+async function enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido) {
+  const startTime = Date.now();
+  console.log('📧 === INICIANDO ENVÍO DE CORREO ===');
+  console.log('⏰ Timestamp:', new Date().toISOString());
+  
+  try {
+    // Verificar credenciales con detalle
+    console.log('🔐 === VERIFICACIÓN CREDENCIALES EMAIL ===');
+    console.log('EMAIL_USER presente:', !!process.env.EMAIL_USER);
+    console.log('EMAIL_USER valor:', process.env.EMAIL_USER ? process.env.EMAIL_USER.substring(0, 10) + '...' : 'NO CONFIGURADO');
+    console.log('EMAIL_PASS presente:', !!process.env.EMAIL_PASS);
+    console.log('EMAIL_PASS longitud:', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length + ' caracteres' : 'NO CONFIGURADO');
+    
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('❌ CREDENCIALES FALTANTES:');
+      console.error('- EMAIL_USER:', !!process.env.EMAIL_USER);
+      console.error('- EMAIL_PASS:', !!process.env.EMAIL_PASS);
+      throw new Error('Credenciales de email no configuradas');
+    }
+
+    console.log('✅ Credenciales verificadas correctamente');
+
+    // Validar datos de entrada
+    console.log('📋 === VALIDACIÓN DATOS ENTRADA ===');
+    console.log('datosComprador:', JSON.stringify(datosComprador, null, 2));
+    console.log('productos count:', productos ? productos.length : 'undefined');
+    console.log('total:', total, typeof total);
+    console.log('numeroPedido:', numeroPedido);
+
+    if (!datosComprador || !datosComprador.email || !datosComprador.nombre) {
+      throw new Error('Datos del comprador incompletos para envío de correo');
+    }
+
+    // Configurar transporter con logging
+    console.log('⚙️ === CONFIGURACIÓN TRANSPORTER ===');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.zoho.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      },
+      debug: true, // Habilitar debug de SMTP
+      logger: true // Habilitar logger
+    });
+
+    console.log('✅ Transporter configurado');
 
     // Verificar conexión SMTP
-    await transporter.verify();
-    console.log('✅ Conexión SMTP verificada exitosamente');
+    console.log('🔌 === VERIFICACIÓN CONEXIÓN SMTP ===');
+    try {
+      await transporter.verify();
+      console.log('✅ Conexión SMTP verificada exitosamente');
+    } catch (verifyError) {
+      console.error('❌ Error en verificación SMTP:', verifyError.message);
+      throw new Error(`Error de conexión SMTP: ${verifyError.message}`);
+    }
 
-    // Crear resumen de productos
+    // Crear resumen de productos con logging
+    console.log('📝 === CREACIÓN RESUMEN PRODUCTOS ===');
     let resumenProductos = '';
     let subtotal = 0;
     
     if (!productos || !Array.isArray(productos)) {
+      console.error('❌ Productos no válidos para resumen:', productos);
       throw new Error('Lista de productos no válida');
     }
     
     productos.forEach((producto, index) => {
+      console.log(`Procesando producto ${index + 1}:`, producto);
       const totalProducto = producto.cantidad * producto.precio;
       subtotal += totalProducto;
       resumenProductos += `${index + 1}. ${producto.nombre}`;
@@ -398,16 +485,24 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
       resumenProductos += `\n   Cantidad: ${producto.cantidad} x $${producto.precio.toFixed(2)} = $${totalProducto.toFixed(2)}\n`;
     });
 
+    console.log('Resumen productos generado:', resumenProductos);
+    console.log('Subtotal calculado:', subtotal);
+
     // Determinar tipo de entrega
+    console.log('🚚 === CONFIGURACIÓN ENTREGA ===');
     const tipoEntrega = datosComprador.tipoEntrega || 'retiro';
+    console.log('Tipo de entrega:', tipoEntrega);
+    
     let mensajeEntrega = '';
-    if (tipoEntrega === 'envio') {
+    if (tipoEntrega === 'domicilio') {
       mensajeEntrega = 'Nos comunicaremos contigo para coordinar el envío a tu domicilio.';
     } else {
       mensajeEntrega = 'Podes retirarlo por Justa Lima 123, Zárate.';
     }
+    console.log('Mensaje entrega:', mensajeEntrega);
 
     // Crear contenido del email
+    console.log('✍️ === CREACIÓN CONTENIDO EMAIL ===');
     const nombreCompletoSaludo = [datosComprador.nombre, datosComprador.apellido]
       .filter(Boolean)
       .join(' ')
@@ -443,9 +538,15 @@ Justa Lima 123, Zárate`;
       text: emailText
     };
 
+    console.log('📬 === CONFIGURACIÓN FINAL EMAIL ===');
+    console.log('From:', mailOptions.from);
+    console.log('To:', mailOptions.to);
+    console.log('Subject:', mailOptions.subject);
+    console.log('Content length:', mailOptions.text.length, 'caracteres');
+
     // Enviar el correo con timeout
     console.log('🚀 === ENVIANDO EMAIL ===');
-    const emailPromise = transporter.sendMail(mailOptions);
+  const emailPromise = transporter.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Timeout al enviar email después de 30 segundos')), 30000)
     );
@@ -458,11 +559,13 @@ Justa Lima 123, Zárate`;
     console.log('🎉 === EMAIL ENVIADO EXITOSAMENTE ===');
     console.log('⏱️ Tiempo de envío:', duration + 'ms');
     console.log('📧 Message ID:', info.messageId);
+    console.log('📊 Response:', info.response);
     console.log('✅ Email enviado a:', datosComprador.email);
     
     return { 
       success: true, 
       messageId: info.messageId,
+      response: info.response,
       duration: duration + 'ms'
     };
     
@@ -472,17 +575,25 @@ Justa Lima 123, Zárate`;
     
     console.error('💥 === ERROR AL ENVIAR CORREO ===');
     console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+    console.error('Error tipo:', error.constructor.name);
+    console.error('Error código:', error.code);
     console.error('Error mensaje:', error.message);
+    console.error('Error response:', error.response);
+    console.error('Error responseCode:', error.responseCode);
+    console.error('Error command:', error.command);
+    console.error('Error stack:', error.stack);
     
+    // No fallar todo el proceso si el email falla
     return { 
       success: false, 
       error: error.message,
+      code: error.code,
       duration: duration + 'ms'
     };
   }
 }
 
-// Webhook para notificaciones de Mercado Pago
+// Webhook para notificaciones de Mercado Pago (crea el pedido aunque el usuario no vuelva a success)
 app.post('/webhook', async (req, res) => {
   try {
     console.log('🔔 Webhook recibido:', JSON.stringify(req.body));
@@ -498,7 +609,7 @@ app.post('/webhook', async (req, res) => {
       return res.status(400).send('MISSING PAYMENT ID');
     }
 
-    // Verificar idempotencia
+    // Idempotencia: si ya tenemos algún producto con id_pedido asociado a este payment, no reprocesar
     try {
       const cli = await pool.connect();
       try {
@@ -510,14 +621,12 @@ app.post('/webhook', async (req, res) => {
           console.log('Webhook idempotente: ya procesado', paymentId);
           return res.status(200).send('ALREADY PROCESSED');
         }
-      } finally { 
-        cli.release(); 
-      }
+      } finally { cli.release(); }
     } catch (idempotencyError) {
       console.warn('Error en verificación de idempotencia:', idempotencyError.message);
     }
 
-    // Obtener detalles del pago desde MercadoPago
+    // Traer pago desde MP y reconstruir datos
     const paymentClient = new Payment(client);
     const mpPayment = await paymentClient.get({ id: paymentId });
     console.log('Pago recuperado MP:', JSON.stringify(mpPayment));
@@ -530,7 +639,6 @@ app.post('/webhook', async (req, res) => {
 
     console.log('✅ Pago aprobado, procesando pedido...');
 
-    // Extraer datos del metadata
     const metadata = mpPayment.metadata || {};
     const itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
     const datosComprador = metadata.datosComprador || {
@@ -544,7 +652,7 @@ app.post('/webhook', async (req, res) => {
     console.log('📦 Items reconstruidos:', itemsSimple);
     console.log('👤 Datos del comprador reconstruidos:', datosComprador);
 
-    // Construir productos del pedido
+    // Construir productos del pedido desde el metadata
     const productos = itemsSimple.map(it => ({
       nombre: it.title,
       cantidad: it.quantity,
@@ -552,6 +660,8 @@ app.post('/webhook', async (req, res) => {
       img: '', 
       txt: ''
     }));
+
+    console.log('🛍️ Productos a procesar:', productos);
 
     // Obtener datos completos del comprador
     const nombreCompleto = [datosComprador.nombre, datosComprador.apellido]
@@ -576,8 +686,8 @@ app.post('/webhook', async (req, res) => {
         let productosActualizados = 0;
         
         for (const producto of productos) {
-          // Buscar productos disponibles
-          const nombreLimpio = producto.nombre.split('(')[0].trim();
+          // Buscar productos disponibles que coincidan con el nombre y precio
+          const nombreLimpio = producto.nombre.split('(')[0].trim(); // Quitar talle del nombre
           const cantidad = parseInt(producto.cantidad, 10);
           
           console.log(`🔍 Buscando ${cantidad} unidades de "${nombreLimpio}" a precio ${producto.precio}`);
@@ -601,48 +711,73 @@ app.post('/webhook', async (req, res) => {
           
           console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles`);
           
-          // Actualizar productos (todos los disponibles hasta la cantidad solicitada)
-          const cantidadAActualizar = Math.min(productosDisponibles.length, cantidad);
-          
-          for (let i = 0; i < cantidadAActualizar; i++) {
-            const prod = productosDisponibles[i];
+          if (productosDisponibles.length >= cantidad) {
+            // Actualizar los productos encontrados
+            for (let i = 0; i < cantidad; i++) {
+              const prod = productosDisponibles[i];
+              
+              const queryActualizar = `
+                UPDATE productos 
+                SET 
+                  id_pedido = $1,
+                  pedido_fecha = NOW(),
+                  pedido_nombre_cliente = $2,
+                  pedido_correo_cliente = $3,
+                  pedido_monto_total = $4,
+                  pedido_tipo_entrega = $5,
+                  estado = 'Vendido'
+                WHERE id_articulo = $6
+              `;
+              
+              await cli.query(queryActualizar, [
+                paymentId,
+                nombreCompleto,
+                datosComprador.email,
+                parseFloat(mpPayment.transaction_amount),
+                tipoEntrega,
+                prod.id_articulo
+              ]);
+              
+              productosActualizados++;
+            }
             
-            const queryActualizar = `
-              UPDATE productos 
-              SET 
-                id_pedido = $1,
-                pedido_fecha = NOW(),
-                pedido_nombre_cliente = $2,
-                pedido_correo_cliente = $3,
-                pedido_monto_total = $4,
-                pedido_tipo_entrega = $5,
-                estado = 'Vendido'
-              WHERE id_articulo = $6
-            `;
-            
-            await cli.query(queryActualizar, [
-              paymentId,
-              nombreCompleto,
-              datosComprador.email,
-              parseFloat(mpPayment.transaction_amount),
-              tipoEntrega,
-              prod.id_articulo
-            ]);
-            
-            productosActualizados++;
-          }
-          
-          if (cantidadAActualizar < cantidad) {
-            console.warn(`⚠️ Solo se actualizaron ${cantidadAActualizar} de ${cantidad} productos para "${nombreLimpio}"`);
+            console.log(`✅ Actualizados ${cantidad} productos de "${nombreLimpio}"`);
           } else {
-            console.log(`✅ Actualizados ${cantidadAActualizar} productos de "${nombreLimpio}"`);
+            console.warn(`⚠️ Solo se encontraron ${productosDisponibles.length} de ${cantidad} productos solicitados para "${nombreLimpio}"`);
+            
+            // Actualizar los que se pudieron encontrar
+            for (const prod of productosDisponibles) {
+              const queryActualizar = `
+                UPDATE productos 
+                SET 
+                  id_pedido = $1,
+                  pedido_fecha = NOW(),
+                  pedido_nombre_cliente = $2,
+                  pedido_correo_cliente = $3,
+                  pedido_monto_total = $4,
+                  pedido_tipo_entrega = $5,
+                  estado = 'Vendido'
+                WHERE id_articulo = $6
+              `;
+              
+              await cli.query(queryActualizar, [
+                paymentId,
+                nombreCompleto,
+                datosComprador.email,
+                parseFloat(mpPayment.transaction_amount),
+                tipoEntrega,
+                prod.id_articulo
+              ]);
+              
+              productosActualizados++;
+            }
           }
         }
         
         await cli.query('COMMIT');
         console.log(`✅ Pedido creado por webhook. Productos actualizados: ${productosActualizados}`);
         
-        // Enviar correo de confirmación
+        // Enviar correo de confirmación también desde el webhook
         if (datosComprador.email && nombreCompleto && productosActualizados > 0) {
           try {
             await enviarCorreoConfirmacion(
@@ -669,7 +804,37 @@ app.post('/webhook', async (req, res) => {
     res.status(200).send('OK');
   } catch (err) {
     console.error('Error en /webhook:', err.message);
-    res.status(200).send('ERROR');
+    res.status(200).send('ERROR'); // responder 200 para no reintentos infinitos de MP
+  }
+});
+
+// Endpoint temporal para debugging de stored procedures
+app.get('/debug-sp', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    // Consultar información del stored procedure con más detalle
+    const result = await client.query(`
+      SELECT 
+        p.proname,
+        pg_catalog.pg_get_function_arguments(p.oid) as argumentos,
+        p.prokind,
+        pg_catalog.oidvectortypes(p.proargtypes) as tipos_argumentos
+      FROM pg_proc p 
+      WHERE p.proname = 'sp_crear_pedido_web'
+    `);
+    
+    client.release();
+    
+    res.json({
+      procedure_info: result.rows,
+      timestamp: new Date().toISOString(),
+      total_procedures: result.rows.length
+    });
+    
+  } catch (error) {
+    console.error('Error en debug-sp:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -738,7 +903,7 @@ app.post('/crear-pedido', async (req, res) => {
       
       for (const producto of productos) {
         // Buscar productos disponibles que coincidan
-        const nombreLimpio = producto.nombre.split('(')[0].trim();
+        const nombreLimpio = producto.nombre.split('(')[0].trim(); // Quitar talle del nombre
         const cantidad = parseInt(producto.cantidad, 10);
         
         console.log(`🔍 Buscando ${cantidad} unidades de "${nombreLimpio}" a precio ${producto.precio}`);
@@ -762,41 +927,66 @@ app.post('/crear-pedido', async (req, res) => {
         
         console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles`);
         
-        // Actualizar productos (todos los disponibles hasta la cantidad solicitada)
-        const cantidadAActualizar = Math.min(productosDisponibles.length, cantidad);
-        
-        for (let i = 0; i < cantidadAActualizar; i++) {
-          const prod = productosDisponibles[i];
+        if (productosDisponibles.length >= cantidad) {
+          // Actualizar los productos encontrados
+          for (let i = 0; i < cantidad; i++) {
+            const prod = productosDisponibles[i];
+            
+            const queryActualizar = `
+              UPDATE productos 
+              SET 
+                id_pedido = $1,
+                pedido_fecha = NOW(),
+                pedido_nombre_cliente = $2,
+                pedido_correo_cliente = $3,
+                pedido_monto_total = $4,
+                pedido_tipo_entrega = $5,
+                estado = 'Vendido'
+              WHERE id_articulo = $6
+            `;
+            
+            await dbClient.query(queryActualizar, [
+              paymentId,
+              nombreCompleto,
+              datosComprador.email,
+              parseFloat(total),
+              tipoEntrega,
+              prod.id_articulo
+            ]);
+            
+            productosActualizados++;
+          }
           
-          const queryActualizar = `
-            UPDATE productos 
-            SET 
-              id_pedido = $1,
-              pedido_fecha = NOW(),
-              pedido_nombre_cliente = $2,
-              pedido_correo_cliente = $3,
-              pedido_monto_total = $4,
-              pedido_tipo_entrega = $5,
-              estado = 'Vendido'
-            WHERE id_articulo = $6
-          `;
-          
-          await dbClient.query(queryActualizar, [
-            paymentId,
-            nombreCompleto,
-            datosComprador.email,
-            parseFloat(total),
-            tipoEntrega,
-            prod.id_articulo
-          ]);
-          
-          productosActualizados++;
-        }
-        
-        if (cantidadAActualizar < cantidad) {
-          console.warn(`⚠️ Solo se actualizaron ${cantidadAActualizar} de ${cantidad} productos para "${nombreLimpio}"`);
+          console.log(`✅ Actualizados ${cantidad} productos de "${nombreLimpio}"`);
         } else {
-          console.log(`✅ Actualizados ${cantidadAActualizar} productos de "${nombreLimpio}"`);
+          console.warn(`⚠️ Solo se encontraron ${productosDisponibles.length} de ${cantidad} productos para "${nombreLimpio}"`);
+          
+          // Actualizar los que se pudieron encontrar
+          for (const prod of productosDisponibles) {
+            const queryActualizar = `
+              UPDATE productos 
+              SET 
+                id_pedido = $1,
+                pedido_fecha = NOW(),
+                pedido_nombre_cliente = $2,
+                pedido_correo_cliente = $3,
+                pedido_monto_total = $4,
+                pedido_tipo_entrega = $5,
+                estado = 'Vendido'
+              WHERE id_articulo = $6
+            `;
+            
+            await dbClient.query(queryActualizar, [
+              paymentId,
+              nombreCompleto,
+              datosComprador.email,
+              parseFloat(total),
+              tipoEntrega,
+              prod.id_articulo
+            ]);
+            
+            productosActualizados++;
+          }
         }
       }
       
@@ -819,6 +1009,7 @@ app.post('/crear-pedido', async (req, res) => {
         }
       }
       
+      // Limpiar carrito del localStorage (esto se hace en el frontend)
       const duration = Date.now() - startTime;
       console.log(`⏱️ Pedido procesado en ${duration}ms`);
       
@@ -849,6 +1040,217 @@ app.post('/crear-pedido', async (req, res) => {
       error: 'Error al procesar el pedido',
       message: error.message,
       duration: duration + 'ms'
+    });
+  }
+  
+  console.log('🏁 === FIN /crear-pedido ===');
+});
+      const parsedId = parseIdFromItem(item);
+      const cant = parseInt(item.cantidad || 1, 10);
+      if (parsedId) {
+        console.log('🆔 ID detectado en nombre:', item.nombre, '=>', parsedId, 'x', cant);
+        for (let i = 0; i < cant; i++) idList.push(parsedId);
+      } else {
+        fallbackItems.push(item);
+      }
+    }
+
+    if (fallbackItems.length > 0) {
+      try {
+        console.log('🔎 IDs no detectados en nombre, buscando en BD por descripcion+precio...', fallbackItems.length, 'items');
+        const dbClientLookup = await pool.connect();
+        try {
+          for (const item of fallbackItems) {
+            const nombreBase = (item.nombre || '').split('(Talle')[0].trim();
+            const precioNum = parseFloat(item.precio);
+            const cantidadNum = parseInt(item.cantidad || 1, 10);
+            console.log('Buscando coincidencias para:', { nombreBase, precioNum, cantidadNum });
+
+            const query = `
+              SELECT id_articulo
+              FROM productos
+              WHERE lower(descripcion) = lower($1)
+                AND ABS(precio - $2) < 0.01
+                AND (id_pedido IS NULL)
+              LIMIT $3
+            `;
+            const { rows } = await dbClientLookup.query(query, [nombreBase, precioNum, cantidadNum]);
+            if (!rows || rows.length === 0) {
+              console.warn('⚠️ No se encontraron coincidencias para', nombreBase, 'con precio', precioNum);
+              continue;
+            }
+            for (const r of rows) idList.push(r.id_articulo);
+          }
+        } finally {
+          dbClientLookup.release();
+        }
+      } catch (lookupErr) {
+        console.error('❌ Error buscando IDs de productos:', lookupErr.message);
+      }
+    }
+
+    if (idList.length === 0) {
+      console.warn('⚠️ No se pudieron resolver IDs de productos; construyendo lista desde nombres como fallback');
+    }
+
+    const idProductosTexto = idList.join(',');
+    console.log('IDs de productos para SP:', idProductosTexto);
+
+    // Armar nombre completo "Nombre Apellido" si hay apellido
+    const nombreCompleto = [datosComprador?.nombre, datosComprador?.apellido]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || datosComprador?.nombre || '';
+
+    const spParams = [
+      idProductosTexto,                  // in_id_productos (text) - lista "1,2,3"
+      parseFloat(total),                 // in_monto_total (double precision)
+      nombreCompleto,                    // in_nombre_cliente (text)
+      datosComprador.email,              // in_correo_cliente (text)
+      'MercadoPago - ' + paymentId,      // in_metodo_pago (text)
+      tipoEntregaSP                      // in_tipo_entrega (text) - "Retiro" o "Envio"
+    ];
+    console.log('Parámetros para SP:', spParams);
+
+    // Ejecutar stored procedure para crear el pedido
+    console.log('💾 === EJECUCIÓN STORED PROCEDURE ===');
+    
+    let client;
+    try {
+      console.log('Obteniendo conexión del pool...');
+      client = await pool.connect();
+      console.log('✅ Conexión a BD establecida exitosamente');
+      
+      console.log('Iniciando transacción...');
+      await client.query('BEGIN');
+      console.log('✅ Transacción iniciada');
+      
+      // Verificar que el stored procedure existe
+      console.log('🔍 Verificando existencia del stored procedure...');
+      const spCheck = await client.query(
+        "SELECT proname FROM pg_proc WHERE proname = 'sp_crear_pedido_web'"
+      );
+      console.log('SP existe:', spCheck.rows.length > 0, spCheck.rows);
+      
+      if (spCheck.rows.length === 0) {
+        throw new Error('El stored procedure sp_crear_pedido_web no existe en la base de datos');
+      }
+      
+      // Ejecutar el stored procedure
+      console.log('⚡ Ejecutando stored procedure sp_crear_pedido_web...');
+      console.log('Parámetros finales:', spParams);
+      
+      await client.query(
+        'CALL sp_crear_pedido_web($1::TEXT, $2::DOUBLE PRECISION, $3::TEXT, $4::TEXT, $5::TEXT, $6::TEXT)',
+        spParams
+      );
+      console.log('✅ Stored procedure ejecutado exitosamente');
+
+      // Intentar leer el id_pedido asignado a esos productos
+      let numeroPedidoReal = null;
+      try {
+        if (idList.length > 0) {
+          const { rows: pedidoRows } = await client.query(
+            `SELECT id_pedido
+             FROM productos
+             WHERE id_articulo = ANY($1::int[])
+               AND id_pedido IS NOT NULL
+             LIMIT 1`,
+            [idList]
+          );
+          numeroPedidoReal = (pedidoRows && pedidoRows[0] && pedidoRows[0].id_pedido) || null;
+        } else {
+          // Fallback: tomar el máximo id_pedido recién asignado
+          const { rows: maxRows } = await client.query(
+            `SELECT id_pedido
+             FROM productos
+             WHERE id_pedido IS NOT NULL
+             ORDER BY CAST(SUBSTRING(id_pedido FROM 2) AS INT) DESC
+             LIMIT 1`
+          );
+          numeroPedidoReal = (maxRows && maxRows[0] && maxRows[0].id_pedido) || null;
+        }
+      } catch (readErr) {
+        console.error('⚠️ Error leyendo id_pedido luego del SP:', readErr.message);
+      }
+
+      await client.query('COMMIT');
+      console.log('✅ Transacción confirmada');
+
+      // Enviar correo de confirmación antes de responder
+      console.log('📧 === ENVÍO DE CORREO ===');
+      try {
+        const emailResult = await enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedidoReal || fallbackNumeroPedido);
+        if (emailResult.success) {
+          console.log('✅ Correo enviado exitosamente:', emailResult.messageId);
+        } else {
+          console.error('⚠️ Error al enviar correo (continuando):', emailResult.error);
+        }
+      } catch (emailError) {
+        console.error('⚠️ Error crítico en correo (continuando):', emailError.message);
+      }
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      const responseOrderId = numeroPedidoReal || fallbackNumeroPedido;
+      console.log('🎉 === PEDIDO CREADO EXITOSAMENTE ===');
+      console.log('⏱️ Tiempo total:', duration + 'ms');
+      console.log('🔢 Número de pedido:', responseOrderId);
+      console.log('💳 Payment ID:', paymentId);
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Pedido creado exitosamente',
+  orderId: responseOrderId,
+        paymentId: paymentId,
+  processingTime: duration + 'ms',
+  agotados: idList // devolver ids comprados para que el front pueda marcar sin stock
+      });
+      
+    } catch (dbError) {
+      console.error('❌ === ERROR EN BASE DE DATOS ===');
+      console.error('Error tipo:', dbError.constructor.name);
+      console.error('Error código:', dbError.code);
+      console.error('Error mensaje:', dbError.message);
+      console.error('Error detalle:', dbError.detail);
+      console.error('Error stack:', dbError.stack);
+      
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+          console.log('✅ Rollback ejecutado');
+        } catch (rollbackError) {
+          console.error('❌ Error en rollback:', rollbackError.message);
+        }
+      }
+      
+      throw dbError;
+    } finally {
+      if (client) {
+        client.release();
+        console.log('✅ Conexión BD liberada');
+      }
+    }
+    
+  // Nota: el flujo happy path ya retornó dentro del bloque de transacción tras COMMIT
+    
+  } catch (error) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.error('💥 === ERROR CRÍTICO EN /crear-pedido ===');
+    console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+    console.error('Error tipo:', error.constructor.name);
+    console.error('Error mensaje:', error.message);
+    console.error('Error código:', error.code);
+    console.error('Error stack completo:', error.stack);
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Error interno del servidor al crear pedido',
+      details: error.message,
+      code: error.code,
+      processingTime: duration + 'ms'
     });
   }
   
@@ -931,58 +1333,8 @@ app.get('/stock-agotado', async (req, res) => {
   }
 });
 
-// Nuevo endpoint para confirmar compra y enviar correo
-app.post('/confirmar-compra', async (req, res) => {
-  try {
-    const { nombre, apellido, email, resumen, total } = req.body;
-    if (!nombre || !apellido || !email || !resumen || !total) {
-      return res.status(400).json({ success: false, error: "Faltan datos." });
-    }
-    
-    const numeroPedido = Math.floor(100000 + Math.random() * 900000);
-    
-    const transporter = nodemailer.createTransporter({
-      host: 'smtp.zoho.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-    
-    const mailOptions = {
-      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Confirmación de compra - Capri Store',
-      text: 
-`¡Gracias por tu compra, ${nombre} ${apellido}!
-
-Resumen de tu pedido:
-${resumen}
-Total: $${total}
-
-Tu número de pedido es: ${numeroPedido}
-
-Para abonar por transferencia, utiliza el siguiente alias de Mercado Pago:
-capristore.mp
-
-O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
-
-¡Te esperamos!`
-    };
-    
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true, numeroPedido });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Servir archivos estáticos desde la carpeta raíz del proyecto
+// Servir archivos estáticos desde la carpeta raíz del proyecto (al final)
 app.use(express.static(path.join(__dirname, '..')));
-
-const PORT = process.env.PORT || 3001;
 
 console.log('Intentando iniciar backend Capri Store...');
 app.listen(PORT, () => {

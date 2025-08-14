@@ -167,11 +167,12 @@
 
                         // Si tenemos todos los datos, crear el pedido en la base de datos
                         if (paymentId && productos.length > 0 && checkoutData && checkoutData.nombre && totalCompra) {
-                                crearPedidoEnBD(paymentId, productos, totalCompra, checkoutData);
+                          // Verificar primero si el pedido ya fue procesado por el webhook
+                          await verificarYCrearPedido(paymentId, productos, totalCompra, checkoutData);
             } else {
                 // Si no tenemos todos los datos, solo confirmar que el pago fue exitoso
                 console.warn('No se pudieron obtener todos los datos del pedido desde localStorage');
-                mostrarPedidoConfirmado();
+                mostrarPedidoConfirmado(paymentId);
             }
         } else {
             // Si no hay payment_id o el status no es approved, solo mostrar mensaje general
@@ -237,6 +238,43 @@
                 totalDiv.innerHTML = totalHTML;
                 detallesDiv.classList.remove('d-none');
             }
+        }
+        
+        // Función para verificar si el pedido ya fue procesado por el webhook
+        async function verificarYCrearPedido(paymentId, productos, total, datosComprador) {
+          console.log('🔍 Verificando si el pedido ya fue procesado por webhook...');
+          
+          try {
+            // Detectar entorno y configurar API
+            const isProduction = window.location.hostname.includes('capristorezte.com.ar');
+            const API_BASE = isProduction
+              ? 'https://capri-store.onrender.com'
+              : '';
+            
+            // Verificar si ya existe un pedido con este payment_id
+            const checkResponse = await fetch(`${API_BASE}/pedido/${paymentId}`, {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (checkResponse.ok) {
+              const pedidoExistente = await checkResponse.json();
+              if (pedidoExistente.existe) {
+                console.log('✅ Pedido ya fue procesado por webhook');
+                mostrarPedidoConfirmado(paymentId);
+                return;
+              }
+            }
+            
+            // Si no existe, proceder a crear el pedido
+            console.log('📝 Pedido no encontrado, creando desde frontend...');
+            await crearPedidoEnBD(paymentId, productos, total, datosComprador);
+            
+          } catch (error) {
+            console.warn('⚠️ Error al verificar pedido existente, procediendo con creación:', error.message);
+            // En caso de error en la verificación, intentar crear el pedido de todas formas
+            await crearPedidoEnBD(paymentId, productos, total, datosComprador);
+          }
         }
         
         // Función para crear el pedido en la base de datos
