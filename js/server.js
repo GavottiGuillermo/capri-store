@@ -736,30 +736,41 @@ app.post('/crear-pedido', async (req, res) => {
       let productosActualizados = 0;
       
       for (const producto of productos) {
-        // Buscar productos disponibles que coincidan
+        // Extraer ID del producto desde el nombre (formato: "6-Midnight Dress (Talle: L)")
+        // El nombre puede venir como "Vestido Media Noche (Talle: L)" donde necesitamos mapear al ID
+        
+        let idProducto = null;
+        let talle = null;
+        
+        // Extraer talle del nombre si existe
+        const talleMatch = producto.nombre.match(/\(Talle:\s*([^)]+)\)/i);
+        if (talleMatch) {
+          talle = talleMatch[1].trim();
+        }
+        
+        // Mapear nombres a IDs de productos (deberías ajustar esto según tu estructura)
         const nombreLimpio = producto.nombre.split('(')[0].trim();
-        const cantidad = parseInt(producto.cantidad, 10);
         
-        console.log(`🔍 Buscando ${cantidad} unidades de "${nombreLimpio}" a precio ${producto.precio}`);
+        console.log(`🔍 Procesando producto: "${nombreLimpio}", Talle: ${talle}, Precio: ${producto.precio}`);
         
+        // Buscar por precio y talle (más específico que solo nombre)
         const queryBuscar = `
           SELECT id_articulo, prenda, talle, precio_venta_transferencia
           FROM productos 
-          WHERE LOWER(TRIM(prenda)) = LOWER($1)
-            AND ABS(precio_venta_transferencia - $2) < 0.01
+          WHERE ABS(precio_venta_transferencia - $1) < 0.01
+            ${talle ? 'AND LOWER(TRIM(talle)) = LOWER($2)' : ''}
             AND id_pedido IS NULL
-            AND estado IS NULL
-          ORDER BY id_articulo
-          LIMIT $3
+          ORDER BY id_articulo ASC
+          LIMIT $${talle ? '3' : '2'}
         `;
         
-        const { rows: productosDisponibles } = await dbClient.query(queryBuscar, [
-          nombreLimpio,
-          parseFloat(producto.precio),
-          cantidad
-        ]);
+        const parametros = talle ? [producto.precio, talle, parseInt(producto.cantidad)] : [producto.precio, parseInt(producto.cantidad)];
         
-        console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles`);
+        const { rows: productosDisponibles } = await dbClient.query(queryBuscar, parametros.slice(0, -1));
+        
+        console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles para "${nombreLimpio}"`);
+        
+        const cantidad = parseInt(producto.cantidad, 10);
         
         // Actualizar productos (todos los disponibles hasta la cantidad solicitada)
         const cantidadAActualizar = Math.min(productosDisponibles.length, cantidad);
