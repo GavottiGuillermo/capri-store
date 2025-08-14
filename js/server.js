@@ -520,7 +520,12 @@ Si tenes alguna consulta, no dudes en contactarnos.
 Capri Store
 Justa Lima 123, Zárate`;
 
-    const mailOptions = {
+        const nombreCompletoSaludo = [datosComprador.nombre, datosComprador.apellido]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || datosComprador.nombre;
+
+        const emailContent = `¡Hola ${nombreCompletoSaludo}!
       from: `"Capri Store" <${process.env.EMAIL_USER}>`,
       to: datosComprador.email,
       subject: `Confirmación de compra #${numeroPedido} - Capri Store`,
@@ -779,10 +784,16 @@ app.post('/crear-pedido', async (req, res) => {
     const idProductosTexto = idList.join(',');
     console.log('IDs de productos para SP:', idProductosTexto);
 
+    // Armar nombre completo "Nombre Apellido" si hay apellido
+    const nombreCompleto = [datosComprador?.nombre, datosComprador?.apellido]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || datosComprador?.nombre || '';
+
     const spParams = [
       idProductosTexto,                  // in_id_productos (text) - lista "1,2,3"
       parseFloat(total),                 // in_monto_total (double precision)
-      datosComprador.nombre,             // in_nombre_cliente (text)
+      nombreCompleto,                    // in_nombre_cliente (text)
       datosComprador.email,              // in_correo_cliente (text)
       'MercadoPago - ' + paymentId,      // in_metodo_pago (text)
       tipoEntregaSP                      // in_tipo_entrega (text) - "Retiro" o "Envio"
