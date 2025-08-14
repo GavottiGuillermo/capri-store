@@ -1,5 +1,5 @@
 const express = require('express');
-const { MercadoPagoConfig, Preference } = require('mercadopago');
+const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
@@ -205,7 +205,8 @@ app.post('/crear-preferencia', async (req, res) => {
     console.log('Request headers:', JSON.stringify(req.headers, null, 2));
   }
   try {
-    const items = req.body.items;
+  const items = req.body.items;
+  const datosCompradorMeta = req.body.datosComprador || null; // opcional: nombre, apellido, email, tipoEntrega
     console.log('Items recibidos:', JSON.stringify(items, null, 2));
     // Validación extra de items
     if (!Array.isArray(items) || items.length === 0) {
@@ -244,6 +245,10 @@ app.post('/crear-preferencia', async (req, res) => {
         currency_id: item.currency_id,
         unit_price: item.unit_price
       })),
+      metadata: {
+        itemsSimple: items.map(i => ({ title: i.title, quantity: i.quantity, unit_price: i.unit_price })),
+        datosComprador: datosCompradorMeta || null
+      },
       back_urls: {
         success: `${baseUrl}/success.html?status=approved`,
         failure: `${baseUrl}/failure.html?status=failure`,
@@ -259,8 +264,8 @@ app.post('/crear-preferencia', async (req, res) => {
         excluded_payment_types: [], // Permitir todos los tipos
         installments: 12 // Permitir hasta 12 cuotas
       },
-      // notification_url solo en producción donde MercadoPago pueda acceder
-      ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
+  // notification_url solo en producción donde MercadoPago pueda acceder
+  ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
     };
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
     console.log('🔍 Configuración específica:');
@@ -587,20 +592,112 @@ Justa Lima 123, Zárate`;
   }
 }
 
-// Webhook para notificaciones de Mercado Pago
-app.post('/webhook', (req, res) => {
-  console.log('Webhook recibido:', req.body);
-  
-  // Verificar si es una notificación de pago
-  if (req.body.type === 'payment') {
-    const paymentId = req.body.data.id;
-    console.log('ID de pago recibido:', paymentId);
-    
-    // Aquí puedes agregar lógica adicional para procesar el pago
-    // Por ejemplo, actualizar el estado del pedido en la base de datos
+// Webhook para notificaciones de Mercado Pago (crea el pedido aunque el usuario no vuelva a success)
+app.post('/webhook', async (req, res) => {
+  try {
+    console.log('🔔 Webhook recibido:', JSON.stringify(req.body));
+
+    const topic = req.body.type || req.query.type || req.headers['x-mp-topic'];
+    if ((topic || '').toLowerCase() !== 'payment') {
+      return res.status(200).send('IGNORED');
+    }
+
+    const paymentId = req.body.data?.id || req.query['data.id'];
+    if (!paymentId) {
+      console.warn('Webhook sin paymentId');
+      return res.status(400).send('MISSING PAYMENT ID');
+    }
+
+    // Idempotencia: si ya tenemos algún producto con id_pedido asociado a este payment, no reprocesar
+    try {
+      const cli = await pool.connect();
+      try {
+        const { rows } = await cli.query(
+          `SELECT 1 FROM productos WHERE pedido_metodo_pago = $1 LIMIT 1`,
+          ['MercadoPago - ' + paymentId]
+        );
+        if (rows && rows.length) {
+          console.log('Webhook idempotente: ya procesado', paymentId);
+          return res.status(200).send('ALREADY PROCESSED');
+        }
+      } finally { cli.release(); }
+    } catch {}
+
+    // Traer pago desde MP y reconstruir datos
+    const paymentClient = new Payment(client);
+    const mpPayment = await paymentClient.get({ id: paymentId });
+    console.log('Pago recuperado MP:', JSON.stringify(mpPayment));
+
+    if (!mpPayment || (mpPayment.status !== 'approved' && mpPayment.status !== 'authorized')) {
+      return res.status(200).send('PAYMENT NOT APPROVED');
+    }
+
+    const metadata = mpPayment.metadata || {};
+    const itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
+    const datosComprador = metadata.datosComprador || {
+      nombre: mpPayment.payer?.first_name || 'Cliente',
+      apellido: mpPayment.payer?.last_name || '',
+      email: mpPayment.payer?.email || ''
+    };
+
+    // Construir una forma mínima de productos: idealmente vendrá del metadata
+    const productos = itemsSimple.map(it => ({
+      nombre: it.title,
+      cantidad: it.quantity,
+      precio: it.unit_price,
+      img: '', txt: ''
+    }));
+
+    // Reusar la lógica de creación de pedido llamando directamente a la SP
+    const tipoEntregaSP = (datosComprador.tipoEntrega || '').toLowerCase() === 'domicilio' || (datosComprador.tipoEntrega || '').toLowerCase() === 'envio' ? 'Envio' : 'Retiro';
+
+    // Intento best-effort de extracción de IDs con los títulos
+    function parseIdFromTitle(title) {
+      const m = (title || '').match(/\b(\d{1,6})\b/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    const idList = [];
+    for (const p of productos) {
+      const idParsed = parseIdFromTitle(p.nombre);
+      const cant = parseInt(p.cantidad || 1, 10);
+      if (idParsed) {
+        for (let i = 0; i < cant; i++) idList.push(idParsed);
+      }
+    }
+    const idProductosTexto = idList.join(',');
+    const nombreCompleto = [datosComprador.nombre, datosComprador.apellido].filter(Boolean).join(' ').trim() || datosComprador.nombre;
+
+    const spParams = [
+      idProductosTexto,
+      parseFloat(mpPayment.transaction_amount || 0),
+      nombreCompleto,
+      datosComprador.email,
+      'MercadoPago - ' + paymentId,
+      tipoEntregaSP
+    ];
+
+    // Ejecutar SP si tenemos algo para marcar
+    if (idProductosTexto) {
+      const cli = await pool.connect();
+      try {
+        await cli.query('BEGIN');
+        await cli.query(
+          'CALL sp_crear_pedido_web($1::TEXT, $2::DOUBLE PRECISION, $3::TEXT, $4::TEXT, $5::TEXT, $6::TEXT)',
+          spParams
+        );
+        await cli.query('COMMIT');
+        console.log('Pedido creado por webhook para payment', paymentId);
+      } catch (e) {
+        try { await cli.query('ROLLBACK'); } catch {}
+        console.error('Error en webhook/SP:', e.message);
+      } finally { cli.release(); }
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Error en /webhook:', err.message);
+    res.status(200).send('ERROR'); // responder 200 para no reintentos infinitos de MP
   }
-  
-  res.status(200).send('OK');
 });
 
 // Endpoint temporal para debugging de stored procedures
