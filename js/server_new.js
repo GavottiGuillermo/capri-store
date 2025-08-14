@@ -4,7 +4,6 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const path = require('path');
-const crypto = require('crypto');
 
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -55,55 +54,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Endpoint de prueba para webhook
-// *** ENDPOINT PARA VERIFICAR ESTADO DEL SERVIDOR ***
-app.get('/health', (req, res) => {
-  const health = {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    webhook: {
-      endpoint: '/webhook',
-      secret_configured: !!process.env.MERCADOPAGO_WEBHOOK_SECRET,
-      url: process.env.NODE_ENV === 'production' ? 
-        'https://www.capristorezte.com.ar/webhook' : 
-        'localhost webhook (no funcional)'
-    },
-    database: {
-      configured: !!process.env.DATABASE_URL
-    },
-    email: {
-      configured: !!process.env.EMAIL_USER && !!process.env.EMAIL_PASS
-    }
-  };
-  
-  console.log('🏥 Health check:', health);
-  res.json(health);
-});
-
-app.get('/test-webhook', (req, res) => {
-  console.log('🧪 Test webhook endpoint called');
-  res.json({
-    status: 'Webhook endpoint is accessible',
-    timestamp: new Date().toISOString(),
-    url: '/webhook',
-    message: 'Si ves esto, el servidor está funcionando y puede recibir webhooks'
-  });
-});
-
-// Endpoint POST de prueba para simular webhook
-app.post('/test-webhook', (req, res) => {
-  console.log('🧪 === TEST WEBHOOK POST ===');
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  res.json({
-    status: 'Test webhook received',
-    receivedBody: req.body,
-    receivedHeaders: req.headers,
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Configura Mercado Pago con la nueva sintaxis
 const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN_TEST;
 console.log('Access Token configurado:', accessToken ? 'Sí' : 'No');
@@ -135,21 +85,6 @@ async function verificarConexionBD() {
 
 // Verificar conexión al iniciar el servidor
 verificarConexionBD();
-
-// Verificar configuración de webhook
-console.log('🔧 === CONFIGURACIÓN WEBHOOK ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('WEBHOOK_SECRET configurado:', !!process.env.MERCADOPAGO_WEBHOOK_SECRET);
-console.log('EMAIL_USER configurado:', !!process.env.EMAIL_USER);
-console.log('EMAIL_PASS configurado:', !!process.env.EMAIL_PASS);
-console.log('DATABASE_URL configurado:', !!process.env.DATABASE_URL);
-
-const isProduction = process.env.NODE_ENV === 'production';
-if (isProduction) {
-  console.log('🚀 Modo PRODUCCIÓN - Webhook esperado en: https://www.capristorezte.com.ar/webhook');
-} else {
-  console.log('🛠️ Modo DESARROLLO - Webhook no funcionará localmente');
-}
 
 const client = new MercadoPagoConfig({
   accessToken: accessToken,
@@ -549,77 +484,19 @@ Justa Lima 123, Zárate`;
 
 // Webhook para notificaciones de Mercado Pago
 app.post('/webhook', async (req, res) => {
-  console.log('🔔 === WEBHOOK RECIBIDO ===');
-  console.log('⏰ Timestamp:', new Date().toISOString());
-  console.log('🌐 IP origen:', req.ip || req.connection.remoteAddress);
-  console.log('📋 Body completo:', JSON.stringify(req.body, null, 2));
-  console.log('🔐 Headers completos:', JSON.stringify(req.headers, null, 2));
-  console.log('🔗 URL completa:', req.originalUrl);
-  console.log('📝 Query params:', JSON.stringify(req.query, null, 2));
-
   try {
-    // Por ahora, saltamos la validación de signature para debugging
-    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
-    console.log('🔑 Webhook secret configurado:', webhookSecret ? 'SÍ' : 'NO');
-    
-    // TEMPORALMENTE COMENTADO PARA DEBUG
-    /*
-    if (webhookSecret) {
-      const signature = req.headers['x-signature'];
-      const requestId = req.headers['x-request-id'];
-      
-      console.log('✍️ Signature recibida:', signature);
-      console.log('🆔 Request ID recibido:', requestId);
-      
-      if (!signature || !requestId) {
-        console.warn('❌ Webhook rechazado: falta signature o request-id');
-        return res.status(401).send('UNAUTHORIZED - Missing signature');
-      }
-      
-      const dataId = req.body.data?.id || req.query['data.id'];
-      console.log('🆔 Data ID extraído:', dataId);
-      
-      if (!dataId) {
-        console.warn('❌ No se pudo extraer data.id del webhook');
-        return res.status(400).send('BAD REQUEST - Missing data.id');
-      }
-      
-      const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(dataId + requestId)
-        .digest('hex');
-      
-      const signatureHash = signature.split(',').find(s => s.startsWith('v1='))?.replace('v1=', '');
-      
-      console.log('🔒 Expected signature:', expectedSignature);
-      console.log('🔓 Received signature:', signatureHash);
-      
-      if (signatureHash !== expectedSignature) {
-        console.warn('❌ Webhook rechazado: signature inválida');
-        return res.status(401).send('UNAUTHORIZED - Invalid signature');
-      }
-      
-      console.log('✅ Signature validada correctamente');
-    }
-    */
+    console.log('🔔 Webhook recibido:', JSON.stringify(req.body));
 
     const topic = req.body.type || req.query.type || req.headers['x-mp-topic'];
-    console.log('📋 Topic recibido:', topic);
-    
     if ((topic || '').toLowerCase() !== 'payment') {
-      console.log('ℹ️ Topic ignorado:', topic);
-      return res.status(200).send('IGNORED - Not a payment topic');
+      return res.status(200).send('IGNORED');
     }
 
     const paymentId = req.body.data?.id || req.query['data.id'];
-    console.log('💳 Payment ID extraído:', paymentId);
-    
     if (!paymentId) {
-      console.warn('❌ Webhook sin paymentId');
+      console.warn('Webhook sin paymentId');
       return res.status(400).send('MISSING PAYMENT ID');
     }
-
-    console.log('🔄 Procesando pago:', paymentId);
 
     // Verificar idempotencia
     try {
