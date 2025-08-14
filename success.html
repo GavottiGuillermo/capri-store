@@ -133,29 +133,33 @@
 
     <!-- Bootstrap Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Scripts -->
     <script src="js/scripts.js"></script>
     
     <script>
-        // Nota: No limpiamos el carrito aquí. Se limpia luego de registrar el pedido exitosamente.
-        // updateCartCount(); // Opcional: mantener contador si se muestra en Success
-        
-        // Obtener parámetros de la URL para información adicional
-        const urlParams = new URLSearchParams(window.location.search);
-        const paymentId = urlParams.get('payment_id');
-        const status = urlParams.get('status');
-        const preferenceId = urlParams.get('preference_id');
-        
-        console.log('Parámetros de URL:', { paymentId, status, preferenceId });
-        
-        // Mostrar detalles de la compra
-        mostrarDetallesCompra();
-        
-                if (paymentId && status === 'approved') {
-            console.log('Payment ID:', paymentId);
-            console.log('Status:', status);
+        // Función principal async para manejar el pago exitoso
+        async function procesarPagoExitoso() {
+            // Nota: No limpiamos el carrito aquí. Se limpia luego de registrar el pedido exitosamente.
+            // updateCartCount(); // Opcional: mantener contador si se muestra en Success
             
-                        // Preferir los datos completos de checkout guardados antes de ir a MP
+            // Obtener parámetros de la URL para información adicional
+            const urlParams = new URLSearchParams(window.location.search);
+            const paymentId = urlParams.get('payment_id');
+            const status = urlParams.get('status');
+            const preferenceId = urlParams.get('preference_id');
+            
+            console.log('Parámetros de URL:', { paymentId, status, preferenceId });
+            
+            // Mostrar detalles de la compra
+            mostrarDetallesCompra();
+            
+            if (paymentId && status === 'approved') {
+                console.log('Payment ID:', paymentId);
+                console.log('Status:', status);
+                
+                // Preferir los datos completos de checkout guardados antes de ir a MP
                         const checkoutData = JSON.parse(localStorage.getItem('checkoutData') || 'null');
                         const carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
                         const productos = (checkoutData && Array.isArray(checkoutData.items) && checkoutData.items.length > 0)
@@ -179,6 +183,10 @@
             console.log('No se detectó pago exitoso, mostrando mensaje general');
             mostrarPedidoConfirmado();
         }
+    }
+    
+    // Llamar a la función principal al cargar la página
+    procesarPagoExitoso();
         
         // Función para mostrar los detalles de la compra
         function mostrarDetallesCompra() {
