@@ -14,9 +14,19 @@ const app = express();
 // SIEMPRE PRIMERO
 app.use(express.json());
 
-// Middleware de logs simplificado
+// Middleware de logs simplificado - solo lo esencial
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  // Solo logear webhooks y endpoints importantes
+  if (req.originalUrl.includes('webhook') || 
+      req.originalUrl.includes('crear-preferencia') || 
+      req.originalUrl.includes('stock-agotado')) {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+    
+    // Log especial para webhook
+    if (req.originalUrl.includes('webhook')) {
+      console.log('� WEBHOOK:', req.body);
+    }
+  }
   next();
 });
 
@@ -59,14 +69,11 @@ const pool = new Pool({
 async function verificarConexionBD() {
   try {
     const client = await pool.connect();
-    console.log('✅ Conexión exitosa a PostgreSQL (Neon)');
+    console.log('✅ Conexión a base de datos exitosa');
     await client.query('SELECT NOW()');
     client.release();
   } catch (error) {
-    console.error('❌ Error al conectar con PostgreSQL:', error.message);
-    if (process.env.NODE_ENV === 'development') {
-      console.log('⚠️ Modo desarrollo: Continuando sin base de datos...');
-    }
+    console.error('❌ Error en base de datos:', error.message);
   }
 }
 
@@ -180,15 +187,11 @@ app.get('/test-mp', async (req, res) => {
 });
 
 app.post('/crear-preferencia', async (req, res) => {
-  console.log('=== INICIO /crear-preferencia ===');
-  console.log('Request body (raw):', JSON.stringify(req.body, null, 2));
+  console.log('💳 Creando preferencia de pago...');
   
   try {
     const items = req.body.items;
     const datosCompradorMeta = req.body.datosComprador || null;
-    
-    console.log('Items recibidos:', JSON.stringify(items, null, 2));
-    console.log('Datos comprador:', JSON.stringify(datosCompradorMeta, null, 2));
     
     // Validación de items
     if (!Array.isArray(items) || items.length === 0) {
@@ -258,17 +261,10 @@ app.post('/crear-preferencia', async (req, res) => {
       ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
     };
     
-    console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
-    console.log('🔍 Configuración específica:');
-    console.log('- Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
-    console.log('- Base URL:', baseUrl);
-    console.log('- Auto return:', preference.auto_return || 'NO CONFIGURADO');
-    console.log('- Binary mode:', preference.binary_mode);
-    console.log('- Notification URL:', preference.notification_url || 'NO CONFIGURADO');
+    console.log('🔍 Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
     
     // Crear preferencia
     const preferenceObj = new Preference(client);
-    console.log('Creando preferencia...');
     
     let response;
     try {
@@ -278,7 +274,7 @@ app.post('/crear-preferencia', async (req, res) => {
           setTimeout(() => reject(new Error('Timeout al crear preferencia después de 15 segundos')), 15000)
         )
       ]);
-      console.log('Respuesta de MercadoPago recibida:', JSON.stringify(response, null, 2));
+      // Respuesta exitosa de MercadoPago
     } catch (err) {
       console.error('=== ERROR DETALLADO AL CREAR PREFERENCIA ===');
       console.error('Error message:', err.message);
@@ -316,8 +312,8 @@ app.post('/crear-preferencia', async (req, res) => {
     };
     
     res.json(result);
-    console.log('Enviando respuesta al frontend:', JSON.stringify(result, null, 2));
-    console.log('=== FIN /crear-preferencia EXITOSO ===');
+    console.log('✅ Preferencia creada exitosamente');
+    console.log('=== FIN /crear-preferencia ===');
     
   } catch (error) {
     console.error('=== ERROR en /crear-preferencia ===');
@@ -477,15 +473,9 @@ app.get('/webhook', (req, res) => {
 
 // Webhook para notificaciones de Mercado Pago
 app.post('/webhook', async (req, res) => {
-  const timestamp = new Date().toISOString();
-  console.log(`🔔 [${timestamp}] Webhook recibido desde IP: ${req.ip || req.connection.remoteAddress}`);
-  console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('📦 Body:', JSON.stringify(req.body, null, 2));
+  console.log('🔔 Webhook recibido:', req.body);
 
   try {
-    // Validación de signature (opcional para debugging)
-    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
-    
     const topic = req.body.type || req.query.type || req.headers['x-mp-topic'];
     
     if ((topic || '').toLowerCase() !== 'payment') {
@@ -519,7 +509,6 @@ app.post('/webhook', async (req, res) => {
     // Obtener detalles del pago desde MercadoPago
     const paymentClient = new Payment(client);
     const mpPayment = await paymentClient.get({ id: paymentId });
-    console.log('Pago recuperado MP:', JSON.stringify(mpPayment));
 
     // Solo procesar pagos aprobados
     if (!mpPayment || (mpPayment.status !== 'approved' && mpPayment.status !== 'authorized')) {
@@ -983,7 +972,7 @@ app.use(express.static(path.join(__dirname, '..')));
 
 const PORT = process.env.PORT || 3001;
 
-console.log('Intentando iniciar backend Capri Store...');
+console.log('🚀 Iniciando Capri Store Backend...');
 app.listen(PORT, () => {
-  console.log(`Backend escuchando en puerto ${PORT}`);
+  console.log(`✅ Servidor activo en puerto ${PORT}`);
 });
