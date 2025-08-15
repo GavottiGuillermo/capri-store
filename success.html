@@ -294,24 +294,13 @@
             console.log('🌍 Hostname:', window.location.hostname);
             
             try {
-                // Validación detallada de datos
+                // Validación simplificada de datos
                 console.log('🔍 === VALIDACIÓN DATOS ENTRADA ===');
                 console.log('paymentId:', paymentId, typeof paymentId);
                 console.log('productos:', productos ? 'Array con ' + productos.length + ' items' : 'undefined/null');
-                console.log('total:', total, typeof total);
-                console.log('datosComprador:', datosComprador ? Object.keys(datosComprador) : 'undefined/null');
                 
-                if (!paymentId) {
-                    throw new Error('Payment ID faltante');
-                }
                 if (!productos || productos.length === 0) {
                     throw new Error('Lista de productos vacía o faltante');
-                }
-                if (!total) {
-                    throw new Error('Total faltante');
-                }
-                if (!datosComprador || !datosComprador.nombre || !datosComprador.email) {
-                    throw new Error('Datos del comprador incompletos');
                 }
                 
                 console.log('✅ Validación de datos exitosa');
@@ -325,16 +314,26 @@
                 
                 console.log('Entorno detectado:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
                 console.log('API Base URL:', API_BASE);
-                console.log('URL completa:', `${API_BASE}/crear-pedido`);
+                console.log('URL completa:', `${API_BASE}/crear-pedido-sp`);
                 
-                // Preparar datos del request
+                // Preparar datos del request con todos los parámetros del SP
                 console.log('📦 === PREPARACIÓN REQUEST ===');
+                
+                // Calcular total desde los productos
+                const totalCalculado = productos.reduce((sum, prod) => sum + (prod.precio * (prod.cantidad || 1)), 0);
+                
+                // Obtener datos del comprador desde localStorage o usar defaults
+                const datosComprador = JSON.parse(localStorage.getItem('datosComprador') || '{}');
+                
                 const requestData = {
-                    paymentId: paymentId,
                     productos: productos,
-                    total: parseFloat(total),
-                    datosComprador: datosComprador
+                    monto_total: totalCalculado,
+                    nombre_cliente: datosComprador.nombre || 'Cliente Web',
+                    correo_cliente: datosComprador.email || 'cliente@web.com',
+                    metodo_pago: 'MercadoPago',
+                    tipo_entrega: 'Retiro'
                 };
+                
                 console.log('Request data:', JSON.stringify(requestData, null, 2));
                 
                 // Configurar fetch con timeout
@@ -345,8 +344,8 @@
                     controller.abort();
                 }, 30000);
                 
-                console.log('Realizando fetch a:', `${API_BASE}/crear-pedido`);
-                const response = await fetch(`${API_BASE}/crear-pedido`, {
+                console.log('Realizando fetch a:', `${API_BASE}/crear-pedido-sp`);
+                const response = await fetch(`${API_BASE}/crear-pedido-sp`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

@@ -81,104 +81,6 @@ const client = new MercadoPagoConfig({
   }
 });
 
-// Endpoint de prueba simple para crear preferencia
-app.post('/test-crear-preferencia', async (req, res) => {
-  try {
-    console.log('=== TEST CREAR PREFERENCIA SIMPLE ===');
-    
-    const testPreference = {
-      items: [{
-        title: 'Producto de Prueba',
-        quantity: 1,
-        currency_id: 'ARS',
-        unit_price: 100
-      }],
-      back_urls: {
-        success: 'http://localhost:3001/success.html',
-        failure: 'http://localhost:3001/failure.html',
-        pending: 'http://localhost:3001/pending.html'
-      }
-    };
-    
-    console.log('Creando preferencia de prueba...');
-    const preferenceObj = new Preference(client);
-    const response = await preferenceObj.create({ body: testPreference });
-    
-    console.log('Respuesta exitosa:', response.init_point);
-    res.json({ 
-      success: true, 
-      init_point: response.init_point,
-      id: response.id 
-    });
-    
-  } catch (error) {
-    console.error('Error en test:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      details: error.response?.data 
-    });
-  }
-});
-
-// Endpoint de prueba para el SDK de Mercado Pago
-app.get('/test-mp', async (req, res) => {
-  try {
-    console.log('=== TEST MERCADO PAGO ===');
-    
-    const basicTest = {
-      sdk_loaded: !!Preference,
-      client_configured: !!client,
-      access_token_configured: !!client.accessToken
-    };
-    
-    console.log('Test básico:', basicTest);
-    
-    try {
-      const testPreference = {
-        items: [{
-          title: 'Test Product',
-          quantity: 1,
-          currency_id: 'ARS',
-          unit_price: 100
-        }],
-        back_urls: {
-          success: 'http://localhost:3001/success.html',
-          failure: 'http://localhost:3001/failure.html',
-          pending: 'http://localhost:3001/pending.html'
-        }
-      };
-      
-      const preferenceObj = new Preference(client);
-      const testResponse = await preferenceObj.create({ body: testPreference });
-      
-      console.log('Test de creación exitoso:', !!testResponse.init_point);
-      
-      res.json({ 
-        status: 'OK',
-        ...basicTest,
-        preference_creation_test: 'SUCCESS',
-        test_init_point: testResponse.init_point
-      });
-    } catch (prefError) {
-      console.error('Error en test de preferencia:', prefError.message);
-      res.json({ 
-        status: 'PARTIAL_OK',
-        ...basicTest,
-        preference_creation_test: 'FAILED',
-        preference_error: prefError.message
-      });
-    }
-    
-  } catch (error) {
-    console.error('Error en test-mp:', error);
-    res.status(500).json({ 
-      status: 'ERROR',
-      error: error.message 
-    });
-  }
-});
-
 app.post('/crear-preferencia', async (req, res) => {
   console.log('=== INICIO /crear-preferencia ===');
   console.log('Request body (raw):', JSON.stringify(req.body, null, 2));
@@ -566,23 +468,25 @@ app.post('/webhook', async (req, res) => {
       tipoEntrega: tipoEntrega
     });
 
-    // Procesar cada producto del pedido
+    // Procesar cada producto del pedido usando stored procedure
     if (productos.length > 0) {
       const cli = await pool.connect();
       try {
-        await cli.query('BEGIN');
+        console.log('🚀 Procesando pedido con stored procedure...');
         
-        let productosActualizados = 0;
+        // Buscar IDs de productos disponibles
+        const productosIds = [];
         
         for (const producto of productos) {
-          // Buscar productos disponibles
+          // Limpiar nombre del producto
           const nombreLimpio = producto.nombre.split('(')[0].trim();
           const cantidad = parseInt(producto.cantidad, 10);
           
           console.log(`🔍 Buscando ${cantidad} unidades de "${nombreLimpio}" a precio ${producto.precio}`);
           
+          // Buscar productos disponibles por nombre y precio
           const queryBuscar = `
-            SELECT id_articulo, prenda, talle, precio_venta_transferencia
+            SELECT id_articulo
             FROM productos 
             WHERE LOWER(TRIM(prenda)) = LOWER($1)
               AND ABS(precio_venta_transferencia - $2) < 0.01
@@ -598,56 +502,53 @@ app.post('/webhook', async (req, res) => {
             cantidad
           ]);
           
-          console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles`);
+          console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles para "${nombreLimpio}"`);
           
-          // Actualizar productos (todos los disponibles hasta la cantidad solicitada)
-          const cantidadAActualizar = Math.min(productosDisponibles.length, cantidad);
-          
-          for (let i = 0; i < cantidadAActualizar; i++) {
-            const prod = productosDisponibles[i];
-            
-            const queryActualizar = `
-              UPDATE productos 
-              SET 
-                id_pedido = $1,
-                pedido_fecha = NOW(),
-                pedido_nombre_cliente = $2,
-                pedido_correo_cliente = $3,
-                pedido_monto_total = $4,
-                pedido_tipo_entrega = $5,
-                estado = 'Vendido'
-              WHERE id_articulo = $6
-            `;
-            
-            await cli.query(queryActualizar, [
-              paymentId,
-              nombreCompleto,
-              datosComprador.email,
-              parseFloat(mpPayment.transaction_amount),
-              tipoEntrega,
-              prod.id_articulo
-            ]);
-            
-            productosActualizados++;
-          }
-          
-          if (cantidadAActualizar < cantidad) {
-            console.warn(`⚠️ Solo se actualizaron ${cantidadAActualizar} de ${cantidad} productos para "${nombreLimpio}"`);
-          } else {
-            console.log(`✅ Actualizados ${cantidadAActualizar} productos de "${nombreLimpio}"`);
-          }
+          // Agregar IDs encontrados
+          productosDisponibles.forEach(prod => {
+            productosIds.push(prod.id_articulo);
+          });
         }
         
-        await cli.query('COMMIT');
-        console.log(`✅ Pedido creado por webhook. Productos actualizados: ${productosActualizados}`);
+        if (productosIds.length === 0) {
+          console.warn('❌ No se encontraron productos disponibles para el pedido');
+          return res.status(200).send('NO PRODUCTS AVAILABLE');
+        }
+        
+        console.log(`🆔 IDs de productos encontrados: ${productosIds.join(',')}`);
+        
+        // Preparar datos para el stored procedure
+        const idsProductos = productosIds.join(',');
+        const montoTotal = parseFloat(mpPayment.transaction_amount);
+        const nombreCliente = nombreCompleto;
+        const correoCliente = datosComprador.email || 'cliente@webhook.com';
+        const metodoPago = 'MercadoPago';
+        const tipoEntregaSP = tipoEntrega; // 'Retiro' o 'Envio'
+        
+        console.log('📋 Datos para SP:', {
+          idsProductos,
+          montoTotal,
+          nombreCliente,
+          correoCliente,
+          metodoPago,
+          tipoEntregaSP
+        });
+        
+        // Ejecutar stored procedure
+        await cli.query(
+          'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6)',
+          [idsProductos, montoTotal, nombreCliente, correoCliente, metodoPago, tipoEntregaSP]
+        );
+        
+        console.log(`✅ Pedido creado exitosamente por webhook usando SP. Payment ID: ${paymentId}`);
         
         // Enviar correo de confirmación
-        if (datosComprador.email && nombreCompleto && productosActualizados > 0) {
+        if (correoCliente && nombreCliente) {
           try {
             await enviarCorreoConfirmacion(
               datosComprador, 
               productos, 
-              mpPayment.transaction_amount, 
+              montoTotal, 
               paymentId
             );
             console.log('✅ Correo enviado desde webhook para payment', paymentId);
@@ -657,8 +558,7 @@ app.post('/webhook', async (req, res) => {
         }
         
       } catch (e) {
-        await cli.query('ROLLBACK');
-        console.error('❌ Error al procesar pedido en webhook:', e.message);
+        console.error('❌ Error procesando pedido con SP:', e.message);
         throw e;
       } finally { 
         cli.release(); 
@@ -754,19 +654,32 @@ app.post('/crear-pedido', async (req, res) => {
         console.log(`🔍 Procesando producto: "${nombreLimpio}", Talle: ${talle}, Precio: ${producto.precio}`);
         
         // Buscar por precio y talle (más específico que solo nombre)
-        const queryBuscar = `
-          SELECT id_articulo, prenda, talle, precio_venta_transferencia
-          FROM productos 
-          WHERE ABS(precio_venta_transferencia - $1) < 0.01
-            ${talle ? 'AND LOWER(TRIM(talle)) = LOWER($2)' : ''}
-            AND id_pedido IS NULL
-          ORDER BY id_articulo ASC
-          LIMIT $${talle ? '3' : '2'}
-        `;
+        let queryBuscar, parametros;
         
-        const parametros = talle ? [producto.precio, talle, parseInt(producto.cantidad)] : [producto.precio, parseInt(producto.cantidad)];
+        if (talle) {
+          queryBuscar = `
+            SELECT id_articulo, prenda, talle, precio_venta_transferencia
+            FROM productos 
+            WHERE ABS(precio_venta_transferencia - $1) < 0.01
+              AND LOWER(TRIM(talle)) = LOWER($2)
+              AND id_pedido IS NULL
+            ORDER BY id_articulo ASC
+            LIMIT 10
+          `;
+          parametros = [producto.precio, talle];
+        } else {
+          queryBuscar = `
+            SELECT id_articulo, prenda, talle, precio_venta_transferencia
+            FROM productos 
+            WHERE ABS(precio_venta_transferencia - $1) < 0.01
+              AND id_pedido IS NULL
+            ORDER BY id_articulo ASC
+            LIMIT 10
+          `;
+          parametros = [producto.precio];
+        }
         
-        const { rows: productosDisponibles } = await dbClient.query(queryBuscar, parametros.slice(0, -1));
+        const { rows: productosDisponibles } = await dbClient.query(queryBuscar, parametros);
         
         console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles para "${nombreLimpio}"`);
         
@@ -985,6 +898,72 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
     await transporter.sendMail(mailOptions);
     res.json({ success: true, numeroPedido });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint para crear pedido con stored procedure
+app.post('/crear-pedido-sp', async (req, res) => {
+  console.log('🚀 Request a /crear-pedido-sp');
+  
+  try {
+    const { productos, monto_total, nombre_cliente, correo_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro' } = req.body;
+    
+    console.log('📦 Productos:', productos?.length || 0);
+    console.log('💰 Total:', monto_total);
+    
+    if (!productos?.length || !monto_total || !nombre_cliente || !correo_cliente) {
+      return res.status(400).json({ success: false, error: 'Faltan datos requeridos' });
+    }
+
+    const dbClient = await pool.connect();
+    const productosIds = [];
+    
+    for (const prod of productos) {
+      // Extraer talle del nombre si está incluido
+      let talle = prod.talle;
+      if (!talle && prod.nombre) {
+        const match = prod.nombre.match(/\(Talle:\s*([^)]+)\)/);
+        talle = match ? match[1] : null;
+      }
+      
+      const result = await dbClient.query(
+        'SELECT id_articulo FROM productos WHERE precio = $1 AND talle = $2 AND stock > 0 AND activo = true LIMIT 1',
+        [prod.precio, talle]
+      );
+      
+      if (result.rows.length > 0) {
+        const cantidad = prod.cantidad || 1;
+        for (let i = 0; i < cantidad; i++) {
+          productosIds.push(result.rows[0].id_articulo);
+        }
+      }
+    }
+    
+    if (productosIds.length === 0) {
+      dbClient.release();
+      return res.status(400).json({ success: false, error: 'No se encontraron productos disponibles' });
+    }
+    
+    const idsString = productosIds.join(',');
+    
+    // Llamar al stored procedure
+    await dbClient.query(
+      'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6)',
+      [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, metodo_pago, tipo_entrega]
+    );
+    
+    dbClient.release();
+    
+    res.json({
+      success: true,
+      mensaje: 'Pedido creado exitosamente',
+      productosIds: idsString,
+      cliente: nombre_cliente
+    });
+    
+  } catch (error) {
+    console.error('Error en crear-pedido-sp:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
