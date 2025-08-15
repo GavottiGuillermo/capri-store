@@ -1004,6 +1004,7 @@
           };
           
           const productosCompra = cartItems.map(item => ({
+            id: item.id,  // ⭐ AGREGADO: ID del producto
             nombre: item.nombre,
             cantidad: item.cantidad,
             precio: item.precio,

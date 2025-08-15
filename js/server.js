@@ -905,66 +905,87 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 // Endpoint para crear pedido con stored procedure
 app.post('/crear-pedido-sp', async (req, res) => {
   console.log('🚀 Request a /crear-pedido-sp');
+  console.log('📋 Body completo:', JSON.stringify(req.body, null, 2));
   
   try {
     const { productos, monto_total, nombre_cliente, correo_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro' } = req.body;
     
-    console.log('📦 Productos:', productos?.length || 0);
-    console.log('💰 Total:', monto_total);
+    console.log('📦 Productos recibidos:', productos?.length || 0);
+    console.log('💰 Monto total:', monto_total);
     
     if (!productos?.length || !monto_total || !nombre_cliente || !correo_cliente) {
       return res.status(400).json({ success: false, error: 'Faltan datos requeridos' });
     }
 
-    const dbClient = await pool.connect();
+    // Extraer IDs de productos directamente del carrito
     const productosIds = [];
     
     for (const prod of productos) {
-      // Extraer talle del nombre si está incluido
-      let talle = prod.talle;
-      if (!talle && prod.nombre) {
-        const match = prod.nombre.match(/\(Talle:\s*([^)]+)\)/);
-        talle = match ? match[1] : null;
+      // El ID del producto debe venir en prod.id o extraerse del nombre
+      let idProducto = prod.id;
+      
+      if (!idProducto && prod.nombre) {
+        // Si no viene el ID, intentar extraerlo del nombre (formato: "123-Nombre del producto")
+        const match = prod.nombre.match(/^(\d+)-/);
+        if (match) {
+          idProducto = parseInt(match[1]);
+        }
       }
       
-      const result = await dbClient.query(
-        'SELECT id_articulo FROM productos WHERE precio = $1 AND talle = $2 AND stock > 0 AND activo = true LIMIT 1',
-        [prod.precio, talle]
-      );
-      
-      if (result.rows.length > 0) {
-        const cantidad = prod.cantidad || 1;
+      if (idProducto) {
+        const cantidad = parseInt(prod.cantidad) || 1;
+        console.log(`📝 Agregando ${cantidad} unidades del producto ID: ${idProducto}`);
+        
+        // Agregar el ID tantas veces como cantidad se solicite
         for (let i = 0; i < cantidad; i++) {
-          productosIds.push(result.rows[0].id_articulo);
+          productosIds.push(idProducto);
         }
+      } else {
+        console.warn(`⚠️ No se pudo extraer ID del producto: ${prod.nombre}`);
       }
     }
     
     if (productosIds.length === 0) {
-      dbClient.release();
-      return res.status(400).json({ success: false, error: 'No se encontraron productos disponibles' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No se pudieron extraer los IDs de los productos del carrito' 
+      });
     }
     
     const idsString = productosIds.join(',');
+    console.log('🆔 IDs de productos para SP:', idsString);
     
-    // Llamar al stored procedure
-    await dbClient.query(
-      'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6)',
-      [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, metodo_pago, tipo_entrega]
-    );
-    
-    dbClient.release();
-    
-    res.json({
-      success: true,
-      mensaje: 'Pedido creado exitosamente',
-      productosIds: idsString,
-      cliente: nombre_cliente
-    });
+    const dbClient = await pool.connect();
+    try {
+      // Llamar al stored procedure directamente con los IDs del carrito
+      await dbClient.query(
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6)',
+        [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, metodo_pago, tipo_entrega]
+      );
+      
+      console.log('✅ Stored procedure ejecutado exitosamente');
+      console.log('✅ Productos procesados:', productosIds.length);
+      
+      res.json({
+        success: true,
+        mensaje: 'Pedido creado exitosamente con stored procedure',
+        productosIds: idsString,
+        cliente: nombre_cliente,
+        productos_procesados: productosIds.length
+      });
+      
+    } finally {
+      dbClient.release();
+    }
     
   } catch (error) {
-    console.error('Error en crear-pedido-sp:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error en crear-pedido-sp:', error.message);
+    console.error('Stack:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: 'Error al ejecutar stored procedure'
+    });
   }
 });
 

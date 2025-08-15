@@ -112,15 +112,36 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1) {
       return;
     }
   } catch {}
+  
   // Validar datos antes de agregar
   if (!nombre || isNaN(Number(precio)) || !img || isNaN(Number(cantidad)) || Number(cantidad) < 1) return;
+  
   precio = Number(precio);
   cantidad = Number(cantidad);
+  
+  // Extraer ID del producto desde la URL de la imagen
+  let productId = null;
+  try {
+    const path = decodeURIComponent(img || '');
+    const match = path.match(/\/(\d+)-[^/]+/);
+    if (match && match[1]) {
+      productId = parseInt(match[1], 10);
+    }
+  } catch (e) {
+    console.warn('No se pudo extraer ID del producto desde la imagen:', img);
+  }
+  
   const idx = cartItems.findIndex(item => item.nombre === nombre && item.img === img);
   if (idx !== -1) {
     cartItems[idx].cantidad += cantidad;
   } else {
-    cartItems.push({ nombre, precio, img, cantidad });
+    cartItems.push({ 
+      id: productId,  // ⭐ AGREGADO: ID del producto
+      nombre, 
+      precio, 
+      img, 
+      cantidad 
+    });
   }
   guardarCarrito();
   actualizarCartSidenav();
