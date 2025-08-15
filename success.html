@@ -319,14 +319,48 @@
                 // Preparar datos del request con todos los parámetros del SP
                 console.log('📦 === PREPARACIÓN REQUEST ===');
                 
+                // Función para extraer ID de producto si no lo tiene
+                function extraerIdProducto(producto) {
+                    if (producto.id) return producto;
+                    
+                    let productId = null;
+                    
+                    // Intentar extraer del nombre (formato: "123-Nombre")
+                    if (producto.nombre || producto.title) {
+                        const nombre = producto.nombre || producto.title;
+                        const match = nombre.match(/^(\d+)-/);
+                        if (match) {
+                            productId = parseInt(match[1]);
+                        }
+                    }
+                    
+                    // Intentar extraer de la imagen
+                    if (!productId && producto.img) {
+                        const match = producto.img.match(/\/(\d+)-[^/]+\.(jpg|jpeg|png|webp)/i);
+                        if (match) {
+                            productId = parseInt(match[1]);
+                        }
+                    }
+                    
+                    // Devolver producto mejorado
+                    return {
+                        ...producto,
+                        id: productId
+                    };
+                }
+                
+                // Procesar productos para asegurar que tengan ID
+                const productosConId = productos.map(extraerIdProducto);
+                console.log('🔧 Productos procesados para extraer IDs:', productosConId);
+                
                 // Calcular total desde los productos
-                const totalCalculado = productos.reduce((sum, prod) => sum + (prod.precio * (prod.cantidad || 1)), 0);
+                const totalCalculado = productosConId.reduce((sum, prod) => sum + (prod.precio * (prod.cantidad || 1)), 0);
                 
                 // Obtener datos del comprador desde localStorage o usar defaults
                 const datosComprador = JSON.parse(localStorage.getItem('datosComprador') || '{}');
                 
                 const requestData = {
-                    productos: productos,
+                    productos: productosConId,
                     monto_total: totalCalculado,
                     nombre_cliente: datosComprador.nombre || 'Cliente Web',
                     correo_cliente: datosComprador.email || 'cliente@web.com',

@@ -908,6 +908,7 @@
 
       //  Preparar items para Mercado Pago
       const items = cartItems.map(item => ({
+        id: item.id,  // ⭐ PRESERVAR ID del producto
         title: item.nombre,
         quantity: item.cantidad,
         currency_id: 'ARS',

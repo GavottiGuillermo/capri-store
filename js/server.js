@@ -920,28 +920,73 @@ app.post('/crear-pedido-sp', async (req, res) => {
     // Extraer IDs de productos directamente del carrito
     const productosIds = [];
     
+    console.log('🔍 === ANÁLISIS DETALLADO DE PRODUCTOS ===');
+    productos.forEach((prod, index) => {
+      console.log(`Producto ${index + 1}:`, JSON.stringify(prod, null, 2));
+    });
+    
     for (const prod of productos) {
-      // El ID del producto debe venir en prod.id o extraerse del nombre
+      console.log(`\n🔎 Procesando producto:`, {
+        id: prod.id,
+        nombre: prod.nombre,
+        img: prod.img,
+        cantidad: prod.cantidad
+      });
+      
+      // El ID del producto puede venir de varias fuentes
       let idProducto = prod.id;
       
+      // 1. Intentar extraer del campo id directo
       if (!idProducto && prod.nombre) {
-        // Si no viene el ID, intentar extraerlo del nombre (formato: "123-Nombre del producto")
-        const match = prod.nombre.match(/^(\d+)-/);
-        if (match) {
-          idProducto = parseInt(match[1]);
+        // 2. Extraer del nombre (formato: "123-Nombre del producto")
+        const matchNombre = prod.nombre.match(/^(\d+)-/);
+        if (matchNombre) {
+          idProducto = parseInt(matchNombre[1]);
+          console.log(`📝 ID extraído del nombre: ${idProducto}`);
+        }
+      }
+      
+      // 3. Extraer de la imagen (formato: "/123-producto.jpg" o "assets/img/portfolio/123-producto.jpg")
+      if (!idProducto && prod.img) {
+        const matchImg = prod.img.match(/\/(\d+)-[^/]+\.(jpg|jpeg|png|webp)/i);
+        if (matchImg) {
+          idProducto = parseInt(matchImg[1]);
+          console.log(`📝 ID extraído de la imagen: ${idProducto} desde ${prod.img}`);
+        }
+      }
+      
+      // 4. Extraer del título si tiene formato "123-Nombre" (para compatibilidad con títulos de MercadoPago)
+      if (!idProducto && prod.title) {
+        const matchTitle = prod.title.match(/^(\d+)-/);
+        if (matchTitle) {
+          idProducto = parseInt(matchTitle[1]);
+          console.log(`📝 ID extraído del título: ${idProducto}`);
+        }
+      }
+      
+      // 5. Último intento: buscar cualquier número al inicio del nombre
+      if (!idProducto && prod.nombre) {
+        const matchNumero = prod.nombre.match(/(\d+)/);
+        if (matchNumero) {
+          idProducto = parseInt(matchNumero[1]);
+          console.log(`📝 ID extraído como primer número del nombre: ${idProducto}`);
         }
       }
       
       if (idProducto) {
         const cantidad = parseInt(prod.cantidad) || 1;
-        console.log(`📝 Agregando ${cantidad} unidades del producto ID: ${idProducto}`);
+        console.log(`✅ Agregando ${cantidad} unidades del producto ID: ${idProducto}`);
         
         // Agregar el ID tantas veces como cantidad se solicite
         for (let i = 0; i < cantidad; i++) {
           productosIds.push(idProducto);
         }
       } else {
-        console.warn(`⚠️ No se pudo extraer ID del producto: ${prod.nombre}`);
+        console.error(`❌ No se pudo extraer ID del producto:`, {
+          nombre: prod.nombre,
+          img: prod.img,
+          id: prod.id
+        });
       }
     }
     
