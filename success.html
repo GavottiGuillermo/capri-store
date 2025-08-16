@@ -364,6 +364,7 @@
                     monto_total: totalCalculado,
                     nombre_cliente: datosComprador.nombre || 'Cliente Web',
                     correo_cliente: datosComprador.email || 'cliente@web.com',
+                    telefono_cliente: datosComprador.telefono || '',
                     metodo_pago: 'MercadoPago',
                     tipo_entrega: 'Retiro'
                 };
@@ -502,9 +503,17 @@
                                 const numeroPedidoDiv = document.getElementById('numero-pedido');
                                 const mostrado = typeof orderId === 'string' ? orderId.slice(-2) : String(orderId).slice(-2);
                                 numeroPedidoDiv.innerHTML = `
-                                    <div class="mt-2">
-                                        <span class="me-2" style="color:#6b0a0a; font-weight:700;">Número de pedido:</span>
-                                        <span class="display-6 fw-bold" style="color:#6b0a0a;">${mostrado}</span>
+                                    <div class="mt-4 mb-4 p-4 border rounded" style="background-color: #f8f9fa; border-color: #6b0a0a !important;">
+                                        <div class="text-center">
+                                            <h4 class="mb-3" style="color:#6b0a0a; font-weight:600;">TU NÚMERO DE PEDIDO ES:</h4>
+                                            <div class="display-2 fw-bold p-3 rounded" style="color:#6b0a0a; background-color: white; border: 3px solid #6b0a0a; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
+                                                ${mostrado}
+                                            </div>
+                                            <p class="mt-3 mb-0" style="color:#6b0a0a; font-weight:500;">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                Guarda este número para consultas sobre tu pedido
+                                            </p>
+                                        </div>
                                     </div>`;
             }
         }

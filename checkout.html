@@ -1025,6 +1025,9 @@
           // También guardar los datos originales del checkout
           localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
           
+          // Guardar datos del comprador para compatibilidad con success.html
+          localStorage.setItem('datosComprador', JSON.stringify(checkoutData));
+          
           console.log('Datos guardados para post-pago:', {
             datosCompra,
             productosCompra,

@@ -61,6 +61,7 @@ async function verificarConexionBD() {
     const client = await pool.connect();
     console.log('✅ Conexión exitosa a PostgreSQL (Neon)');
     await client.query('SELECT NOW()');
+    console.log('✅ Stored procedure sp_crear_pedido_web disponible en BD');
     client.release();
   } catch (error) {
     console.error('❌ Error al conectar con PostgreSQL:', error.message);
@@ -148,11 +149,42 @@ app.post('/crear-preferencia', async (req, res) => {
         failure: `${baseUrl}/failure.html?status=failure`,
         pending: `${baseUrl}/pending.html?status=pending`
       },
+      site_id: "MLA",
+      purpose: "wallet_purchase",
       ...(isProduction ? { auto_return: "approved" } : {}),
       binary_mode: false,
       statement_descriptor: "CAPRI STORE",
+      marketplace: "NONE",
+      marketplace_fee: 0,
       external_reference: "capri-" + Date.now(),
       expires: false,
+      payer: {
+        name: "Cliente",
+        surname: "Capri Store"
+      },
+      additional_info: {
+        items: items.map(item => ({
+          id: item.id || "ITEM-" + Date.now(),
+          title: item.title,
+          description: item.title,
+          picture_url: item.picture_url || "",
+          category_id: "fashion",
+          quantity: item.quantity,
+          unit_price: item.unit_price
+        })),
+        payer: {
+          first_name: "Cliente",
+          last_name: "Capri Store"
+        },
+        shipments: {
+          receiver_address: {
+            zip_code: "2800",
+            state_name: "Buenos Aires",
+            city_name: "Zárate",
+            street_name: "Justa Lima 123"
+          }
+        }
+      },
       payment_methods: {
         excluded_payment_types: [],
         installments: 12
@@ -434,6 +466,8 @@ app.post('/webhook', async (req, res) => {
     // Extraer datos del metadata
     const metadata = mpPayment.metadata || {};
     const itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
+    
+    // Priorizar datos del checkout guardados en metadata sobre los del payer de MP
     const datosComprador = metadata.datosComprador || {
       nombre: mpPayment.payer?.first_name || 'Cliente',
       apellido: mpPayment.payer?.last_name || '',
@@ -443,7 +477,7 @@ app.post('/webhook', async (req, res) => {
     };
 
     console.log('📦 Items reconstruidos:', itemsSimple);
-    console.log('👤 Datos del comprador reconstruidos:', datosComprador);
+    console.log('👤 Datos del comprador desde metadata (checkout):', datosComprador);
 
     // Construir productos del pedido
     const productos = itemsSimple.map(it => ({
@@ -522,6 +556,7 @@ app.post('/webhook', async (req, res) => {
         const montoTotal = parseFloat(mpPayment.transaction_amount);
         const nombreCliente = nombreCompleto;
         const correoCliente = datosComprador.email || 'cliente@webhook.com';
+        const telefonoCliente = datosComprador.telefono || '';
         const metodoPago = 'MercadoPago';
         const tipoEntregaSP = tipoEntrega; // 'Retiro' o 'Envio'
         
@@ -530,14 +565,15 @@ app.post('/webhook', async (req, res) => {
           montoTotal,
           nombreCliente,
           correoCliente,
+          telefonoCliente,
           metodoPago,
           tipoEntregaSP
         });
         
-        // Ejecutar stored procedure
+        // Ejecutar stored procedure con teléfono
         await cli.query(
-          'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6)',
-          [idsProductos, montoTotal, nombreCliente, correoCliente, metodoPago, tipoEntregaSP]
+          'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
+          [idsProductos, montoTotal, nombreCliente, correoCliente, telefonoCliente, metodoPago, tipoEntregaSP]
         );
         
         console.log(`✅ Pedido creado exitosamente por webhook usando SP. Payment ID: ${paymentId}`);
@@ -698,16 +734,18 @@ app.post('/crear-pedido', async (req, res) => {
               pedido_fecha = NOW(),
               pedido_nombre_cliente = $2,
               pedido_correo_cliente = $3,
-              pedido_monto_total = $4,
-              pedido_tipo_entrega = $5,
+              pedido_telefono_cliente = $4,
+              pedido_monto_total = $5,
+              pedido_tipo_entrega = $6,
               estado = 'Vendido'
-            WHERE id_articulo = $6
+            WHERE id_articulo = $7
           `;
           
           await dbClient.query(queryActualizar, [
             paymentId,
             nombreCompleto,
             datosComprador.email,
+            datosComprador.telefono || '',
             parseFloat(total),
             tipoEntrega,
             prod.id_articulo
@@ -793,6 +831,7 @@ app.get('/pedido/:paymentId', async (req, res) => {
         MAX(pedido_fecha) as fecha_pedido,
         MAX(pedido_nombre_cliente) as nombre_cliente,
         MAX(pedido_correo_cliente) as correo_cliente,
+        MAX(pedido_telefono_cliente) as telefono_cliente,
         MAX(pedido_monto_total) as monto_total,
         MAX(pedido_tipo_entrega) as tipo_entrega
        FROM productos 
@@ -813,6 +852,7 @@ app.get('/pedido/:paymentId', async (req, res) => {
         fecha_pedido: result.fecha_pedido,
         nombre_cliente: result.nombre_cliente,
         correo_cliente: result.correo_cliente,
+        telefono_cliente: result.telefono_cliente,
         monto_total: result.monto_total,
         tipo_entrega: result.tipo_entrega,
         fuente: 'tabla_productos'
@@ -908,10 +948,11 @@ app.post('/crear-pedido-sp', async (req, res) => {
   console.log('📋 Body completo:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { productos, monto_total, nombre_cliente, correo_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro' } = req.body;
+    const { productos, monto_total, nombre_cliente, correo_cliente, telefono_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro' } = req.body;
     
     console.log('📦 Productos recibidos:', productos?.length || 0);
     console.log('💰 Monto total:', monto_total);
+    console.log('📞 Teléfono cliente:', telefono_cliente);
     
     if (!productos?.length || !monto_total || !nombre_cliente || !correo_cliente) {
       return res.status(400).json({ success: false, error: 'Faltan datos requeridos' });
@@ -1002,10 +1043,10 @@ app.post('/crear-pedido-sp', async (req, res) => {
     
     const dbClient = await pool.connect();
     try {
-      // Llamar al stored procedure directamente con los IDs del carrito
+      // Llamar al stored procedure directamente con los IDs del carrito incluyendo teléfono
       await dbClient.query(
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6)',
-        [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, metodo_pago, tipo_entrega]
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
+        [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, telefono_cliente || '', metodo_pago, tipo_entrega]
       );
       
       console.log('✅ Stored procedure ejecutado exitosamente');
