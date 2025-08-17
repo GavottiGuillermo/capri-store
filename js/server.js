@@ -14,6 +14,23 @@ const app = express();
 // Almacén en memoria para notificaciones de webhook
 const webhookNotifications = new Map();
 
+// Sistema de idempotencia para evitar procesamiento duplicado
+const processedPayments = new Set();
+
+// Función para verificar si un pago ya fue procesado
+function isPaymentProcessed(paymentId) {
+  return processedPayments.has(paymentId);
+}
+
+// Función para marcar un pago como procesado
+function markPaymentAsProcessed(paymentId) {
+  processedPayments.add(paymentId);
+  // Limpiar después de 30 minutos
+  setTimeout(() => {
+    processedPayments.delete(paymentId);
+  }, 30 * 60 * 1000);
+}
+
 // Función para almacenar notificación de webhook exitoso
 function storeWebhookNotification(paymentId, pedidoId, externalReference) {
   const notification = {
@@ -66,7 +83,7 @@ app.use(cors({
 
 
 // Configura Mercado Pago
-const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN_TEST;
+const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
 
 // Configuración de la base de datos PostgreSQL con variables de entorno
 const pool = new Pool({
@@ -525,7 +542,18 @@ app.post('/webhook', async (req, res) => {
       return res.status(200).send('OK - NO ID PROVIDED'); // Responder OK para evitar reintentos
     }
 
-    // Verificar idempotencia - evitar procesar el mismo pago múltiples veces
+    console.log(`🔍 Procesando ${topic} ${id} en MercadoPago...`);
+
+    // VERIFICACIÓN DE IDEMPOTENCIA - evitar procesamiento duplicado
+    if (isPaymentProcessed(id)) {
+      console.log(`🔄 Pago ${id} ya está siendo procesado o fue procesado recientemente - evitando duplicados`);
+      return res.status(200).send('OK - ALREADY_PROCESSING');
+    }
+
+    // Marcar como en procesamiento
+    markPaymentAsProcessed(id);
+
+    // Verificar idempotencia en BD - si ya existe el pedido
     let dbClient;
     try {
       dbClient = await pool.connect();
@@ -536,14 +564,56 @@ app.post('/webhook', async (req, res) => {
       );
       
       if (existingRows && existingRows[0] && parseInt(existingRows[0].count) > 0) {
-        console.log(`⚠️ Pago ${id} ya fue procesado anteriormente`);
-        return res.status(200).send('OK - ALREADY PROCESSED');
+        console.log(`⚠️ Pago ${id} ya fue procesado anteriormente en BD`);
+        return res.status(200).send('OK - ALREADY_PROCESSED');
       }
       
       // Obtener información del pago desde MercadoPago
-      console.log(`🔍 Consultando pago ${id} en MercadoPago...`);
-      const paymentClient = new Payment(client);
-      const payment = await paymentClient.get({ id: id });
+      console.log(`🔍 Consultando ${topic} ${id} en MercadoPago...`);
+      
+      let payment;
+      if (topic === 'payment') {
+        // Consultar directamente el payment
+        const paymentClient = new Payment(client);
+        payment = await paymentClient.get({ id: id });
+      } else if (topic === 'merchant_order') {
+        // Para merchant_order, necesitamos obtener el payment ID desde la orden
+        const orderResponse = await fetch(`https://api.mercadolibre.com/merchant_orders/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`
+          }
+        });
+        
+        if (!orderResponse.ok) {
+          console.log(`❌ Error consultando merchant_order ${id}`);
+          return res.status(200).send('OK - ORDER_NOT_FOUND');
+        }
+        
+        const orderData = await orderResponse.json();
+        
+        // Obtener el payment ID de la orden
+        if (!orderData.payments || orderData.payments.length === 0) {
+          console.log(`⏸️ Merchant order ${id} sin pagos asociados`);
+          return res.status(200).send('OK - NO_PAYMENTS_IN_ORDER');
+        }
+        
+        const paymentId = orderData.payments[0].id;
+        console.log(`🔗 Merchant order ${id} -> Payment ID: ${paymentId}`);
+        
+        // Verificar si ya procesamos este payment ID
+        if (isPaymentProcessed(paymentId)) {
+          console.log(`🔄 Payment ${paymentId} ya fue procesado - evitando duplicado desde merchant_order`);
+          return res.status(200).send('OK - PAYMENT_ALREADY_PROCESSED');
+        }
+        
+        // Consultar el payment real
+        const paymentClient = new Payment(client);
+        payment = await paymentClient.get({ id: paymentId });
+        
+        // Actualizar el ID para el resto del procesamiento
+        id = paymentId;
+        markPaymentAsProcessed(paymentId);
+      }
       
       console.log('💳 Estado del pago:', payment.status);
       console.log('💰 Monto:', payment.transaction_amount);
