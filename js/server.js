@@ -139,6 +139,7 @@ app.post('/crear-preferencia', async (req, res) => {
       })),
       metadata: {
         itemsSimple: items.map(i => ({ 
+          id: i.id,
           title: i.title, 
           quantity: i.quantity, 
           unit_price: i.unit_price 
@@ -516,13 +517,14 @@ app.post('/webhook', async (req, res) => {
       const datosComprador = metadata.datosComprador || {};
       
       console.log('📦 Items del pedido:', itemsSimple.length);
-      console.log('👤 Datos del comprador:', datosComprador);
+      console.log('� Items metadata:', JSON.stringify(itemsSimple, null, 2));
+      console.log('�👤 Datos del comprador:', JSON.stringify(datosComprador, null, 2));
 
       // Si no hay items en metadata, intentar reconstruir desde los items del payment
       let productos = [];
       if (itemsSimple.length > 0) {
         productos = itemsSimple.map(item => ({
-          id: null, // Se extraerá del título
+          id: item.id, // Ya viene el ID en metadata
           nombre: item.title,
           cantidad: item.quantity,
           precio: item.unit_price,
@@ -530,7 +532,7 @@ app.post('/webhook', async (req, res) => {
         }));
       } else if (payment.additional_info?.items) {
         productos = payment.additional_info.items.map(item => ({
-          id: null,
+          id: item.id, // Usar ID del additional_info
           nombre: item.title,
           cantidad: item.quantity,
           precio: item.unit_price,
@@ -543,16 +545,17 @@ app.post('/webhook', async (req, res) => {
         return res.status(200).send('OK - NO PRODUCTS');
       }
 
-      // Extraer IDs de productos del nombre
+      // Extraer IDs de productos
       const productosIds = [];
       for (const prod of productos) {
-        const nombreLimpio = prod.nombre.split('(')[0].trim();
+        let productId = prod.id;
         
-        // Buscar ID en el nombre (formato: "123-Nombre")
-        let productId = null;
-        const matchNombre = prod.nombre.match(/^(\d+)-/);
-        if (matchNombre) {
-          productId = parseInt(matchNombre[1]);
+        // Si no hay ID en metadata, intentar extraer del nombre (fallback)
+        if (!productId) {
+          const matchNombre = prod.nombre.match(/^(\d+)-/);
+          if (matchNombre) {
+            productId = parseInt(matchNombre[1]);
+          }
         }
         
         if (productId) {
