@@ -671,11 +671,11 @@ html {
 }
 
 :root {
-  --vino-tinto: #8b4a6b;
-  --rosado: #c8a2c8;
+  --vino-tinto: #6b0a0a;
+  --rosado: #e29ca3;
   --color-primario: var(--vino-tinto);
-  --color-acento: #f4e4e4;
-  --color-hover: #6d3751;
+  --color-acento: #fbeee6;
+  --color-hover: #a85753;
   --blue: #007bff;
   --indigo: #6610f2;
   --purple: #6f42c1;
