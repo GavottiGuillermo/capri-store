@@ -82,8 +82,16 @@ app.use(cors({
 
 
 
-// Configura Mercado Pago
-const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+// Configura Mercado Pago - detectar entorno automáticamente
+const isProduction = process.env.NODE_ENV === 'production';
+const accessToken = isProduction 
+  ? process.env.MERCADOPAGO_ACCESS_TOKEN 
+  : (process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || process.env.MERCADOPAGO_ACCESS_TOKEN);
+
+console.log('🔧 Configuración MercadoPago:');
+console.log('- Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO/TEST');
+console.log('- Token tipo:', accessToken?.startsWith('TEST-') ? 'TEST' : 'PRODUCTION');
+console.log('- Token length:', accessToken?.length || 0);
 
 // Configuración de la base de datos PostgreSQL con variables de entorno
 const pool = new Pool({
@@ -580,7 +588,7 @@ app.post('/webhook', async (req, res) => {
         // Para merchant_order, necesitamos obtener el payment ID desde la orden
         const orderResponse = await fetch(`https://api.mercadolibre.com/merchant_orders/${id}`, {
           headers: {
-            'Authorization': `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`
+            'Authorization': `Bearer ${accessToken}`
           }
         });
         
