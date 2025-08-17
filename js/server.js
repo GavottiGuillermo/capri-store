@@ -31,6 +31,58 @@ function markPaymentAsProcessed(paymentId) {
   }, 30 * 60 * 1000);
 }
 
+// Función helper para ejecutar queries con reintentos
+async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let client;
+    try {
+      console.log(`🔄 Intento ${attempt}/${maxRetries} de conexión BD`);
+      
+      // Obtener conexión con timeout
+      const connectionPromise = pool.connect();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout conexión BD (intento ${attempt})`)), 8000)
+      );
+      
+      client = await Promise.race([connectionPromise, timeoutPromise]);
+      console.log(`✅ Conexión obtenida en intento ${attempt}`);
+      
+      // Ejecutar query con timeout
+      const queryPromise = client.query(query, params);
+      const queryTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout query BD (intento ${attempt})`)), 10000)
+      );
+      
+      const result = await Promise.race([queryPromise, queryTimeoutPromise]);
+      console.log(`✅ Query completada en intento ${attempt}`);
+      
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ Error en intento ${attempt}:`, error.message);
+      
+      if (attempt === maxRetries) {
+        console.error('💥 Agotados todos los reintentos');
+        throw error;
+      }
+      
+      // Esperar antes del siguiente intento (exponential backoff)
+      const waitTime = Math.pow(2, attempt) * 1000;
+      console.log(`⏳ Esperando ${waitTime}ms antes del siguiente intento...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+    } finally {
+      if (client) {
+        try {
+          client.release();
+        } catch (releaseError) {
+          console.error('❌ Error liberando conexión:', releaseError.message);
+        }
+      }
+    }
+  }
+}
+
 // Función para almacenar notificación de webhook exitoso
 function storeWebhookNotification(paymentId, pedidoId, externalReference) {
   const notification = {
@@ -97,9 +149,15 @@ console.log('- Token length:', accessToken?.length || 0);
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  max: 10,                    // Reducir pool máximo
+  min: 2,                     // Mantener conexiones mínimas
+  idleTimeoutMillis: 20000,   // Reducir timeout de idle
+  connectionTimeoutMillis: 8000, // Aumentar timeout de conexión
+  acquireTimeoutMillis: 8000, // Timeout para obtener conexión del pool
+  createTimeoutMillis: 8000,  // Timeout para crear nueva conexión
+  destroyTimeoutMillis: 5000, // Timeout para destruir conexión
+  createRetryIntervalMillis: 1000, // Intervalo entre reintentos
+  propagateCreateError: false // No propagar errores de creación
 });
 
 // Verificar conexión a la base de datos al iniciar
@@ -564,12 +622,27 @@ app.post('/webhook', async (req, res) => {
     // Verificar idempotencia en BD - si ya existe el pedido
     let dbClient;
     try {
-      dbClient = await pool.connect();
+      // Obtener conexión con timeout
+      console.log('🔍 Obteniendo conexión a la base de datos...');
+      const connectionPromise = pool.connect();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout obteniendo conexión BD después de 10 segundos')), 10000)
+      );
       
-      const { rows: existingRows } = await dbClient.query(
+      dbClient = await Promise.race([connectionPromise, timeoutPromise]);
+      console.log('✅ Conexión a BD obtenida exitosamente');
+      
+      // Verificar si ya existe el pedido con timeout
+      const queryPromise = dbClient.query(
         'SELECT COUNT(*) as count FROM productos WHERE id_pedido = $1',
         [id]
       );
+      const queryTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ejecutando query después de 8 segundos')), 8000)
+      );
+      
+      const { rows: existingRows } = await Promise.race([queryPromise, queryTimeoutPromise]);
+      console.log('✅ Query de verificación completada');
       
       if (existingRows && existingRows[0] && parseInt(existingRows[0].count) > 0) {
         console.log(`⚠️ Pago ${id} ya fue procesado anteriormente en BD`);
@@ -747,12 +820,16 @@ app.post('/webhook', async (req, res) => {
         tipoEntrega
       });
 
-      // Ejecutar stored procedure
-      await dbClient.query(
+      // Ejecutar stored procedure con timeout
+      const spPromise = dbClient.query(
         'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
         [idsString, montoTotal, nombreCompleto, correoCliente, telefonoCliente, metodoPago, tipoEntrega]
       );
-
+      const spTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ejecutando stored procedure después de 15 segundos')), 15000)
+      );
+      
+      await Promise.race([spPromise, spTimeoutPromise]);
       console.log(`✅ Pedido creado exitosamente por webhook para payment ${id}`);
 
       // Almacenar notificación de webhook exitoso
@@ -788,10 +865,29 @@ app.post('/webhook', async (req, res) => {
 
     } catch (dbError) {
       console.error('❌ Error de base de datos en webhook:', dbError.message);
-      throw dbError;
+      
+      // Clasificar el tipo de error para mejor manejo
+      if (dbError.message.includes('timeout') || dbError.message.includes('Connection terminated')) {
+        console.error('🕐 Error de timeout - la BD tardó demasiado en responder');
+        console.error('💡 Sugerencias: Verificar conectividad de red o estado de la BD');
+      } else if (dbError.message.includes('connect') || dbError.message.includes('connection')) {
+        console.error('🔌 Error de conexión - no se puede conectar a la BD');
+        console.error('💡 Sugerencias: Verificar credenciales y disponibilidad de la BD');
+      } else {
+        console.error('🐛 Error SQL o lógico en la BD');
+      }
+      
+      // No relanzar el error para que el webhook responda OK a MercadoPago
+      // En lugar de: throw dbError;
+      console.log('⚠️ Continuando sin relanzar error para evitar reintentos de MP');
     } finally {
       if (dbClient) {
-        dbClient.release();
+        try {
+          dbClient.release();
+          console.log('🔓 Conexión BD liberada correctamente');
+        } catch (releaseError) {
+          console.error('❌ Error liberando conexión BD:', releaseError.message);
+        }
       }
     }
 
