@@ -256,6 +256,7 @@ app.post('/crear-preferencia', async (req, res) => {
         failure: `${frontendUrl}/failure.html?status=failure`,
         pending: `${frontendUrl}/pending.html?status=pending`
       },
+      auto_return: "approved",
       site_id: "MLA",
       purpose: "wallet_purchase",
       binary_mode: false,
@@ -394,7 +395,7 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
     }
 
     // Configurar transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,
@@ -1210,7 +1211,7 @@ app.get('/pedido/:paymentId', async (req, res) => {
   }
 });
 
-// Nuevo endpoint para obtener el número real del pedido desde la tabla pedidos
+// Nuevo endpoint para obtener el número real del pedido desde la tabla productos
 app.get('/numero-pedido/:paymentId', async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -1219,30 +1220,26 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const client = await pool.connect();
     
     try {
-      // Buscar en la tabla pedidos por el payment_id o referencia
+      // Buscar en la tabla productos (donde se creó el pedido por el webhook)
       const pedidoResult = await client.query(`
         SELECT 
-          id_pedido,
-          numero_pedido,
-          fecha_pedido,
-          nombre_cliente,
-          total
-        FROM pedidos 
-        WHERE payment_id = $1 
-           OR external_reference = $1
-           OR id_pedido::text = $1
-        ORDER BY fecha_pedido DESC 
-        LIMIT 1
+          MIN(id_articulo) as id_pedido,
+          MAX(pedido_fecha) as fecha_pedido,
+          MAX(pedido_nombre_cliente) as nombre_cliente,
+          MAX(pedido_monto_total) as total,
+          COUNT(*) as productos_count
+        FROM productos 
+        WHERE id_pedido = $1
       `, [paymentId]);
       
-      if (pedidoResult.rows.length > 0) {
+      if (pedidoResult.rows.length > 0 && pedidoResult.rows[0].id_pedido) {
         const pedido = pedidoResult.rows[0];
         
-        // Calcular los últimos 2 dígitos del número real del pedido
-        const numeroCompleto = pedido.numero_pedido || pedido.id_pedido;
+        // Usar el ID del artículo como número de pedido y obtener los últimos 2 dígitos
+        const numeroCompleto = pedido.id_pedido;
         const ultimosDosDigitos = String(numeroCompleto).slice(-2).padStart(2, '0');
         
-        console.log(`✅ Pedido encontrado - ID: ${numeroCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
+        console.log(`✅ Pedido encontrado - ID artículo: ${numeroCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
         
         res.json({
           existe: true,
@@ -1250,7 +1247,8 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
           numero_display: ultimosDosDigitos,
           nombre_cliente: pedido.nombre_cliente,
           total: pedido.total,
-          fecha_pedido: pedido.fecha_pedido
+          fecha_pedido: pedido.fecha_pedido,
+          productos_count: parseInt(pedido.productos_count)
         });
         
       } else {
@@ -1365,7 +1363,7 @@ app.post('/confirmar-compra', async (req, res) => {
     
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
     
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,
