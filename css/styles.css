@@ -4264,7 +4264,6 @@ textarea.form-control {
 .was-validated .custom-select:valid:focus, .custom-select.is-valid:focus {
   border-color: #28a745;
   box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
-}
 
 .was-validated .form-check-input:valid ~ .form-check-label, .form-check-input.is-valid ~ .form-check-label {
   color: #28a745;
@@ -11178,6 +11177,39 @@ input:focus, textarea:focus {
   background-color: var(--color-hover);
   color: var(--color-acento);
 }
+
+/* Botones outline-dark personalizados */
+.btn-outline-dark {
+  border-color: #6b0a0a;
+  color: #6b0a0a;
+  background-color: transparent;
+}
+
+.btn-outline-dark:hover {
+  background-color: #6b0a0a;
+  border-color: #6b0a0a;
+  color: #fff;
+}
+
+.btn-outline-dark:focus, 
+.btn-outline-dark.focus {
+  box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5);
+}
+
+.btn-outline-dark.disabled, 
+.btn-outline-dark:disabled {
+  color: #6c757d;
+  border-color: #6c757d;
+  background-color: transparent;
+}
+
+.btn-outline-dark.disabled:hover, 
+.btn-outline-dark:disabled:hover {
+  color: #6c757d;
+  border-color: #6c757d;
+  background-color: transparent;
+}
+
 .capri-divider-dot {
   color: #801f1c;                /* Vino tinto */
   font-size: 2.9rem;             /* Ajusta el tamaño según prefieras */
@@ -11188,7 +11220,109 @@ input:focus, textarea:focus {
   vertical-align: middle;
   margin-bottom: 0.15em;         /* Ajusta fino para centrar el punto */
 }
+
 .close {
-  color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;
+  color: #aaa; 
+  float: right; 
+  font-size: 28px; 
+  font-weight: bold; 
+  cursor: pointer;
 }
+
+/* Botones personalizados Capri */
+.btn-rosado {
+  background-color: var(--rosado);
+  border-color: var(--rosado);
+  color: #fff;
+}
+
+.btn-rosado:hover,
+.btn-rosado:focus,
+.btn-rosado.focus {
+  background-color: var(--vino-tinto);
+  border-color: var(--vino-tinto);
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5);
+}
+
+.btn-rosado:active,
+.btn-rosado.active {
+  background-color: var(--vino-tinto);
+  border-color: var(--vino-tinto);
+  color: #fff;
+}
+
+.btn-rosado.disabled,
+.btn-rosado:disabled {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: #fff;
+  opacity: 0.65;
+}
+
+.btn-vino-tinto {
+  background-color: var(--vino-tinto);
+  border-color: var(--vino-tinto);
+  color: #fff;
+}
+
+.btn-vino-tinto:hover,
+.btn-vino-tinto:focus,
+.btn-vino-tinto.focus {
+  background-color: var(--color-hover);
+  border-color: var(--color-hover);
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5);
+}
+
+.btn-vino-tinto:active,
+.btn-vino-tinto.active {
+  background-color: var(--color-hover);
+  border-color: var(--color-hover);
+  color: #fff;
+}
+
+.btn-vino-tinto.disabled,
+.btn-vino-tinto:disabled {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: #fff;
+  opacity: 0.65;
+}
+
+.btn-outline-vino-tinto {
+  color: var(--vino-tinto);
+  border-color: var(--vino-tinto);
+  background-color: transparent;
+}
+
+.btn-outline-vino-tinto:hover,
+.btn-outline-vino-tinto:focus,
+.btn-outline-vino-tinto.focus {
+  background-color: var(--vino-tinto);
+  border-color: var(--vino-tinto);
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5);
+}
+
+.btn-outline-vino-tinto:active,
+.btn-outline-vino-tinto.active {
+  background-color: var(--vino-tinto);
+  border-color: var(--vino-tinto);
+  color: #fff;
+}
+
+.btn-outline-vino-tinto.disabled,
+.btn-outline-vino-tinto:disabled {
+  color: #6c757d;
+  border-color: #6c757d;
+  background-color: transparent;
+  opacity: 0.65;
+}
+
+/* Estilo especial para texto "Mi Carrito" */
+.carrito-titulo {
+  color: var(--vino-tinto) !important;
+  font-weight: bold !important;
+  font-family: 'Montserrat', sans-serif !important;
 }
