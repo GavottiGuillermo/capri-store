@@ -262,7 +262,7 @@ app.post('/crear-preferencia', async (req, res) => {
       statement_descriptor: "CAPRI STORE",
       marketplace: "NONE",
       marketplace_fee: 0,
-      external_reference: "capri-" + Date.now(),
+      external_reference: "capri-" + Date.now() + "-ids-" + items.map(i => `${i.id}x${i.quantity}`).join(","),
       expires: false,
       payer: {
         name: datosCompradorMeta?.nombre || "Cliente",
@@ -767,125 +767,69 @@ app.post('/webhook', async (req, res) => {
         return res.status(200).send('OK - NO PRODUCTS');
       }
 
-      // Extraer IDs de productos con debugging detallado
+      // Extraer IDs de productos - ESTRATEGIA SIMPLE Y DIRECTA
       const productosIds = [];
-      console.log('🔍 === INICIANDO EXTRACCIÓN DE IDs ===');
+      console.log('🔍 === EXTRACCIÓN DIRECTA DE IDs ===');
       
-      // ESTRATEGIA 1: Usar metadata.itemsSimple si tiene IDs válidos
-      let idsExtraidos = false;
+      // PASO 1: Usar metadata.itemsSimple si contiene los IDs originales
       if (itemsSimple.length > 0) {
-        for (const [index, prod] of productos.entries()) {
-          console.log(`\n🔎 Producto ${index + 1}:`, {
-            id: prod.id,
-            nombre: prod.nombre,
-            cantidad: prod.cantidad,
-            precio: prod.precio
-          });
-          
-          let productId = prod.id;
-          console.log(`📋 ID inicial del producto: ${productId} (tipo: ${typeof productId})`);
+        console.log('✅ Usando metadata.itemsSimple (IDs originales de la preferencia)');
+        
+        for (const item of itemsSimple) {
+          let productId = item.id;
           
           // Convertir a número si viene como string
           if (productId && typeof productId === 'string') {
             productId = parseInt(productId);
-            console.log(`🔄 ID convertido a número: ${productId}`);
           }
           
-          // Si el ID está presente y es válido, usarlo directamente
           if (productId && !isNaN(productId) && productId > 0) {
-            const cantidad = parseInt(prod.cantidad) || 1;
-            console.log(`✅ ID válido encontrado: ${productId}, cantidad: ${cantidad}`);
+            const cantidad = parseInt(item.quantity) || 1;
             
+            // Agregar el ID exacto tantas veces como la cantidad
             for (let i = 0; i < cantidad; i++) {
               productosIds.push(productId);
             }
-            console.log(`✅ Agregado producto ID ${productId} (${cantidad} veces)`);
-            idsExtraidos = true;
+            console.log(`✅ Agregado ID ${productId} x ${cantidad} (desde metadata original)`);
           }
         }
       }
       
-        // ESTRATEGIA 2: Si no hay IDs en metadata, usar mapeo por nombre y precio
-        if (!idsExtraidos) {
-          console.log('🔄 === FALLBACK: MAPEO POR NOMBRE Y PRECIO ===');
+      // PASO 2: Si metadata está vacío, extraer IDs desde external_reference
+      if (productosIds.length === 0) {
+        console.log('⚠️ metadata.itemsSimple vacío, extrayendo IDs desde external_reference');
+        
+        const externalRef = payment.external_reference || '';
+        console.log('🔍 External reference:', externalRef);
+        
+        // Formato esperado: "capri-1234567890-ids-6x1,7x2"
+        const idsMatch = externalRef.match(/-ids-(.+)$/);
+        if (idsMatch) {
+          const idsString = idsMatch[1];
+          console.log('🎯 IDs extraídos del external_reference:', idsString);
           
-          // Intentar obtener mapeo dinámico desde la base de datos
-          try {
-            for (const [index, prod] of productos.entries()) {
-              console.log(`\n🔎 Fallback Producto ${index + 1}:`, {
-                nombre: prod.nombre,
-                precio: prod.precio
-              });
-              
-              const precio = parseFloat(prod.precio);
-              
-              // Buscar producto en BD por precio exacto
-              const { rows: productosDB } = await dbClient.query(
-                `SELECT id_articulo, prenda, precio_venta_transferencia 
-                 FROM productos 
-                 WHERE ABS(precio_venta_transferencia - $1) < 0.01 
-                   AND id_pedido IS NULL
-                 ORDER BY id_articulo ASC
-                 LIMIT 5`,
-                [precio]
-              );
-              
-              if (productosDB.length > 0) {
-                // Tomar el primer producto disponible con ese precio
-                const productId = productosDB[0].id_articulo;
-                const cantidad = parseInt(prod.cantidad) || 1;
-                
-                console.log(`✅ ID encontrado en BD: precio ${precio} -> ID ${productId} (${productosDB[0].prenda})`);
-                console.log(`📦 Productos disponibles con ese precio: ${productosDB.length}`);
-                
-                // Agregar solo la cantidad disponible
-                const cantidadDisponible = Math.min(cantidad, productosDB.length);
-                for (let i = 0; i < cantidadDisponible; i++) {
-                  productosIds.push(productosDB[i].id_articulo);
-                }
-                console.log(`✅ Agregados ${cantidadDisponible} productos con IDs por consulta BD`);
-                idsExtraidos = true;
-                
-              } else {
-                console.error(`❌ No se encontró producto en BD con precio: ${precio}`);
+          // Parse "6x1,7x2" -> [6, 7, 7]
+          const idsData = idsString.split(',');
+          for (const idData of idsData) {
+            const [id, quantity] = idData.split('x').map(n => parseInt(n));
+            if (!isNaN(id) && !isNaN(quantity) && id > 0 && quantity > 0) {
+              for (let i = 0; i < quantity; i++) {
+                productosIds.push(id);
               }
-            }
-          } catch (dbError) {
-            console.error('❌ Error consultando productos en BD:', dbError.message);
-            
-            // Fallback: mapeo hardcoded como última opción
-            console.log('🔄 === ÚLTIMO FALLBACK: MAPEO HARDCODED ===');
-            const productosConocidos = {
-              24000: 6,  // Vestido Media Noche
-              // Agregar más productos según sea necesario
-            };
-            
-            for (const [index, prod] of productos.entries()) {
-              const precio = parseFloat(prod.precio);
-              const productId = productosConocidos[precio];
-              
-              if (productId) {
-                const cantidad = parseInt(prod.cantidad) || 1;
-                console.log(`✅ ID encontrado por mapeo hardcoded: ${precio} -> ID ${productId}, cantidad: ${cantidad}`);
-                
-                for (let i = 0; i < cantidad; i++) {
-                  productosIds.push(productId);
-                }
-                idsExtraidos = true;
-              }
+              console.log(`✅ Agregado ID ${id} x ${quantity} (desde external_reference)`);
             }
           }
-        }      console.log('🎯 IDs finales extraídos:', productosIds);
-      console.log('📊 Total de productos con ID:', productosIds.length);
+        } else {
+          console.error('❌ No se pudieron extraer IDs del external_reference');
+        }
+      }
+      
+      console.log('🎯 IDs para stored procedure:', productosIds);
 
       if (productosIds.length === 0) {
-        console.log('💥 === FALLO EN EXTRACCIÓN DE IDs ===');
-        console.log('🔍 Productos originales:', JSON.stringify(productos, null, 2));
-        console.log('🔍 metadata.itemsSimple:', JSON.stringify(metadata.itemsSimple, null, 2));
-        console.log('🔍 additional_info.items:', JSON.stringify(additionalInfo.items, null, 2));
+        console.log('💥 === SIN IDs PARA PROCESAR ===');
         return res.status(200).send('OK - NO PRODUCT IDS');
       }
-
       // Preparar datos para el stored procedure
       const idsString = productosIds.join(',');
       const montoTotal = parseFloat(payment.transaction_amount);
