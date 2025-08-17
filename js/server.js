@@ -892,7 +892,7 @@ app.post('/webhook', async (req, res) => {
         paymentId: id // Agregar payment ID
       });
 
-      // Ejecutar stored procedure con payment ID incluido
+      // Ejecutar stored procedure con payment ID incluido (8 parámetros)
       const spPromise = dbClient.query(
         'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
         [idsString, montoTotal, nombreCompleto, correoCliente, telefonoCliente, metodoPago, tipoEntrega, id]
@@ -1243,7 +1243,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
     console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
     
-    // Buscar el pedido usando la nueva columna payment_id
+    // Buscar el pedido usando la nueva columna mp_payment_id
     const pedidoResult = await executeQueryWithRetry(
       pool,
       `SELECT 
@@ -1255,7 +1255,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         COUNT(*) as productos_count
        FROM productos p
        WHERE p.id_pedido IS NOT NULL 
-         AND p.payment_id = $1
+         AND p.mp_payment_id = $1
        GROUP BY p.id_pedido
        ORDER BY MAX(p.pedido_fecha) DESC
        LIMIT 1`,
