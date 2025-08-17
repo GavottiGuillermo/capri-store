@@ -151,7 +151,6 @@ app.post('/crear-preferencia', async (req, res) => {
       },
       site_id: "MLA",
       purpose: "wallet_purchase",
-      ...(isProduction ? { auto_return: "approved" } : {}),
       binary_mode: false,
       statement_descriptor: "CAPRI STORE",
       marketplace: "NONE",
@@ -159,8 +158,8 @@ app.post('/crear-preferencia', async (req, res) => {
       external_reference: "capri-" + Date.now(),
       expires: false,
       payer: {
-        name: "Cliente",
-        surname: "Capri Store"
+        name: datosCompradorMeta?.nombre || "Cliente",
+        surname: datosCompradorMeta?.apellido || "Capri Store"
       },
       additional_info: {
         items: items.map(item => ({
@@ -173,8 +172,8 @@ app.post('/crear-preferencia', async (req, res) => {
           unit_price: item.unit_price
         })),
         payer: {
-          first_name: "Cliente",
-          last_name: "Capri Store"
+          first_name: datosCompradorMeta?.nombre || "Cliente",
+          last_name: datosCompradorMeta?.apellido || "Capri Store"
         },
         shipments: {
           receiver_address: {

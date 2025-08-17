@@ -5,7 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Capri Store - Venta de Ropa</title>
   <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="ht    <div class="p-4" style="border-top:1px solid #c8a2c8;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="font-weight-bold">Subtotal:</span>
+        <span id="cart-sidenav-total" class="font-weight-bold"></span>
+      </div>
+      <button class="btn btn-rosado btn-block font-weight-bold py-3" onclick="finalizarCompraSidebar()">Comenzar Compra</button>
+    </div>onts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
   <!-- <link href="css/styles.css" rel="stylesheet" /> -->
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
@@ -13,20 +19,19 @@
     body { font-family: 'Montserrat', sans-serif; }
     .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
     .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
-    .bg-vino-tinto { background-color: #6b0a0a !important; }
-    .text-vino-tinto { color: #6b0a0a !important; }
-    .text-rosado { color: #e29ca3 !important; }
-    .bg-rosado { background-color: #e29ca3 !important; }
-    .border-rosado { border-color: #e29ca3 !important; }
+    .bg-vino-tinto { background-color: #8b4a6b !important; }
+    .text-vino-tinto { color: #8b4a6b !important; }
+    .text-rosado { color: #c8a2c8 !important; }
+    .bg-rosado { background-color: #c8a2c8 !important; }
+    .border-rosado { border-color: #c8a2c8 !important; }
     .shadow-lg { box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important; }
     .rounded-lg { border-radius: 1rem !important; }
     
     /* Estilos de botones limpios y sin conflictos */
     .btn-rosado { 
-      background-color: #e29ca3 !important; 
-      color: #fff !important; 
-      border-color: #e29ca3 !important;
-      border: 1px solid #e29ca3 !important;
+      background-color: #f4e4e4 !important; 
+      color: #8b4a6b !important; 
+      border: 2px solid #c8a2c8 !important;
       padding: 0.375rem 0.75rem !important;
       font-size: 1rem !important;
       line-height: 1.5 !important;
@@ -40,22 +45,22 @@
       transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out !important;
     }
     .btn-rosado:hover { 
-      background-color: #d1848d !important; 
+      background-color: #c8a2c8 !important; 
       color: #fff !important; 
-      border-color: #d1848d !important;
+      border-color: #8b4a6b !important;
     }
     .btn-rosado:focus, .btn-rosado:active {
-      background-color: #d1848d !important; 
+      background-color: #c8a2c8 !important; 
       color: #fff !important; 
-      border-color: #d1848d !important;
-      box-shadow: 0 0 0 0.2rem rgba(226, 156, 163, 0.5) !important;
+      border-color: #8b4a6b !important;
+      box-shadow: 0 0 0 0.2rem rgba(200, 162, 200, 0.5) !important;
     }
     
     .btn-vino-tinto { 
-      background-color: #6b0a0a !important; 
+      background-color: #8b4a6b !important; 
       color: #fff !important; 
-      border-color: #6b0a0a !important;
-      border: 1px solid #6b0a0a !important;
+      border-color: #8b4a6b !important;
+      border: 1px solid #8b4a6b !important;
       padding: 0.375rem 0.75rem !important;
       font-size: 1rem !important;
       line-height: 1.5 !important;
@@ -69,19 +74,19 @@
       transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out !important;
     }
     .btn-vino-tinto:hover { 
-      background-color: #4a0707 !important; 
+      background-color: #6d3751 !important; 
       color: #fff !important; 
-      border-color: #4a0707 !important;
+      border-color: #6d3751 !important;
     }
     .btn-vino-tinto:focus, .btn-vino-tinto:active {
-      background-color: #4a0707 !important; 
+      background-color: #6d3751 !important; 
       color: #fff !important; 
-      border-color: #4a0707 !important;
-      box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5) !important;
+      border-color: #6d3751 !important;
+      box-shadow: 0 0 0 0.2rem rgba(139, 74, 107, 0.5) !important;
     }
     
-    .btn-outline-vino-tinto { border: 2px solid #6b0a0a; color: #6b0a0a; background: transparent; }
-    .btn-outline-vino-tinto:hover { background-color: #6b0a0a; color: #fff; }
+    .btn-outline-vino-tinto { border: 2px solid #8b4a6b; color: #8b4a6b; background: transparent; }
+    .btn-outline-vino-tinto:hover { background-color: #8b4a6b; color: #fff; }
     
     /* Eliminar cualquier pseudo-elemento problemático */
     .btn::before, .btn::after,
@@ -268,9 +273,9 @@
   </footer>
 
   <!-- Sidebar Carrito -->
-  <div id="cartSidenav" class="cart-sidenav" style="display:none; position:fixed; top:0; right:0; width:500px; max-width:100vw; height:100vh; background:#a85753; color:#fff; z-index:2000; box-shadow:-2px 0 16px rgba(0,0,0,0.2); transition:right 0.3s;">
+  <div id="cartSidenav" class="cart-sidenav" style="display:none; position:fixed; top:0; right:0; width:500px; max-width:100vw; height:100vh; background:#8b4a6b; color:#fff; z-index:2000; box-shadow:-2px 0 16px rgba(0,0,0,0.2); transition:right 0.3s;">
     <button onclick="closeCartSidenav()" style="background:none; border:none; color:#fff; font-size:2rem; position:absolute; top:16px; right:16px; z-index:10;">&times;</button>
-    <h3 class="text-center py-4" style="border-bottom:1px solid #e29ca3;">Mi carrito</h3>
+    <h3 class="text-center py-4" style="border-bottom:1px solid #c8a2c8;">Mi carrito</h3>
     <div class="cart-sidenav__loader" style="display: none; text-align:center; margin-top:2rem;">
       <div class="uk-icon uk-spinner">
         <svg width="30" height="30" viewBox="0 0 30 30"><circle fill="none" stroke="#fff" cx="15" cy="15" r="14"></circle></svg>
