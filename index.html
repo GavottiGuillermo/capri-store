@@ -786,19 +786,31 @@
         talle: talle,
         detalle: detalle,
         img: prod.imagen,
-        txt: prod.txt
+        txt: prod.txt,
+        // ⭐ AGREGADO: Incluir datos originales para extraer ID
+        originalData: {
+          imagen: prod.imagen,
+          txt: prod.txt,
+          categoria: prod.categoria
+        }
       };
       localStorage.setItem('productoDetalle', JSON.stringify(productoDetalle));
       window.location.href = 'detalle.html';
     }).catch(() => {
-      // Si falla, guardar solo las urls
+      // Si falla, guardar solo las urls pero incluir datos originales
       const productoDetalle = {
         nombre: '',
         precio: '',
         desc: '',
         detalle: '',
         img: prod.imagen,
-        txt: prod.txt
+        txt: prod.txt,
+        // ⭐ AGREGADO: Incluir datos originales incluso si falla
+        originalData: {
+          imagen: prod.imagen,
+          txt: prod.txt,
+          categoria: prod.categoria
+        }
       };
       localStorage.setItem('productoDetalle', JSON.stringify(productoDetalle));
       window.location.href = 'detalle.html';

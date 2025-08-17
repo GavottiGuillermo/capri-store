@@ -100,12 +100,57 @@ function guardarCarrito() {
 }
 
 // Agregar un producto al carrito (permite repetidos con cantidad)
-function agregarAlCarrito(nombre, precio, img, cantidad = 1) {
+function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
   // Evitar agregar si agotado
   try {
-    const path = decodeURIComponent(img || '');
-    const m = path.match(/\/(\d+)-[^/]+/);
-    const id = m && m[1] ? parseInt(m[1], 10) : null;
+    let id = null;
+    
+    // NUEVO: Extraer ID desde el objeto producto si está disponible
+    if (producto) {
+      // Opción 1: ID directo en el objeto
+      if (producto.id) {
+        id = parseInt(producto.id, 10);
+      }
+      // Opción 2: Usar originalData si está disponible
+      else if (producto.originalData) {
+        // Intentar extraer desde .txt primero
+        if (producto.originalData.txt) {
+          const match = producto.originalData.txt.match(/\/(\d+)[-_]?[^/]*\//i);
+          if (match && match[1]) {
+            id = parseInt(match[1], 10);
+          }
+        }
+        // Luego desde .imagen si no se encontró en txt
+        if (!id && producto.originalData.imagen) {
+          const match = producto.originalData.imagen.match(/\/(\d+)[-_]?[^/]*\//i);
+          if (match && match[1]) {
+            id = parseInt(match[1], 10);
+          }
+        }
+      }
+      // Opción 3: Extraer ID del nombre de la carpeta desde .txt o .imagen directamente
+      else if (producto.txt) {
+        const match = producto.txt.match(/\/(\d+)[-_]?[^/]*\//i);
+        if (match && match[1]) {
+          id = parseInt(match[1], 10);
+        }
+      }
+      else if (producto.imagen || producto.img) {
+        const url = producto.imagen || producto.img;
+        const match = url.match(/\/(\d+)[-_]?[^/]*\//i);
+        if (match && match[1]) {
+          id = parseInt(match[1], 10);
+        }
+      }
+    }
+    
+    // FALLBACK: Método anterior desde la imagen
+    if (!id) {
+      const path = decodeURIComponent(img || '');
+      const m = path.match(/\/(\d+)-[^/]+/);
+      id = m && m[1] ? parseInt(m[1], 10) : null;
+    }
+    
     const agotados = JSON.parse(localStorage.getItem('agotados') || '[]');
     if (id && Array.isArray(agotados) && agotados.includes(id)) {
       mostrarPopup('Este artículo está sin stock');
@@ -119,16 +164,68 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1) {
   precio = Number(precio);
   cantidad = Number(cantidad);
   
-  // Extraer ID del producto desde la URL de la imagen
+  // Extraer ID del producto (misma lógica que arriba)
   let productId = null;
   try {
-    const path = decodeURIComponent(img || '');
-    const match = path.match(/\/(\d+)-[^/]+/);
-    if (match && match[1]) {
-      productId = parseInt(match[1], 10);
+    // NUEVO: Extraer ID desde el objeto producto si está disponible
+    if (producto) {
+      // Opción 1: ID directo en el objeto
+      if (producto.id) {
+        productId = parseInt(producto.id, 10);
+      }
+      // Opción 2: Usar originalData si está disponible
+      else if (producto.originalData) {
+        // Intentar extraer desde .txt primero
+        if (producto.originalData.txt) {
+          const match = producto.originalData.txt.match(/\/(\d+)[-_]?[^/]*\//i);
+          if (match && match[1]) {
+            productId = parseInt(match[1], 10);
+            console.log('✅ ID extraído de originalData.txt:', productId, 'desde:', producto.originalData.txt);
+          }
+        }
+        // Luego desde .imagen si no se encontró en txt
+        if (!productId && producto.originalData.imagen) {
+          const match = producto.originalData.imagen.match(/\/(\d+)[-_]?[^/]*\//i);
+          if (match && match[1]) {
+            productId = parseInt(match[1], 10);
+            console.log('✅ ID extraído de originalData.imagen:', productId, 'desde:', producto.originalData.imagen);
+          }
+        }
+      }
+      // Opción 3: Extraer ID del nombre de la carpeta desde .txt o .imagen directamente
+      else if (producto.txt) {
+        const match = producto.txt.match(/\/(\d+)[-_]?[^/]*\//i);
+        if (match && match[1]) {
+          productId = parseInt(match[1], 10);
+          console.log('✅ ID extraído de .txt:', productId, 'desde:', producto.txt);
+        }
+      }
+      else if (producto.imagen || producto.img) {
+        const url = producto.imagen || producto.img;
+        const match = url.match(/\/(\d+)[-_]?[^/]*\//i);
+        if (match && match[1]) {
+          productId = parseInt(match[1], 10);
+          console.log('✅ ID extraído de .imagen:', productId, 'desde:', url);
+        }
+      }
     }
+    
+    // FALLBACK: Método anterior desde la imagen
+    if (!productId) {
+      const path = decodeURIComponent(img || '');
+      const match = path.match(/\/(\d+)-[^/]+/);
+      if (match && match[1]) {
+        productId = parseInt(match[1], 10);
+        console.log('✅ ID extraído (fallback):', productId, 'desde:', img);
+      }
+    }
+    
+    if (!productId) {
+      console.warn('⚠️ No se pudo extraer ID del producto:', { nombre, img, producto });
+    }
+    
   } catch (e) {
-    console.warn('No se pudo extraer ID del producto desde la imagen:', img);
+    console.warn('❌ Error extrayendo ID del producto:', e.message);
   }
   
   const idx = cartItems.findIndex(item => item.nombre === nombre && item.img === img);
@@ -136,7 +233,7 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1) {
     cartItems[idx].cantidad += cantidad;
   } else {
     cartItems.push({ 
-      id: productId,  // ⭐ AGREGADO: ID del producto
+      id: productId,  // ⭐ ID del producto extraído de la carpeta
       nombre, 
       precio, 
       img, 
@@ -319,7 +416,8 @@ document.addEventListener('DOMContentLoaded', function() {
         `${producto.nombre} (Talle: ${size})`,
         Number(producto.precio),
         producto.img,
-        quantity
+        quantity,
+        producto  // ⭐ AGREGADO: pasar el objeto producto completo
       );
       mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${size}) x${quantity}`);
       productForm.reset();
