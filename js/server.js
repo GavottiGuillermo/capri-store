@@ -712,16 +712,21 @@ app.post('/webhook', async (req, res) => {
       const metadata = payment.metadata || {};
       const additionalInfo = payment.additional_info || {};
       
-      // Priorizar additional_info.items que sí contiene los IDs
+      // PRIORIZAR metadata.itemsSimple que SÍ contiene los IDs correctos
       let itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
+      console.log('🔍 metadata.itemsSimple encontrados:', itemsSimple.length);
+      console.log('📋 metadata.itemsSimple content:', JSON.stringify(itemsSimple, null, 2));
+      
+      // Solo usar additional_info como fallback si metadata está realmente vacío
       if (itemsSimple.length === 0 && additionalInfo.items) {
+        console.log('⚠️ metadata.itemsSimple vacío, intentando additional_info como fallback');
         itemsSimple = additionalInfo.items.map(item => ({
           id: item.id,
           title: item.title,
           quantity: item.quantity,
           unit_price: item.unit_price
         }));
-        console.log('✅ Usando datos de additional_info porque metadata está vacío');
+        console.log('📋 additional_info.items mapeados:', JSON.stringify(itemsSimple, null, 2));
       }
       
       const datosComprador = metadata.datosComprador || {};
@@ -734,54 +739,94 @@ app.post('/webhook', async (req, res) => {
       // Si no hay items en metadata, intentar reconstruir desde los items del payment
       let productos = [];
       if (itemsSimple.length > 0) {
+        console.log('✅ Usando itemsSimple del metadata (datos correctos con IDs)');
         productos = itemsSimple.map(item => ({
-          id: item.id, // Ya viene el ID en metadata
+          id: item.id, // Este SÍ debe tener el ID correcto
           nombre: item.title,
           cantidad: item.quantity,
           precio: item.unit_price,
           img: ''
         }));
+        console.log('🔍 Productos desde metadata:', JSON.stringify(productos, null, 2));
       } else if (payment.additional_info?.items) {
+        console.log('⚠️ Fallback: usando additional_info.items');
         productos = payment.additional_info.items.map(item => ({
-          id: item.id, // Usar ID del additional_info
+          id: item.id, // Puede estar vacío en additional_info
           nombre: item.title,
           cantidad: item.quantity,
           precio: item.unit_price,
           img: ''
         }));
+        console.log('🔍 Productos desde additional_info:', JSON.stringify(productos, null, 2));
       }
 
       if (productos.length === 0) {
         console.log('❌ No se pudieron extraer productos del pago');
+        console.log('🔍 Debug - metadata completo:', JSON.stringify(metadata, null, 2));
+        console.log('🔍 Debug - additional_info completo:', JSON.stringify(additionalInfo, null, 2));
         return res.status(200).send('OK - NO PRODUCTS');
       }
 
-      // Extraer IDs de productos
+      // Extraer IDs de productos con debugging detallado
       const productosIds = [];
-      for (const prod of productos) {
-        let productId = prod.id;
+      console.log('🔍 === INICIANDO EXTRACCIÓN DE IDs ===');
+      
+      for (const [index, prod] of productos.entries()) {
+        console.log(`\n🔎 Producto ${index + 1}:`, {
+          id: prod.id,
+          nombre: prod.nombre,
+          cantidad: prod.cantidad,
+          precio: prod.precio
+        });
         
-        // Si no hay ID en metadata, intentar extraer del nombre (fallback)
-        if (!productId) {
-          const matchNombre = prod.nombre.match(/^(\d+)-/);
-          if (matchNombre) {
-            productId = parseInt(matchNombre[1]);
-          }
+        let productId = prod.id;
+        console.log(`📋 ID inicial del producto: ${productId} (tipo: ${typeof productId})`);
+        
+        // Convertir a número si viene como string
+        if (productId && typeof productId === 'string') {
+          productId = parseInt(productId);
+          console.log(`🔄 ID convertido a número: ${productId}`);
         }
         
-        if (productId) {
+        // Si el ID está presente y es válido, usarlo directamente
+        if (productId && !isNaN(productId) && productId > 0) {
           const cantidad = parseInt(prod.cantidad) || 1;
+          console.log(`✅ ID válido encontrado: ${productId}, cantidad: ${cantidad}`);
+          
           for (let i = 0; i < cantidad; i++) {
             productosIds.push(productId);
           }
-          console.log(`✅ Agregado producto ID ${productId} (cantidad: ${cantidad})`);
+          console.log(`✅ Agregado producto ID ${productId} (${cantidad} veces)`);
+          
         } else {
-          console.log(`⚠️ No se pudo extraer ID del producto: ${prod.nombre}`);
+          // Fallback: intentar extraer del nombre
+          console.log(`⚠️ ID no válido (${productId}), intentando extraer del nombre: "${prod.nombre}"`);
+          
+          const matchNombre = prod.nombre.match(/^(\d+)-/);
+          if (matchNombre) {
+            const extractedId = parseInt(matchNombre[1]);
+            console.log(`📝 ID extraído del nombre: ${extractedId}`);
+            
+            const cantidad = parseInt(prod.cantidad) || 1;
+            for (let i = 0; i < cantidad; i++) {
+              productosIds.push(extractedId);
+            }
+            console.log(`✅ Agregado producto ID ${extractedId} (${cantidad} veces) desde nombre`);
+          } else {
+            console.error(`❌ No se pudo extraer ID del producto: ${prod.nombre}`);
+            console.error(`❌ Datos completos del producto:`, JSON.stringify(prod, null, 2));
+          }
         }
       }
+      
+      console.log('🎯 IDs finales extraídos:', productosIds);
+      console.log('📊 Total de productos con ID:', productosIds.length);
 
       if (productosIds.length === 0) {
-        console.log('❌ No se pudieron extraer IDs de productos');
+        console.log('💥 === FALLO EN EXTRACCIÓN DE IDs ===');
+        console.log('🔍 Productos originales:', JSON.stringify(productos, null, 2));
+        console.log('🔍 metadata.itemsSimple:', JSON.stringify(metadata.itemsSimple, null, 2));
+        console.log('🔍 additional_info.items:', JSON.stringify(additionalInfo.items, null, 2));
         return res.status(200).send('OK - NO PRODUCT IDS');
       }
 
