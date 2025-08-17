@@ -167,33 +167,50 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
   // Extraer ID del producto (misma lógica que arriba)
   let productId = null;
   try {
+    console.log('🔍 === EXTRAYENDO ID DEL PRODUCTO ===');
+    console.log('📦 Producto recibido:', producto);
+    console.log('🖼️ Imagen recibida:', img);
+    console.log('📝 Nombre recibido:', nombre);
+    
     // NUEVO: Extraer ID desde el objeto producto si está disponible
     if (producto) {
+      console.log('✅ Producto disponible, buscando ID...');
+      
       // Opción 1: ID directo en el objeto
       if (producto.id) {
         productId = parseInt(producto.id, 10);
+        console.log('✅ ID directo encontrado:', productId);
       }
       // Opción 2: Usar originalData si está disponible
       else if (producto.originalData) {
+        console.log('🔍 Usando originalData:', producto.originalData);
+        
         // Intentar extraer desde .txt primero
         if (producto.originalData.txt) {
+          console.log('🔍 Analizando URL .txt:', producto.originalData.txt);
           const match = producto.originalData.txt.match(/\/(\d+)[-_]?[^/]*\//i);
           if (match && match[1]) {
             productId = parseInt(match[1], 10);
             console.log('✅ ID extraído de originalData.txt:', productId, 'desde:', producto.originalData.txt);
+          } else {
+            console.log('❌ No se encontró ID en .txt URL pattern');
           }
         }
         // Luego desde .imagen si no se encontró en txt
         if (!productId && producto.originalData.imagen) {
+          console.log('🔍 Analizando URL .imagen:', producto.originalData.imagen);
           const match = producto.originalData.imagen.match(/\/(\d+)[-_]?[^/]*\//i);
           if (match && match[1]) {
             productId = parseInt(match[1], 10);
             console.log('✅ ID extraído de originalData.imagen:', productId, 'desde:', producto.originalData.imagen);
+          } else {
+            console.log('❌ No se encontró ID en .imagen URL pattern');
           }
         }
       }
       // Opción 3: Extraer ID del nombre de la carpeta desde .txt o .imagen directamente
       else if (producto.txt) {
+        console.log('🔍 Analizando URL .txt directo:', producto.txt);
         const match = producto.txt.match(/\/(\d+)[-_]?[^/]*\//i);
         if (match && match[1]) {
           productId = parseInt(match[1], 10);
@@ -202,6 +219,7 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
       }
       else if (producto.imagen || producto.img) {
         const url = producto.imagen || producto.img;
+        console.log('🔍 Analizando URL .imagen directo:', url);
         const match = url.match(/\/(\d+)[-_]?[^/]*\//i);
         if (match && match[1]) {
           productId = parseInt(match[1], 10);
@@ -221,7 +239,16 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
     }
     
     if (!productId) {
-      console.warn('⚠️ No se pudo extraer ID del producto:', { nombre, img, producto });
+      console.warn('⚠️ No se pudo extraer ID del producto. Detalles:');
+      console.warn('- Nombre:', nombre);
+      console.warn('- Imagen:', img);  
+      console.warn('- Producto objeto:', producto);
+      if (producto?.originalData) {
+        console.warn('- originalData.txt:', producto.originalData.txt);
+        console.warn('- originalData.imagen:', producto.originalData.imagen);
+      }
+    } else {
+      console.log('🎉 ID del producto extraído exitosamente:', productId);
     }
     
   } catch (e) {
