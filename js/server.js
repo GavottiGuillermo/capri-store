@@ -389,12 +389,18 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
       throw new Error('Credenciales de email no configuradas');
     }
 
+    // Verificar si la contraseña no es la de placeholder
+    if (process.env.EMAIL_PASS === 'tu_contraseña_de_aplicacion_zoho_aqui') {
+      console.error('❌ EMAIL_PASS contiene valor de placeholder - necesita configuración real');
+      throw new Error('EMAIL_PASS necesita ser configurado con una contraseña de aplicación válida de Zoho');
+    }
+
     // Validar datos de entrada
     if (!datosComprador || !datosComprador.email || !datosComprador.nombre) {
       throw new Error('Datos del comprador incompletos para envío de correo');
     }
 
-    // Configurar transporter
+    // Configurar transporter con timeout y reintentos
     const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
@@ -402,11 +408,20 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      }
+      },
+      connectionTimeout: 10000, // 10 segundos
+      greetingTimeout: 5000,     // 5 segundos
+      socketTimeout: 15000       // 15 segundos
     });
 
-    // Verificar conexión SMTP
-    await transporter.verify();
+    // Verificar conexión SMTP con timeout
+    console.log('🔍 Verificando conexión SMTP...');
+    const verifyPromise = transporter.verify();
+    const verifyTimeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout verificando conexión SMTP después de 10 segundos')), 10000)
+    );
+
+    await Promise.race([verifyPromise, verifyTimeoutPromise]);
     console.log('✅ Conexión SMTP verificada exitosamente');
 
     // Crear resumen de productos
@@ -502,6 +517,16 @@ Justa Lima 123, Zárate`;
     console.error('💥 === ERROR AL ENVIAR CORREO ===');
     console.error('⏱️ Tiempo hasta error:', duration + 'ms');
     console.error('Error mensaje:', error.message);
+    
+    // Clasificar tipos de errores para mejor debugging
+    if (error.message.includes('535')) {
+      console.error('🔐 Error de autenticación - Verifica EMAIL_USER y EMAIL_PASS en .env');
+      console.error('💡 Asegúrate de usar una contraseña de aplicación de Zoho, no la contraseña normal');
+    } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+      console.error('⏰ Error de timeout - El servidor SMTP tardó demasiado en responder');
+    } else if (error.message.includes('connection')) {
+      console.error('🌐 Error de conexión - No se puede conectar al servidor SMTP');
+    }
     
     return { 
       success: false, 
@@ -1217,50 +1242,46 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
     console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
     
-    const client = await pool.connect();
+    // Usar la función helper con reintentos para mejor manejo de conexiones
+    const pedidoResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        MIN(id_articulo) as id_pedido,
+        MAX(pedido_fecha) as fecha_pedido,
+        MAX(pedido_nombre_cliente) as nombre_cliente,
+        MAX(pedido_monto_total) as total,
+        COUNT(*) as productos_count
+       FROM productos 
+       WHERE id_pedido = $1`,
+      [paymentId],
+      3
+    );
     
-    try {
-      // Buscar en la tabla productos (donde se creó el pedido por el webhook)
-      const pedidoResult = await client.query(`
-        SELECT 
-          MIN(id_articulo) as id_pedido,
-          MAX(pedido_fecha) as fecha_pedido,
-          MAX(pedido_nombre_cliente) as nombre_cliente,
-          MAX(pedido_monto_total) as total,
-          COUNT(*) as productos_count
-        FROM productos 
-        WHERE id_pedido = $1
-      `, [paymentId]);
+    if (pedidoResult.rows.length > 0 && pedidoResult.rows[0].id_pedido) {
+      const pedido = pedidoResult.rows[0];
       
-      if (pedidoResult.rows.length > 0 && pedidoResult.rows[0].id_pedido) {
-        const pedido = pedidoResult.rows[0];
-        
-        // Usar el ID del artículo como número de pedido y obtener los últimos 2 dígitos
-        const numeroCompleto = pedido.id_pedido;
-        const ultimosDosDigitos = String(numeroCompleto).slice(-2).padStart(2, '0');
-        
-        console.log(`✅ Pedido encontrado - ID artículo: ${numeroCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
-        
-        res.json({
-          existe: true,
-          numero_completo: numeroCompleto,
-          numero_display: ultimosDosDigitos,
-          nombre_cliente: pedido.nombre_cliente,
-          total: pedido.total,
-          fecha_pedido: pedido.fecha_pedido,
-          productos_count: parseInt(pedido.productos_count)
-        });
-        
-      } else {
-        console.log(`❌ No se encontró pedido para payment ID: ${paymentId}`);
-        res.json({
-          existe: false,
-          message: 'Número de pedido no encontrado'
-        });
-      }
+      // Usar el ID del artículo como número de pedido y obtener los últimos 2 dígitos
+      const numeroCompleto = pedido.id_pedido;
+      const ultimosDosDigitos = String(numeroCompleto).slice(-2).padStart(2, '0');
       
-    } finally {
-      client.release();
+      console.log(`✅ Pedido encontrado - ID artículo: ${numeroCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
+      
+      res.json({
+        existe: true,
+        numero_completo: numeroCompleto,
+        numero_display: ultimosDosDigitos,
+        nombre_cliente: pedido.nombre_cliente,
+        total: pedido.total,
+        fecha_pedido: pedido.fecha_pedido,
+        productos_count: parseInt(pedido.productos_count)
+      });
+      
+    } else {
+      console.log(`❌ No se encontró pedido para payment ID: ${paymentId}`);
+      res.json({
+        existe: false,
+        message: 'Número de pedido no encontrado'
+      });
     }
     
   } catch (error) {
