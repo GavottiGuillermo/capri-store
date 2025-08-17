@@ -11,6 +11,28 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 
+// Almacén en memoria para notificaciones de webhook
+const webhookNotifications = new Map();
+
+// Función para almacenar notificación de webhook exitoso
+function storeWebhookNotification(paymentId, pedidoId, externalReference) {
+  const notification = {
+    paymentId,
+    pedidoId,
+    externalReference,
+    timestamp: Date.now(),
+    processed: false
+  };
+  webhookNotifications.set(paymentId, notification);
+  
+  // Limpiar notificaciones antiguas (mayores a 10 minutos)
+  setTimeout(() => {
+    webhookNotifications.delete(paymentId);
+  }, 10 * 60 * 1000);
+  
+  console.log(`🔔 Notificación de webhook almacenada para payment ${paymentId}`);
+}
+
 // SIEMPRE PRIMERO
 app.use(express.json());
 
@@ -436,6 +458,30 @@ app.get('/webhook-test', (req, res) => {
   });
 });
 
+// Endpoint para verificar si un pago fue procesado por webhook
+app.get('/webhook-status/:paymentId', (req, res) => {
+  const { paymentId } = req.params;
+  const notification = webhookNotifications.get(paymentId);
+  
+  if (notification) {
+    console.log(`✅ Webhook procesó el pago ${paymentId}`);
+    // Marcar como procesado para evitar reutilización
+    notification.processed = true;
+    res.json({
+      processed: true,
+      timestamp: notification.timestamp,
+      pedidoId: notification.pedidoId,
+      externalReference: notification.externalReference
+    });
+  } else {
+    console.log(`⏳ Webhook aún no procesó el pago ${paymentId}`);
+    res.json({
+      processed: false,
+      message: 'Payment not yet processed by webhook'
+    });
+  }
+});
+
 // Webhook para notificaciones de Mercado Pago
 app.post('/webhook', async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -511,14 +557,28 @@ app.post('/webhook', async (req, res) => {
 
       console.log('✅ Pago aprobado, creando pedido...');
 
-      // Extraer información del metadata
+      // Extraer información del metadata y additional_info
       const metadata = payment.metadata || {};
-      const itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
+      const additionalInfo = payment.additional_info || {};
+      
+      // Priorizar additional_info.items que sí contiene los IDs
+      let itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
+      if (itemsSimple.length === 0 && additionalInfo.items) {
+        itemsSimple = additionalInfo.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          quantity: item.quantity,
+          unit_price: item.unit_price
+        }));
+        console.log('✅ Usando datos de additional_info porque metadata está vacío');
+      }
+      
       const datosComprador = metadata.datosComprador || {};
       
       console.log('📦 Items del pedido:', itemsSimple.length);
-      console.log('� Items metadata:', JSON.stringify(itemsSimple, null, 2));
-      console.log('�👤 Datos del comprador:', JSON.stringify(datosComprador, null, 2));
+      console.log('📋 Items metadata:', JSON.stringify(itemsSimple, null, 2));
+      console.log('👤 Datos del comprador:', JSON.stringify(datosComprador, null, 2));
+      console.log('🔍 Additional info items:', JSON.stringify(additionalInfo.items, null, 2));
 
       // Si no hay items en metadata, intentar reconstruir desde los items del payment
       let productos = [];
@@ -578,14 +638,22 @@ app.post('/webhook', async (req, res) => {
       const idsString = productosIds.join(',');
       const montoTotal = parseFloat(payment.transaction_amount);
       
-      // Obtener datos del comprador (priorizar metadata sobre payer)
+      // Obtener datos del comprador (priorizar metadata, luego additional_info, finalmente payer)
+      const additionalInfoPayer = additionalInfo.payer || {};
+      
       const nombreCompleto = datosComprador.nombre && datosComprador.apellido
         ? `${datosComprador.nombre} ${datosComprador.apellido}`
         : datosComprador.nombre 
-        || `${payment.payer?.first_name || 'Cliente'} ${payment.payer?.last_name || ''}`.trim()
+        || (additionalInfoPayer.first_name && additionalInfoPayer.last_name 
+            ? `${additionalInfoPayer.first_name} ${additionalInfoPayer.last_name}`
+            : `${payment.payer?.first_name || 'Cliente'} ${payment.payer?.last_name || ''}`.trim())
         || 'Cliente Webhook';
         
-      const correoCliente = datosComprador.email || payment.payer?.email || 'webhook@capristore.com';
+      const correoCliente = datosComprador.email 
+        || additionalInfoPayer.email 
+        || payment.payer?.email 
+        || 'webhook@capristore.com';
+        
       const telefonoCliente = datosComprador.telefono || '';
       const metodoPago = 'MercadoPago';
       const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
@@ -609,7 +677,8 @@ app.post('/webhook', async (req, res) => {
 
       console.log(`✅ Pedido creado exitosamente por webhook para payment ${id}`);
 
-      // Enviar correo de confirmación
+      // Almacenar notificación de webhook exitoso
+      storeWebhookNotification(id, 'webhook-created', payment.external_reference);
       if (correoCliente) {
         try {
           const resultadoEmail = await enviarCorreoConfirmacion(

@@ -259,7 +259,40 @@
               ? 'https://capri-store.onrender.com'
               : '';
             
-            // Verificar si ya existe un pedido con este payment_id
+            // PASO 1: Verificar si el webhook ya procesó este pago
+            console.log('🕐 Verificando estado del webhook...');
+            const webhookResponse = await fetch(`${API_BASE}/webhook-status/${paymentId}`, {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (webhookResponse.ok) {
+              const webhookStatus = await webhookResponse.json();
+              if (webhookStatus.processed) {
+                console.log('✅ ¡Webhook ya procesó el pago! No necesario crear pedido desde frontend');
+                mostrarPedidoConfirmado(paymentId);
+                return;
+              } else {
+                console.log('⏳ Webhook aún no procesó el pago, esperando...');
+                
+                // Esperar un poco más para dar tiempo al webhook
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Verificar una vez más
+                const webhookResponse2 = await fetch(`${API_BASE}/webhook-status/${paymentId}`);
+                if (webhookResponse2.ok) {
+                  const webhookStatus2 = await webhookResponse2.json();
+                  if (webhookStatus2.processed) {
+                    console.log('✅ ¡Webhook procesó el pago en el segundo intento!');
+                    mostrarPedidoConfirmado(paymentId);
+                    return;
+                  }
+                }
+              }
+            }
+            
+            // PASO 2: Si el webhook no procesó, verificar si ya existe el pedido en BD
+            console.log('🔍 Webhook no procesó, verificando pedido en BD...');
             const checkResponse = await fetch(`${API_BASE}/pedido/${paymentId}`, {
               method: 'GET',
               headers: { 'Content-Type': 'application/json' }
@@ -268,19 +301,19 @@
             if (checkResponse.ok) {
               const pedidoExistente = await checkResponse.json();
               if (pedidoExistente.existe) {
-                console.log('✅ Pedido ya fue procesado por webhook');
+                console.log('✅ Pedido ya existe en BD');
                 mostrarPedidoConfirmado(paymentId);
                 return;
               }
             }
             
-            // Si no existe, proceder a crear el pedido
-            console.log('📝 Pedido no encontrado, creando desde frontend...');
+            // PASO 3: Si no existe, proceder a crear el pedido (RESPALDO)
+            console.log('📝 Pedido no encontrado, creando desde frontend como respaldo...');
             await crearPedidoEnBD(paymentId, productos, total, datosComprador);
             
           } catch (error) {
-            console.warn('⚠️ Error al verificar pedido existente, procediendo con creación:', error.message);
-            // En caso de error en la verificación, intentar crear el pedido de todas formas
+            console.warn('⚠️ Error en verificación, procediendo con creación de respaldo:', error.message);
+            // En caso de error, usar el flujo de respaldo
             await crearPedidoEnBD(paymentId, productos, total, datosComprador);
           }
         }
