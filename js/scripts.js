@@ -225,7 +225,7 @@ function actualizarCartSidenav() {
   // Filtrar productos inválidos
   cartItems = cartItems.filter(item => item && item.nombre && !isNaN(Number(item.precio)) && item.img && !isNaN(Number(item.cantidad)) && Number(item.cantidad) > 0);
   if (cartItems.length === 0) {
-    lista.innerHTML = `<li class='text-center py-5 text-rosado'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
+    lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
     total.textContent = "$0.00 ARS";
     if (cartCount) cartCount.textContent = "0";
     guardarCarrito();
@@ -239,12 +239,12 @@ function actualizarCartSidenav() {
     cantidadTotal += cantidadNum;
     const buttonText = cantidadNum > 1 ? "Quitar 1" : "Quitar";
     lista.innerHTML += `
-      <li class="list-group-item d-flex justify-content-between align-items-center cart-item" style="border:none; background:none; animation-delay: ${idx * 0.1}s;">
+      <li class="list-group-item d-flex justify-content-between align-items-center cart-item" style="border:none; background:none; color:#6b0a0a; animation-delay: ${idx * 0.1}s;">
         <div class="d-flex align-items-center">
           <img src="${item.img || ''}" alt="${item.nombre}" style="width:48px; height:48px; object-fit:cover; border-radius:8px; margin-right:12px;">
           <div>
-            <div class="font-weight-bold">${item.nombre}</div>
-            <div class="text-rosado">AR$${precioNum.toFixed(2)} x${cantidadNum}</div>
+            <div class="font-weight-bold" style="color:#6b0a0a;">${item.nombre}</div>
+            <div style="color:#e29ca3;">AR$${precioNum.toFixed(2)} x${cantidadNum}</div>
           </div>
         </div>
         <button class="btn btn-sm btn-danger quitar-item" data-idx="${idx}">${buttonText}</button>
