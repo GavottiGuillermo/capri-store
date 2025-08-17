@@ -123,13 +123,7 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     }
     
-    // Determinar URL base según el entorno
-    const isProduction = process.env.NODE_ENV === 'production';
-    const baseUrl = isProduction
-      ? 'https://capri-store.onrender.com'  // URL de tu backend en Render
-      : 'http://localhost:3001';
-    
-    // Determinar URL base según el entorno
+    // Determinar URLs según el entorno
     const isProduction = process.env.NODE_ENV === 'production';
     const frontendUrl = 'https://www.capristorezte.com.ar';  // Frontend siempre en el dominio principal
     const backendUrl = isProduction
@@ -1265,14 +1259,17 @@ const server = app.listen(PORT, () => {
   
   // Mostrar URLs importantes
   const isProduction = process.env.NODE_ENV === 'production';
-  const baseUrl = isProduction
-    ? 'https://www.capristorezte.com.ar'
+  const frontendUrl = 'https://www.capristorezte.com.ar';
+  const backendUrl = isProduction
+    ? 'https://capri-store.onrender.com'
     : `http://localhost:${PORT}`;
     
-  console.log(`📡 Webhook URL: ${baseUrl}/webhook`);
-  console.log(`🏥 Health check: ${baseUrl}/health`);
-  console.log(`🧪 Test webhook: ${baseUrl}/test-webhook/{payment_id}`);
-  console.log('🔔 Para testear webhook: curl -X POST ' + baseUrl + '/test-webhook/{payment_id}');
+  console.log(`🌐 Frontend URL: ${frontendUrl}`);
+  console.log(`🖥️  Backend URL: ${backendUrl}`);
+  console.log(`📡 Webhook URL: ${backendUrl}/webhook`);
+  console.log(`🏥 Health check: ${backendUrl}/health`);
+  console.log(`🧪 Test webhook: ${backendUrl}/test-webhook/{payment_id}`);
+  console.log('🔔 Para testear webhook: curl -X POST ' + backendUrl + '/test-webhook/{payment_id}');
 });
 
 // Manejar errores del servidor
