@@ -126,7 +126,14 @@ app.post('/crear-preferencia', async (req, res) => {
     // Determinar URL base según el entorno
     const isProduction = process.env.NODE_ENV === 'production';
     const baseUrl = isProduction
-      ? 'https://www.capristorezte.com.ar'
+      ? 'https://capri-store.onrender.com'  // URL de tu backend en Render
+      : 'http://localhost:3001';
+    
+    // Determinar URL base según el entorno
+    const isProduction = process.env.NODE_ENV === 'production';
+    const frontendUrl = 'https://www.capristorezte.com.ar';  // Frontend siempre en el dominio principal
+    const backendUrl = isProduction
+      ? 'https://capri-store.onrender.com'  // Backend en Render
       : 'http://localhost:3001';
     
     const preference = {
@@ -145,9 +152,9 @@ app.post('/crear-preferencia', async (req, res) => {
         datosComprador: datosCompradorMeta || null
       },
       back_urls: {
-        success: `${baseUrl}/success.html?status=approved`,
-        failure: `${baseUrl}/failure.html?status=failure`,
-        pending: `${baseUrl}/pending.html?status=pending`
+        success: `${frontendUrl}/success.html?status=approved`,
+        failure: `${frontendUrl}/failure.html?status=failure`,
+        pending: `${frontendUrl}/pending.html?status=pending`
       },
       site_id: "MLA",
       purpose: "wallet_purchase",
@@ -188,16 +195,17 @@ app.post('/crear-preferencia', async (req, res) => {
         excluded_payment_types: [],
         installments: 12
       },
-      notification_url: `${baseUrl}/webhook`
+      notification_url: `${backendUrl}/webhook`  // Webhook apunta al backend en Render
     };
     
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
     console.log('🔍 Configuración específica:');
     console.log('- Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
-    console.log('- Base URL:', baseUrl);
+    console.log('- Frontend URL:', frontendUrl);
+    console.log('- Backend URL:', backendUrl);
     console.log('- Auto return:', preference.auto_return || 'NO CONFIGURADO');
     console.log('- Binary mode:', preference.binary_mode);
-    console.log('- Notification URL:', preference.notification_url || 'NO CONFIGURADO');
+    console.log('- Notification URL:', preference.notification_url);
     
     // Crear preferencia
     const preferenceObj = new Preference(client);
