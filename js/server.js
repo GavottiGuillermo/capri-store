@@ -888,13 +888,14 @@ app.post('/webhook', async (req, res) => {
         correoCliente,
         telefonoCliente,
         metodoPago,
-        tipoEntrega
+        tipoEntrega,
+        paymentId: id // Agregar payment ID
       });
 
-      // Ejecutar stored procedure con timeout
+      // Ejecutar stored procedure con payment ID incluido
       const spPromise = dbClient.query(
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
-        [idsString, montoTotal, nombreCompleto, correoCliente, telefonoCliente, metodoPago, tipoEntrega]
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+        [idsString, montoTotal, nombreCompleto, correoCliente, telefonoCliente, metodoPago, tipoEntrega, id]
       );
       const spTimeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout ejecutando stored procedure después de 15 segundos')), 15000)
@@ -1242,27 +1243,19 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
     console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
     
-    // Buscar el pedido usando el payment ID que puede estar en pedido_telefono_cliente
-    // (si no había teléfono) o mediante la tabla pagos
+    // Buscar el pedido usando la nueva columna payment_id
     const pedidoResult = await executeQueryWithRetry(
       pool,
       `SELECT 
         DISTINCT p.id_pedido,
         MAX(p.pedido_fecha) as fecha_pedido,
         MAX(p.pedido_nombre_cliente) as nombre_cliente,
+        MAX(p.pedido_telefono_cliente) as telefono_cliente,
         MAX(p.pedido_monto_total) as total,
         COUNT(*) as productos_count
        FROM productos p
-       LEFT JOIN pagos pg ON p.id_pago = pg.id_pago
        WHERE p.id_pedido IS NOT NULL 
-         AND (
-           -- Buscar por payment ID en telefono (cuando no había teléfono)
-           p.pedido_telefono_cliente = $1
-           -- Buscar por payment ID en metodo_pago de la tabla pagos
-           OR pg.metodo_pago LIKE '%' || $1 || '%'
-           -- Buscar por timestamp reciente (último minuto) como fallback
-           OR (p.pedido_fecha >= NOW() - INTERVAL '2 minutes')
-         )
+         AND p.payment_id = $1
        GROUP BY p.id_pedido
        ORDER BY MAX(p.pedido_fecha) DESC
        LIMIT 1`,
@@ -1279,37 +1272,44 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       const ultimosDosDigitos = numeroCompleto.slice(-2); // "01"
       
       console.log(`✅ Pedido encontrado - ID pedido: ${idPedidoCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
+      console.log(`📞 Teléfono cliente: ${pedido.telefono_cliente}`);
       
       res.json({
         existe: true,
         id_pedido_completo: idPedidoCompleto,
         numero_display: ultimosDosDigitos,
         nombre_cliente: pedido.nombre_cliente,
+        telefono_cliente: pedido.telefono_cliente,
         total: pedido.total,
         fecha_pedido: pedido.fecha_pedido,
         productos_count: parseInt(pedido.productos_count)
       });
       
     } else {
-      console.log(`❌ No se encontró pedido para payment ID: ${paymentId}`);
+      console.log(`❌ No se encontró pedido para payment ID: ${paymentId} en columna payment_id`);
       
-      // Fallback más agresivo: buscar el pedido más reciente
-      console.log(`🔍 Intentando fallback: pedido más reciente...`);
+      // Fallback: buscar usando otros métodos (tabla pagos con JOIN)
+      console.log(`🔍 Intentando fallback con tabla pagos...`);
       const fallbackResult = await executeQueryWithRetry(
         pool,
         `SELECT 
-          DISTINCT id_pedido,
-          MAX(pedido_fecha) as fecha_pedido,
-          MAX(pedido_nombre_cliente) as nombre_cliente,
-          MAX(pedido_monto_total) as total,
+          DISTINCT p.id_pedido,
+          MAX(p.pedido_fecha) as fecha_pedido,
+          MAX(p.pedido_nombre_cliente) as nombre_cliente,
+          MAX(p.pedido_telefono_cliente) as telefono_cliente,
+          MAX(p.pedido_monto_total) as total,
           COUNT(*) as productos_count
-         FROM productos 
-         WHERE id_pedido IS NOT NULL 
-           AND pedido_fecha >= NOW() - INTERVAL '5 minutes'
-         GROUP BY id_pedido
-         ORDER BY MAX(pedido_fecha) DESC
+         FROM productos p
+         LEFT JOIN pagos pg ON p.id_pago = pg.id_pago
+         WHERE p.id_pedido IS NOT NULL 
+           AND (
+             pg.metodo_pago LIKE '%' || $1 || '%'
+             OR p.pedido_fecha >= NOW() - INTERVAL '5 minutes'
+           )
+         GROUP BY p.id_pedido
+         ORDER BY MAX(p.pedido_fecha) DESC
          LIMIT 1`,
-        [],
+        [paymentId],
         2
       );
       
@@ -1319,13 +1319,14 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         const numeroCompleto = idPedidoCompleto.substring(1);
         const ultimosDosDigitos = numeroCompleto.slice(-2);
         
-        console.log(`✅ Pedido encontrado (fallback últimos 5min) - ID pedido: ${idPedidoCompleto}`);
+        console.log(`✅ Pedido encontrado (fallback) - ID pedido: ${idPedidoCompleto}`);
         
         res.json({
           existe: true,
           id_pedido_completo: idPedidoCompleto,
           numero_display: ultimosDosDigitos,
           nombre_cliente: pedido.nombre_cliente,
+          telefono_cliente: pedido.telefono_cliente,
           total: pedido.total,
           fecha_pedido: pedido.fecha_pedido,
           productos_count: parseInt(pedido.productos_count),

@@ -1,7 +1,14 @@
--- PROCEDURE: public.sp_crear_pedido_web(text, double precision, text, text, text, text, text)
--- Versión actualizada que guarda el payment ID de MercadoPago en metodo_pago
--- y permite correlacionar el payment ID con el id_pedido generado
+-- Script de migración completa para corregir el sistema de pedidos
+-- Ejecutar en orden en la base de datos
 
+-- PASO 1: Agregar la nueva columna payment_id
+ALTER TABLE productos 
+ADD COLUMN IF NOT EXISTS payment_id TEXT;
+
+-- PASO 2: Crear índice para mejorar performance
+CREATE INDEX IF NOT EXISTS idx_productos_payment_id ON productos (payment_id);
+
+-- PASO 3: Actualizar el stored procedure
 -- DROP PROCEDURE IF EXISTS public.sp_crear_pedido_web(text, double precision, text, text, text, text, text);
 
 CREATE OR REPLACE PROCEDURE public.sp_crear_pedido_web(
@@ -87,8 +94,19 @@ $BODY$;
 ALTER PROCEDURE public.sp_crear_pedido_web(text, double precision, text, text, text, text, text)
     OWNER TO neondb_owner;
 
--- Comentarios sobre los cambios:
--- 1. Extrae el payment ID del string "MercadoPago 122156582223"
--- 2. Guarda el teléfono real en pedido_telefono_cliente
--- 3. Guarda el payment ID en la nueva columna payment_id
--- 4. Esto permite correlación perfecta entre payment ID y id_pedido generado
+-- PASO 4: Confirmar que la migración funcionó
+-- Verificar que la columna existe
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'productos' AND column_name = 'payment_id';
+
+-- Verificar que el índice existe
+SELECT indexname, indexdef 
+FROM pg_indexes 
+WHERE tablename = 'productos' AND indexname = 'idx_productos_payment_id';
+
+-- COMENTARIOS FINALES:
+-- 1. La columna payment_id permitirá correlacionar perfectamente el payment ID con el id_pedido
+-- 2. El teléfono se guardará correctamente en pedido_telefono_cliente  
+-- 3. El endpoint /numero-pedido podrá encontrar el pedido usando payment_id
+-- 4. Se mostrarán los últimos 2 dígitos del id_pedido (P0001 → "01")
