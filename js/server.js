@@ -877,7 +877,7 @@ app.post('/webhook', async (req, res) => {
         || 'webhook@capristore.com';
         
       const telefonoCliente = datosComprador.telefono || '';
-      const metodoPago = 'MercadoPago';
+      const metodoPago = `MercadoPago ${id}`; // Incluir el payment ID
       const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
 
       console.log('🚀 Ejecutando stored procedure...');
@@ -1242,17 +1242,30 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
     console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
     
-    // Usar la función helper con reintentos para mejor manejo de conexiones
+    // Buscar el pedido usando el payment ID que puede estar en pedido_telefono_cliente
+    // (si no había teléfono) o mediante la tabla pagos
     const pedidoResult = await executeQueryWithRetry(
       pool,
       `SELECT 
-        MIN(id_articulo) as id_pedido,
-        MAX(pedido_fecha) as fecha_pedido,
-        MAX(pedido_nombre_cliente) as nombre_cliente,
-        MAX(pedido_monto_total) as total,
+        DISTINCT p.id_pedido,
+        MAX(p.pedido_fecha) as fecha_pedido,
+        MAX(p.pedido_nombre_cliente) as nombre_cliente,
+        MAX(p.pedido_monto_total) as total,
         COUNT(*) as productos_count
-       FROM productos 
-       WHERE id_pedido = $1`,
+       FROM productos p
+       LEFT JOIN pagos pg ON p.id_pago = pg.id_pago
+       WHERE p.id_pedido IS NOT NULL 
+         AND (
+           -- Buscar por payment ID en telefono (cuando no había teléfono)
+           p.pedido_telefono_cliente = $1
+           -- Buscar por payment ID en metodo_pago de la tabla pagos
+           OR pg.metodo_pago LIKE '%' || $1 || '%'
+           -- Buscar por timestamp reciente (último minuto) como fallback
+           OR (p.pedido_fecha >= NOW() - INTERVAL '2 minutes')
+         )
+       GROUP BY p.id_pedido
+       ORDER BY MAX(p.pedido_fecha) DESC
+       LIMIT 1`,
       [paymentId],
       3
     );
@@ -1260,15 +1273,16 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     if (pedidoResult.rows.length > 0 && pedidoResult.rows[0].id_pedido) {
       const pedido = pedidoResult.rows[0];
       
-      // Usar el ID del artículo como número de pedido y obtener los últimos 2 dígitos
-      const numeroCompleto = pedido.id_pedido;
-      const ultimosDosDigitos = String(numeroCompleto).slice(-2).padStart(2, '0');
+      // El id_pedido viene en formato "P0001", extraer los últimos 2 dígitos numéricos
+      const idPedidoCompleto = pedido.id_pedido; // "P0001"
+      const numeroCompleto = idPedidoCompleto.substring(1); // "0001"
+      const ultimosDosDigitos = numeroCompleto.slice(-2); // "01"
       
-      console.log(`✅ Pedido encontrado - ID artículo: ${numeroCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
+      console.log(`✅ Pedido encontrado - ID pedido: ${idPedidoCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
       
       res.json({
         existe: true,
-        numero_completo: numeroCompleto,
+        id_pedido_completo: idPedidoCompleto,
         numero_display: ultimosDosDigitos,
         nombre_cliente: pedido.nombre_cliente,
         total: pedido.total,
@@ -1278,10 +1292,51 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       
     } else {
       console.log(`❌ No se encontró pedido para payment ID: ${paymentId}`);
-      res.json({
-        existe: false,
-        message: 'Número de pedido no encontrado'
-      });
+      
+      // Fallback más agresivo: buscar el pedido más reciente
+      console.log(`🔍 Intentando fallback: pedido más reciente...`);
+      const fallbackResult = await executeQueryWithRetry(
+        pool,
+        `SELECT 
+          DISTINCT id_pedido,
+          MAX(pedido_fecha) as fecha_pedido,
+          MAX(pedido_nombre_cliente) as nombre_cliente,
+          MAX(pedido_monto_total) as total,
+          COUNT(*) as productos_count
+         FROM productos 
+         WHERE id_pedido IS NOT NULL 
+           AND pedido_fecha >= NOW() - INTERVAL '5 minutes'
+         GROUP BY id_pedido
+         ORDER BY MAX(pedido_fecha) DESC
+         LIMIT 1`,
+        [],
+        2
+      );
+      
+      if (fallbackResult.rows.length > 0) {
+        const pedido = fallbackResult.rows[0];
+        const idPedidoCompleto = pedido.id_pedido;
+        const numeroCompleto = idPedidoCompleto.substring(1);
+        const ultimosDosDigitos = numeroCompleto.slice(-2);
+        
+        console.log(`✅ Pedido encontrado (fallback últimos 5min) - ID pedido: ${idPedidoCompleto}`);
+        
+        res.json({
+          existe: true,
+          id_pedido_completo: idPedidoCompleto,
+          numero_display: ultimosDosDigitos,
+          nombre_cliente: pedido.nombre_cliente,
+          total: pedido.total,
+          fecha_pedido: pedido.fecha_pedido,
+          productos_count: parseInt(pedido.productos_count),
+          encontrado_por_fallback: true
+        });
+      } else {
+        res.json({
+          existe: false,
+          message: 'Número de pedido no encontrado'
+        });
+      }
     }
     
   } catch (error) {
