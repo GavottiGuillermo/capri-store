@@ -188,7 +188,7 @@ app.post('/crear-preferencia', async (req, res) => {
         excluded_payment_types: [],
         installments: 12
       },
-      ...(isProduction ? { notification_url: `${baseUrl}/webhook` } : {})
+      notification_url: `${baseUrl}/webhook`
     };
     
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
@@ -416,194 +416,195 @@ app.post('/webhook', async (req, res) => {
   console.log('📦 Body:', JSON.stringify(req.body, null, 2));
 
   try {
-    // Validación de signature (opcional para debugging)
-    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+    const topic = req.body.type || req.query.topic || req.headers['x-topic'];
+    const id = req.body.data?.id || req.query.id;
     
-    const topic = req.body.type || req.query.type || req.headers['x-mp-topic'];
+    console.log(`📢 Topic: ${topic}, ID: ${id}`);
     
-    if ((topic || '').toLowerCase() !== 'payment') {
-      return res.status(200).send('IGNORED - Not a payment topic');
+    // Solo procesar notificaciones de pago
+    if (topic !== 'payment') {
+      console.log(`⏸️ Topic '${topic}' ignorado - solo procesamos 'payment'`);
+      return res.status(200).send('OK - IGNORED');
     }
 
-    const paymentId = req.body.data?.id || req.query['data.id'];
-    
-    if (!paymentId) {
-      return res.status(400).send('MISSING PAYMENT ID');
+    if (!id) {
+      console.log('❌ No se recibió ID de pago');
+      return res.status(400).send('ERROR - MISSING ID');
     }
 
-    // Verificar idempotencia
+    // Verificar idempotencia - evitar procesar el mismo pago múltiples veces
+    let dbClient;
     try {
-      const cli = await pool.connect();
-      try {
-        const { rows } = await cli.query(
-          `SELECT COUNT(*) as count FROM productos WHERE id_pedido = $1`,
-          [paymentId]
-        );
-        if (rows && rows[0] && parseInt(rows[0].count) > 0) {
-          return res.status(200).send('ALREADY PROCESSED');
-        }
-      } finally { 
-        cli.release(); 
+      dbClient = await pool.connect();
+      
+      const { rows: existingRows } = await dbClient.query(
+        'SELECT COUNT(*) as count FROM productos WHERE id_pedido = $1',
+        [id]
+      );
+      
+      if (existingRows && existingRows[0] && parseInt(existingRows[0].count) > 0) {
+        console.log(`⚠️ Pago ${id} ya fue procesado anteriormente`);
+        return res.status(200).send('OK - ALREADY PROCESSED');
       }
-    } catch (idempotencyError) {
-      console.error('Error verificando idempotencia:', idempotencyError.message);
-    }
+      
+      // Obtener información del pago desde MercadoPago
+      console.log(`🔍 Consultando pago ${id} en MercadoPago...`);
+      const paymentClient = new Payment(client);
+      const payment = await paymentClient.get({ id: id });
+      
+      console.log('💳 Estado del pago:', payment.status);
+      console.log('💰 Monto:', payment.transaction_amount);
+      console.log('📧 Email del pagador:', payment.payer?.email);
+      
+      // Solo procesar pagos aprobados o autorizados
+      if (!payment || (payment.status !== 'approved' && payment.status !== 'authorized')) {
+        console.log(`⏸️ Pago ${id} no está aprobado (status: ${payment?.status})`);
+        return res.status(200).send('OK - NOT APPROVED');
+      }
 
-    // Obtener detalles del pago desde MercadoPago
-    const paymentClient = new Payment(client);
-    const mpPayment = await paymentClient.get({ id: paymentId });
-    console.log('Pago recuperado MP:', JSON.stringify(mpPayment));
+      console.log('✅ Pago aprobado, creando pedido...');
 
-    // Solo procesar pagos aprobados
-    if (!mpPayment || (mpPayment.status !== 'approved' && mpPayment.status !== 'authorized')) {
-      console.log(`⏸️ Pago no aprobado, status: ${mpPayment?.status || 'unknown'}`);
-      return res.status(200).send('PAYMENT NOT APPROVED');
-    }
+      // Extraer información del metadata
+      const metadata = payment.metadata || {};
+      const itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
+      const datosComprador = metadata.datosComprador || {};
+      
+      console.log('📦 Items del pedido:', itemsSimple.length);
+      console.log('👤 Datos del comprador:', datosComprador);
 
-    console.log('✅ Pago aprobado, procesando pedido...');
+      // Si no hay items en metadata, intentar reconstruir desde los items del payment
+      let productos = [];
+      if (itemsSimple.length > 0) {
+        productos = itemsSimple.map(item => ({
+          id: null, // Se extraerá del título
+          nombre: item.title,
+          cantidad: item.quantity,
+          precio: item.unit_price,
+          img: ''
+        }));
+      } else if (payment.additional_info?.items) {
+        productos = payment.additional_info.items.map(item => ({
+          id: null,
+          nombre: item.title,
+          cantidad: item.quantity,
+          precio: item.unit_price,
+          img: ''
+        }));
+      }
 
-    // Extraer datos del metadata
-    const metadata = mpPayment.metadata || {};
-    const itemsSimple = Array.isArray(metadata.itemsSimple) ? metadata.itemsSimple : [];
-    
-    // Priorizar datos del checkout guardados en metadata sobre los del payer de MP
-    const datosComprador = metadata.datosComprador || {
-      nombre: mpPayment.payer?.first_name || 'Cliente',
-      apellido: mpPayment.payer?.last_name || '',
-      email: mpPayment.payer?.email || '',
-      telefono: '',
-      tipoEntrega: 'Retiro'
-    };
+      if (productos.length === 0) {
+        console.log('❌ No se pudieron extraer productos del pago');
+        return res.status(200).send('OK - NO PRODUCTS');
+      }
 
-    console.log('📦 Items reconstruidos:', itemsSimple);
-    console.log('👤 Datos del comprador desde metadata (checkout):', datosComprador);
-
-    // Construir productos del pedido
-    const productos = itemsSimple.map(it => ({
-      nombre: it.title,
-      cantidad: it.quantity,
-      precio: it.unit_price,
-      img: '', 
-      txt: ''
-    }));
-
-    // Obtener datos completos del comprador
-    const nombreCompleto = [datosComprador.nombre, datosComprador.apellido]
-      .filter(Boolean)
-      .join(' ')
-      .trim() || datosComprador.nombre || 'Cliente';
-    
-    const tipoEntrega = (datosComprador.tipoEntrega || '').toLowerCase() === 'envio' ? 'Envio' : 'Retiro';
-
-    console.log('👤 Datos del cliente:', {
-      nombre: nombreCompleto,
-      email: datosComprador.email,
-      tipoEntrega: tipoEntrega
-    });
-
-    // Procesar cada producto del pedido usando stored procedure
-    if (productos.length > 0) {
-      const cli = await pool.connect();
-      try {
-        console.log('🚀 Procesando pedido con stored procedure...');
+      // Extraer IDs de productos del nombre
+      const productosIds = [];
+      for (const prod of productos) {
+        const nombreLimpio = prod.nombre.split('(')[0].trim();
         
-        // Buscar IDs de productos disponibles
-        const productosIds = [];
-        
-        for (const producto of productos) {
-          // Limpiar nombre del producto
-          const nombreLimpio = producto.nombre.split('(')[0].trim();
-          const cantidad = parseInt(producto.cantidad, 10);
-          
-          console.log(`🔍 Buscando ${cantidad} unidades de "${nombreLimpio}" a precio ${producto.precio}`);
-          
-          // Buscar productos disponibles por nombre y precio
-          const queryBuscar = `
-            SELECT id_articulo
-            FROM productos 
-            WHERE LOWER(TRIM(prenda)) = LOWER($1)
-              AND ABS(precio_venta_transferencia - $2) < 0.01
-              AND id_pedido IS NULL
-              AND estado IS NULL
-            ORDER BY id_articulo
-            LIMIT $3
-          `;
-          
-          const { rows: productosDisponibles } = await cli.query(queryBuscar, [
-            nombreLimpio,
-            parseFloat(producto.precio),
-            cantidad
-          ]);
-          
-          console.log(`📦 Encontrados ${productosDisponibles.length} productos disponibles para "${nombreLimpio}"`);
-          
-          // Agregar IDs encontrados
-          productosDisponibles.forEach(prod => {
-            productosIds.push(prod.id_articulo);
-          });
+        // Buscar ID en el nombre (formato: "123-Nombre")
+        let productId = null;
+        const matchNombre = prod.nombre.match(/^(\d+)-/);
+        if (matchNombre) {
+          productId = parseInt(matchNombre[1]);
         }
         
-        if (productosIds.length === 0) {
-          console.warn('❌ No se encontraron productos disponibles para el pedido');
-          return res.status(200).send('NO PRODUCTS AVAILABLE');
-        }
-        
-        console.log(`🆔 IDs de productos encontrados: ${productosIds.join(',')}`);
-        
-        // Preparar datos para el stored procedure
-        const idsProductos = productosIds.join(',');
-        const montoTotal = parseFloat(mpPayment.transaction_amount);
-        const nombreCliente = nombreCompleto;
-        const correoCliente = datosComprador.email || 'cliente@webhook.com';
-        const telefonoCliente = datosComprador.telefono || '';
-        const metodoPago = 'MercadoPago';
-        const tipoEntregaSP = tipoEntrega; // 'Retiro' o 'Envio'
-        
-        console.log('📋 Datos para SP:', {
-          idsProductos,
-          montoTotal,
-          nombreCliente,
-          correoCliente,
-          telefonoCliente,
-          metodoPago,
-          tipoEntregaSP
-        });
-        
-        // Ejecutar stored procedure con teléfono
-        await cli.query(
-          'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
-          [idsProductos, montoTotal, nombreCliente, correoCliente, telefonoCliente, metodoPago, tipoEntregaSP]
-        );
-        
-        console.log(`✅ Pedido creado exitosamente por webhook usando SP. Payment ID: ${paymentId}`);
-        
-        // Enviar correo de confirmación
-        if (correoCliente && nombreCliente) {
-          try {
-            await enviarCorreoConfirmacion(
-              datosComprador, 
-              productos, 
-              montoTotal, 
-              paymentId
-            );
-            console.log('✅ Correo enviado desde webhook para payment', paymentId);
-          } catch (emailError) {
-            console.error('❌ Error al enviar correo desde webhook:', emailError.message);
+        if (productId) {
+          const cantidad = parseInt(prod.cantidad) || 1;
+          for (let i = 0; i < cantidad; i++) {
+            productosIds.push(productId);
           }
+          console.log(`✅ Agregado producto ID ${productId} (cantidad: ${cantidad})`);
+        } else {
+          console.log(`⚠️ No se pudo extraer ID del producto: ${prod.nombre}`);
         }
+      }
+
+      if (productosIds.length === 0) {
+        console.log('❌ No se pudieron extraer IDs de productos');
+        return res.status(200).send('OK - NO PRODUCT IDS');
+      }
+
+      // Preparar datos para el stored procedure
+      const idsString = productosIds.join(',');
+      const montoTotal = parseFloat(payment.transaction_amount);
+      
+      // Obtener datos del comprador (priorizar metadata sobre payer)
+      const nombreCompleto = datosComprador.nombre && datosComprador.apellido
+        ? `${datosComprador.nombre} ${datosComprador.apellido}`
+        : datosComprador.nombre 
+        || `${payment.payer?.first_name || 'Cliente'} ${payment.payer?.last_name || ''}`.trim()
+        || 'Cliente Webhook';
         
-      } catch (e) {
-        console.error('❌ Error procesando pedido con SP:', e.message);
-        throw e;
-      } finally { 
-        cli.release(); 
+      const correoCliente = datosComprador.email || payment.payer?.email || 'webhook@capristore.com';
+      const telefonoCliente = datosComprador.telefono || '';
+      const metodoPago = 'MercadoPago';
+      const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
+
+      console.log('🚀 Ejecutando stored procedure...');
+      console.log('📋 Datos:', {
+        idsString,
+        montoTotal,
+        nombreCompleto,
+        correoCliente,
+        telefonoCliente,
+        metodoPago,
+        tipoEntrega
+      });
+
+      // Ejecutar stored procedure
+      await dbClient.query(
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
+        [idsString, montoTotal, nombreCompleto, correoCliente, telefonoCliente, metodoPago, tipoEntrega]
+      );
+
+      console.log(`✅ Pedido creado exitosamente por webhook para payment ${id}`);
+
+      // Enviar correo de confirmación
+      if (correoCliente) {
+        try {
+          const resultadoEmail = await enviarCorreoConfirmacion(
+            { 
+              nombre: nombreCompleto,
+              email: correoCliente,
+              telefono: telefonoCliente,
+              tipoEntrega: tipoEntrega
+            },
+            productos.map(p => ({
+              nombre: p.nombre,
+              cantidad: p.cantidad,
+              precio: p.precio,
+              talle: p.talle || null
+            })),
+            montoTotal,
+            id
+          );
+          
+          if (resultadoEmail.success) {
+            console.log('✅ Correo enviado exitosamente desde webhook');
+          } else {
+            console.log('⚠️ Error enviando correo desde webhook:', resultadoEmail.error);
+          }
+        } catch (emailError) {
+          console.log('⚠️ Excepción enviando correo desde webhook:', emailError.message);
+        }
+      }
+
+    } catch (dbError) {
+      console.error('❌ Error de base de datos en webhook:', dbError.message);
+      throw dbError;
+    } finally {
+      if (dbClient) {
+        dbClient.release();
       }
     }
 
-    res.status(200).send('OK');
-  } catch (err) {
-    console.error('Error en /webhook:', err.message);
-    res.status(200).send('ERROR');
+    res.status(200).send('OK - PROCESSED');
+    
+  } catch (error) {
+    console.error('💥 Error crítico en webhook:', error.message);
+    console.error('Stack trace:', error.stack);
+    res.status(200).send('OK - ERROR'); // Siempre devolver 200 para que MP no reintente
   }
 });
 
@@ -868,6 +869,70 @@ app.get('/pedido/:paymentId', async (req, res) => {
     res.status(500).json({ 
       error: 'Error al consultar pedido',
       details: error.message 
+    });
+  }
+});
+
+// Nuevo endpoint para obtener el número real del pedido desde la tabla pedidos
+app.get('/numero-pedido/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
+    
+    const client = await pool.connect();
+    
+    try {
+      // Buscar en la tabla pedidos por el payment_id o referencia
+      const pedidoResult = await client.query(`
+        SELECT 
+          id_pedido,
+          numero_pedido,
+          fecha_pedido,
+          nombre_cliente,
+          total
+        FROM pedidos 
+        WHERE payment_id = $1 
+           OR external_reference = $1
+           OR id_pedido::text = $1
+        ORDER BY fecha_pedido DESC 
+        LIMIT 1
+      `, [paymentId]);
+      
+      if (pedidoResult.rows.length > 0) {
+        const pedido = pedidoResult.rows[0];
+        
+        // Calcular los últimos 2 dígitos del número real del pedido
+        const numeroCompleto = pedido.numero_pedido || pedido.id_pedido;
+        const ultimosDosDigitos = String(numeroCompleto).slice(-2).padStart(2, '0');
+        
+        console.log(`✅ Pedido encontrado - ID: ${numeroCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
+        
+        res.json({
+          existe: true,
+          numero_completo: numeroCompleto,
+          numero_display: ultimosDosDigitos,
+          nombre_cliente: pedido.nombre_cliente,
+          total: pedido.total,
+          fecha_pedido: pedido.fecha_pedido
+        });
+        
+      } else {
+        console.log(`❌ No se encontró pedido para payment ID: ${paymentId}`);
+        res.json({
+          existe: false,
+          message: 'Número de pedido no encontrado'
+        });
+      }
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error al consultar número de pedido:', error);
+    res.status(500).json({
+      error: 'Error al consultar número de pedido',
+      details: error.message
     });
   }
 });
