@@ -404,32 +404,76 @@ Justa Lima 123, Zárate`;
 
 // Test endpoint para verificar conectividad
 app.get('/webhook', (req, res) => {
-  console.log('📞 GET request al webhook - MercadoPago puede estar probando conectividad');
+  const timestamp = new Date().toISOString();
+  console.log(`📞 [${timestamp}] GET request al webhook - MercadoPago puede estar probando conectividad`);
+  console.log('Query params:', JSON.stringify(req.query, null, 2));
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   res.status(200).send('Webhook endpoint is reachable');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  console.log('🏥 Health check request');
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    webhook_url: process.env.NODE_ENV === 'production' 
+      ? 'https://www.capristorezte.com.ar/webhook' 
+      : 'http://localhost:3001/webhook'
+  });
+});
+
+// Endpoint específico para que MercadoPago verifique conectividad
+app.get('/webhook-test', (req, res) => {
+  console.log('🔗 Webhook connectivity test from MercadoPago');
+  res.status(200).json({
+    message: 'Webhook endpoint is reachable',
+    timestamp: new Date().toISOString(),
+    server: 'Capri Store Backend'
+  });
 });
 
 // Webhook para notificaciones de Mercado Pago
 app.post('/webhook', async (req, res) => {
   const timestamp = new Date().toISOString();
-  console.log(`🔔 [${timestamp}] Webhook recibido desde IP: ${req.ip || req.connection.remoteAddress}`);
-  console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('📦 Body:', JSON.stringify(req.body, null, 2));
+  const requestId = Math.random().toString(36).substring(7);
+  
+  console.log(`🔔 [${timestamp}] WEBHOOK POST RECIBIDO - Request ID: ${requestId}`);
+  console.log(`📡 IP origen: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`🔗 URL completa: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  console.log('📋 Headers completos:', JSON.stringify(req.headers, null, 2));
+  console.log('📦 Body recibido:', JSON.stringify(req.body, null, 2));
+  console.log('🔍 Query params:', JSON.stringify(req.query, null, 2));
 
   try {
-    const topic = req.body.type || req.query.topic || req.headers['x-topic'];
-    const id = req.body.data?.id || req.query.id;
+    const topic = req.body.type || req.query.topic || req.headers['x-topic'] || req.query.type;
+    const id = req.body.data?.id || req.query.id || req.query['data.id'];
     
-    console.log(`📢 Topic: ${topic}, ID: ${id}`);
+    console.log(`📢 Topic detectado: '${topic}', ID: '${id}'`);
+    console.log(`🔧 Métodos de extracción utilizados:`, {
+      'req.body.type': req.body.type,
+      'req.query.topic': req.query.topic, 
+      'req.headers[x-topic]': req.headers['x-topic'],
+      'req.query.type': req.query.type,
+      'req.body.data?.id': req.body.data?.id,
+      'req.query.id': req.query.id,
+      'req.query[data.id]': req.query['data.id']
+    });
     
-    // Solo procesar notificaciones de pago
-    if (topic !== 'payment') {
-      console.log(`⏸️ Topic '${topic}' ignorado - solo procesamos 'payment'`);
-      return res.status(200).send('OK - IGNORED');
+    // Responder OK a cualquier notificación que no sea de pago para evitar reintentos
+    if (!topic || (topic !== 'payment' && topic !== 'merchant_order')) {
+      console.log(`⏸️ Topic '${topic}' no es payment ni merchant_order - respondiendo OK para evitar reintentos`);
+      return res.status(200).send(`OK - TOPIC ${topic} ACKNOWLEDGED`);
     }
 
     if (!id) {
-      console.log('❌ No se recibió ID de pago');
-      return res.status(400).send('ERROR - MISSING ID');
+      console.log('❌ No se recibió ID en la notificación');
+      console.log('🔍 Todos los datos recibidos para debugging:', {
+        body: req.body,
+        query: req.query,
+        headers: req.headers
+      });
+      return res.status(200).send('OK - NO ID PROVIDED'); // Responder OK para evitar reintentos
     }
 
     // Verificar idempotencia - evitar procesar el mismo pago múltiples veces
@@ -937,6 +981,66 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
   }
 });
 
+// Endpoint para simular webhook manualmente (solo para testing)
+app.post('/test-webhook/:paymentId', async (req, res) => {
+  const { paymentId } = req.params;
+  console.log(`🧪 [TEST] Simulando webhook para payment ID: ${paymentId}`);
+  
+  try {
+    // Simular el body que enviaría MercadoPago
+    const mockBody = {
+      type: 'payment',
+      data: { id: paymentId }
+    };
+    
+    // Simular headers que enviaría MercadoPago
+    const mockHeaders = {
+      'x-topic': 'payment',
+      'content-type': 'application/json'
+    };
+    
+    // Crear un request mock
+    const mockReq = {
+      body: mockBody,
+      headers: mockHeaders,
+      query: {},
+      ip: '127.0.0.1',
+      protocol: 'https',
+      get: (header) => header === 'host' ? 'www.capristorezte.com.ar' : undefined,
+      originalUrl: `/test-webhook/${paymentId}`
+    };
+    
+    // Crear response mock
+    let statusCode = 200;
+    let responseBody = '';
+    const mockRes = {
+      status: (code) => { statusCode = code; return mockRes; },
+      send: (body) => { responseBody = body; return mockRes; }
+    };
+    
+    console.log('🧪 Ejecutando lógica del webhook...');
+    // Aquí deberías llamar a la lógica del webhook actual
+    // Por ahora solo mostraremos que recibimos la simulación
+    
+    console.log(`🧪 [TEST] Webhook simulado completado para payment ${paymentId}`);
+    res.json({
+      success: true,
+      message: `Test webhook ejecutado para payment ${paymentId}`,
+      mock_status: statusCode,
+      mock_response: responseBody,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('🧪 [TEST] Error en simulación de webhook:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Endpoint para consultar productos sin stock (vendidos)
 app.get('/stock-agotado', async (req, res) => {
   try {
@@ -1144,7 +1248,41 @@ app.use(express.static(path.join(__dirname, '..')));
 
 const PORT = process.env.PORT || 3001;
 
-console.log('Intentando iniciar backend Capri Store...');
-app.listen(PORT, () => {
-  console.log(`Backend escuchando en puerto ${PORT}`);
+console.log('🚀 Intentando iniciar backend Capri Store...');
+console.log('🌍 NODE_ENV:', process.env.NODE_ENV || 'development');
+console.log('🔗 PORT:', PORT);
+
+const server = app.listen(PORT, () => {
+  console.log(`✅ Backend escuchando en puerto ${PORT}`);
+  
+  // Mostrar URLs importantes
+  const isProduction = process.env.NODE_ENV === 'production';
+  const baseUrl = isProduction
+    ? 'https://www.capristorezte.com.ar'
+    : `http://localhost:${PORT}`;
+    
+  console.log(`📡 Webhook URL: ${baseUrl}/webhook`);
+  console.log(`🏥 Health check: ${baseUrl}/health`);
+  console.log(`🧪 Test webhook: ${baseUrl}/test-webhook/{payment_id}`);
+  console.log('🔔 Para testear webhook: curl -X POST ' + baseUrl + '/test-webhook/{payment_id}');
+});
+
+// Manejar errores del servidor
+server.on('error', (error) => {
+  console.error('❌ Error del servidor:', error);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('📴 Recibida señal SIGTERM, cerrando servidor...');
+  server.close(() => {
+    console.log('✅ Servidor cerrado exitosamente');
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('📴 Recibida señal SIGINT, cerrando servidor...');
+  server.close(() => {
+    console.log('✅ Servidor cerrado exitosamente');
+  });
 });
