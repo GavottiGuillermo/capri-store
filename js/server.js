@@ -877,7 +877,7 @@ app.post('/webhook', async (req, res) => {
         || 'webhook@capristore.com';
         
       const telefonoCliente = datosComprador.telefono || '';
-      const metodoPago = `MercadoPago ${id}`; // Incluir el payment ID
+      const metodoPago = 'MercadoPago'; // Solo "MercadoPago" aquí
       const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
 
       console.log('🚀 Ejecutando stored procedure...');
@@ -891,6 +891,9 @@ app.post('/webhook', async (req, res) => {
         tipoEntrega,
         paymentId: id // Agregar payment ID
       });
+
+      // VERIFICAR: El payment ID debe pasarse como 8vo parámetro
+      console.log(`🔍 Payment ID que se enviará: "${id}"`);
 
       // Ejecutar stored procedure con payment ID incluido (8 parámetros)
       const spPromise = dbClient.query(
@@ -1286,10 +1289,10 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       });
       
     } else {
-      console.log(`❌ No se encontró pedido para payment ID: ${paymentId} en columna payment_id`);
+      console.log(`❌ No se encontró pedido para payment ID: ${paymentId} en columna mp_payment_id`);
       
-      // Fallback: buscar usando otros métodos (tabla pagos con JOIN)
-      console.log(`🔍 Intentando fallback con tabla pagos...`);
+      // Fallback 1: buscar por timestamp reciente (último pedido creado)
+      console.log(`🔍 Intentando fallback: pedido más reciente...`);
       const fallbackResult = await executeQueryWithRetry(
         pool,
         `SELECT 
@@ -1300,16 +1303,12 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
           MAX(p.pedido_monto_total) as total,
           COUNT(*) as productos_count
          FROM productos p
-         LEFT JOIN pagos pg ON p.id_pago = pg.id_pago
          WHERE p.id_pedido IS NOT NULL 
-           AND (
-             pg.metodo_pago LIKE '%' || $1 || '%'
-             OR p.pedido_fecha >= NOW() - INTERVAL '5 minutes'
-           )
+           AND p.pedido_fecha >= NOW() - INTERVAL '2 minutes'
          GROUP BY p.id_pedido
          ORDER BY MAX(p.pedido_fecha) DESC
          LIMIT 1`,
-        [paymentId],
+        [],
         2
       );
       
