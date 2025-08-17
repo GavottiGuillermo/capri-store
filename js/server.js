@@ -771,55 +771,111 @@ app.post('/webhook', async (req, res) => {
       const productosIds = [];
       console.log('🔍 === INICIANDO EXTRACCIÓN DE IDs ===');
       
-      for (const [index, prod] of productos.entries()) {
-        console.log(`\n🔎 Producto ${index + 1}:`, {
-          id: prod.id,
-          nombre: prod.nombre,
-          cantidad: prod.cantidad,
-          precio: prod.precio
-        });
-        
-        let productId = prod.id;
-        console.log(`📋 ID inicial del producto: ${productId} (tipo: ${typeof productId})`);
-        
-        // Convertir a número si viene como string
-        if (productId && typeof productId === 'string') {
-          productId = parseInt(productId);
-          console.log(`🔄 ID convertido a número: ${productId}`);
-        }
-        
-        // Si el ID está presente y es válido, usarlo directamente
-        if (productId && !isNaN(productId) && productId > 0) {
-          const cantidad = parseInt(prod.cantidad) || 1;
-          console.log(`✅ ID válido encontrado: ${productId}, cantidad: ${cantidad}`);
+      // ESTRATEGIA 1: Usar metadata.itemsSimple si tiene IDs válidos
+      let idsExtraidos = false;
+      if (itemsSimple.length > 0) {
+        for (const [index, prod] of productos.entries()) {
+          console.log(`\n🔎 Producto ${index + 1}:`, {
+            id: prod.id,
+            nombre: prod.nombre,
+            cantidad: prod.cantidad,
+            precio: prod.precio
+          });
           
-          for (let i = 0; i < cantidad; i++) {
-            productosIds.push(productId);
+          let productId = prod.id;
+          console.log(`📋 ID inicial del producto: ${productId} (tipo: ${typeof productId})`);
+          
+          // Convertir a número si viene como string
+          if (productId && typeof productId === 'string') {
+            productId = parseInt(productId);
+            console.log(`🔄 ID convertido a número: ${productId}`);
           }
-          console.log(`✅ Agregado producto ID ${productId} (${cantidad} veces)`);
           
-        } else {
-          // Fallback: intentar extraer del nombre
-          console.log(`⚠️ ID no válido (${productId}), intentando extraer del nombre: "${prod.nombre}"`);
-          
-          const matchNombre = prod.nombre.match(/^(\d+)-/);
-          if (matchNombre) {
-            const extractedId = parseInt(matchNombre[1]);
-            console.log(`📝 ID extraído del nombre: ${extractedId}`);
-            
+          // Si el ID está presente y es válido, usarlo directamente
+          if (productId && !isNaN(productId) && productId > 0) {
             const cantidad = parseInt(prod.cantidad) || 1;
+            console.log(`✅ ID válido encontrado: ${productId}, cantidad: ${cantidad}`);
+            
             for (let i = 0; i < cantidad; i++) {
-              productosIds.push(extractedId);
+              productosIds.push(productId);
             }
-            console.log(`✅ Agregado producto ID ${extractedId} (${cantidad} veces) desde nombre`);
-          } else {
-            console.error(`❌ No se pudo extraer ID del producto: ${prod.nombre}`);
-            console.error(`❌ Datos completos del producto:`, JSON.stringify(prod, null, 2));
+            console.log(`✅ Agregado producto ID ${productId} (${cantidad} veces)`);
+            idsExtraidos = true;
           }
         }
       }
       
-      console.log('🎯 IDs finales extraídos:', productosIds);
+        // ESTRATEGIA 2: Si no hay IDs en metadata, usar mapeo por nombre y precio
+        if (!idsExtraidos) {
+          console.log('🔄 === FALLBACK: MAPEO POR NOMBRE Y PRECIO ===');
+          
+          // Intentar obtener mapeo dinámico desde la base de datos
+          try {
+            for (const [index, prod] of productos.entries()) {
+              console.log(`\n🔎 Fallback Producto ${index + 1}:`, {
+                nombre: prod.nombre,
+                precio: prod.precio
+              });
+              
+              const precio = parseFloat(prod.precio);
+              
+              // Buscar producto en BD por precio exacto
+              const { rows: productosDB } = await dbClient.query(
+                `SELECT id_articulo, prenda, precio_venta_transferencia 
+                 FROM productos 
+                 WHERE ABS(precio_venta_transferencia - $1) < 0.01 
+                   AND id_pedido IS NULL
+                 ORDER BY id_articulo ASC
+                 LIMIT 5`,
+                [precio]
+              );
+              
+              if (productosDB.length > 0) {
+                // Tomar el primer producto disponible con ese precio
+                const productId = productosDB[0].id_articulo;
+                const cantidad = parseInt(prod.cantidad) || 1;
+                
+                console.log(`✅ ID encontrado en BD: precio ${precio} -> ID ${productId} (${productosDB[0].prenda})`);
+                console.log(`📦 Productos disponibles con ese precio: ${productosDB.length}`);
+                
+                // Agregar solo la cantidad disponible
+                const cantidadDisponible = Math.min(cantidad, productosDB.length);
+                for (let i = 0; i < cantidadDisponible; i++) {
+                  productosIds.push(productosDB[i].id_articulo);
+                }
+                console.log(`✅ Agregados ${cantidadDisponible} productos con IDs por consulta BD`);
+                idsExtraidos = true;
+                
+              } else {
+                console.error(`❌ No se encontró producto en BD con precio: ${precio}`);
+              }
+            }
+          } catch (dbError) {
+            console.error('❌ Error consultando productos en BD:', dbError.message);
+            
+            // Fallback: mapeo hardcoded como última opción
+            console.log('🔄 === ÚLTIMO FALLBACK: MAPEO HARDCODED ===');
+            const productosConocidos = {
+              24000: 6,  // Vestido Media Noche
+              // Agregar más productos según sea necesario
+            };
+            
+            for (const [index, prod] of productos.entries()) {
+              const precio = parseFloat(prod.precio);
+              const productId = productosConocidos[precio];
+              
+              if (productId) {
+                const cantidad = parseInt(prod.cantidad) || 1;
+                console.log(`✅ ID encontrado por mapeo hardcoded: ${precio} -> ID ${productId}, cantidad: ${cantidad}`);
+                
+                for (let i = 0; i < cantidad; i++) {
+                  productosIds.push(productId);
+                }
+                idsExtraidos = true;
+              }
+            }
+          }
+        }      console.log('🎯 IDs finales extraídos:', productosIds);
       console.log('📊 Total de productos con ID:', productosIds.length);
 
       if (productosIds.length === 0) {
