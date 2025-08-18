@@ -10,13 +10,7 @@
     <!-- Favicon-->
     <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel=            if (orderId) {
-                // Esperar un poco más para asegurar que el pedido esté completamente procesado
-                console.log('⏰ Esperando 4 segundos antes de consultar número de pedido...');
-                setTimeout(() => {
-                    consultarNumeroPedidoReal(orderId, numeroPedidoDiv);
-                }, 4000);
-            } else {heet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome-->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
     <!-- Custom CSS -->
@@ -198,7 +192,12 @@
         
         // Función para mostrar los detalles de la compra
         function mostrarDetallesCompra() {
-            const productosCompra = JSON.parse(localStorage.getItem('productosCompra') || '[]');
+            // Usar la misma lógica que el resto del código para obtener productos
+            const checkoutData = JSON.parse(localStorage.getItem('checkoutData') || 'null');
+            const carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+            const productosCompra = (checkoutData && Array.isArray(checkoutData.items) && checkoutData.items.length > 0)
+                ? checkoutData.items
+                : carrito; // fallback
             const totalCompra = localStorage.getItem('totalCompra');
             const costoEnvio = parseFloat(localStorage.getItem('costoEnvio') || '0');
             
@@ -546,10 +545,10 @@
             
             if (orderId) {
                 // Esperar tiempo suficiente para asegurar que el pedido esté completamente procesado
-                console.log('⏰ Esperando 8 segundos antes de consultar número de pedido...');
+                console.log('⏰ Esperando 12 segundos antes de consultar número de pedido...');
                 setTimeout(() => {
                     consultarNumeroPedidoReal(orderId, numeroPedidoDiv, 1);
-                }, 8000);
+                }, 12000);
             } else {
                 // Si no hay orderId, mostrar número genérico basado en timestamp
                 const now = Date.now();
@@ -561,17 +560,24 @@
         // Función para consultar el número real del pedido desde la base de datos
         async function consultarNumeroPedidoReal(paymentId, numeroPedidoDiv, intento = 1) {
             try {
-                console.log(`🔍 Consultando pedido para payment ID: ${paymentId} (intento ${intento})`);
+                console.log(`🔍 === INTENTO ${intento}/3 - CONSULTANDO NÚMERO DE PEDIDO ===`);
+                console.log(`💳 Payment ID: ${paymentId}`);
+                console.log(`⏰ Timestamp actual: ${new Date().toISOString()}`);
                 
                 // Detectar entorno
                 const isProduction = window.location.hostname.includes('capristorezte.com.ar');
                 const API_BASE = isProduction ? 'https://capri-store.onrender.com' : '';
+                console.log(`🌐 Entorno: ${isProduction ? 'PRODUCCIÓN' : 'DESARROLLO'}`);
+                console.log(`🔗 API Base: ${API_BASE}`);
                 
                 // PASO 1: Buscar por payment ID con timeout
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
-                const response = await fetch(`${API_BASE}/numero-pedido/${paymentId}`, {
+                const consultaUrl = `${API_BASE}/numero-pedido/${paymentId}`;
+                console.log(`📡 Consultando URL: ${consultaUrl}`);
+                
+                const response = await fetch(consultaUrl, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' },
                     signal: controller.signal
@@ -649,19 +655,15 @@
                 
                 // PASO 4: Fallback final después de todos los reintentos
                 console.log('❌ FALLBACK - No se encontró pedido después de 3 intentos');
-                const ahora = new Date();
-                const numeroFallback = String(ahora.getMinutes()).padStart(2, '0');
-                console.log(`🆘 Usando minutos actuales: ${numeroFallback}`);
-                mostrarNumeroPedidoEnPantalla(numeroFallback, numeroPedidoDiv, `TEMP-${numeroFallback}`);
+                console.log(`🆘 Usando número genérico: 01`);
+                mostrarNumeroPedidoEnPantalla('01', numeroPedidoDiv, `TEMP-01`);
                 
             } catch (error) {
                 console.error('❌ ERROR CRÍTICO:', error.message);
                 
                 // Fallback: mostrar número genérico
-                const ahora = new Date();
-                const numeroFallback = String(ahora.getMinutes()).padStart(2, '0');
-                console.log(`🆘 Error - usando minutos: ${numeroFallback}`);
-                mostrarNumeroPedidoEnPantalla(numeroFallback, numeroPedidoDiv, `ERROR-${numeroFallback}`);
+                console.log(`🆘 Error - usando número genérico: 01`);
+                mostrarNumeroPedidoEnPantalla('01', numeroPedidoDiv, `ERROR-01`);
             }
         }
 
