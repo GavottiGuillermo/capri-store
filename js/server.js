@@ -892,11 +892,22 @@ app.post('/webhook', async (req, res) => {
         || payment.payer?.email 
         || 'webhook@capristore.com';
         
-      const telefonoCliente = datosComprador.telefono || '';
+      const telefonoCliente = datosComprador.telefono 
+        || additionalInfoPayer.phone?.number 
+        || additionalInfoPayer.phone 
+        || payment.payer?.phone?.number 
+        || payment.payer?.phone
+        || '0000000000'; // Teléfono por defecto para webhooks sin teléfono
       const metodoPago = 'MercadoPago'; // Solo "MercadoPago" aquí
       const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
 
       console.log('🚀 Ejecutando stored procedure...');
+      console.log('📋 Datos del comprador disponibles:', {
+        'datosComprador.telefono': datosComprador.telefono,
+        'additionalInfoPayer.phone': additionalInfoPayer.phone,
+        'payment.payer.phone': payment.payer?.phone,
+        'telefonoCliente_final': telefonoCliente
+      });
       console.log('📋 Datos:', {
         idsString,
         montoTotal,
@@ -1712,8 +1723,7 @@ app.post('/crear-pedido-sp', async (req, res) => {
     
     console.log('📦 Productos recibidos:', productos?.length || 0);
     console.log('💰 Monto total:', monto_total);
-    console.log('📞 Teléfono cliente:', telefono_cliente);
-    console.log('💳 Payment ID recibido:', mp_payment_id);
+    console.log(' Payment ID recibido:', mp_payment_id);
     
     if (!productos?.length || !monto_total || !nombre_cliente || !correo_cliente) {
       return res.status(400).json({ success: false, error: 'Faltan datos requeridos' });
@@ -1722,19 +1732,7 @@ app.post('/crear-pedido-sp', async (req, res) => {
     // Extraer IDs de productos directamente del carrito
     const productosIds = [];
     
-    console.log('🔍 === ANÁLISIS DETALLADO DE PRODUCTOS ===');
-    productos.forEach((prod, index) => {
-      console.log(`Producto ${index + 1}:`, JSON.stringify(prod, null, 2));
-    });
-    
     for (const prod of productos) {
-      console.log(`\n🔎 Procesando producto:`, {
-        id: prod.id,
-        nombre: prod.nombre,
-        img: prod.img,
-        cantidad: prod.cantidad
-      });
-      
       // El ID del producto puede venir de varias fuentes
       let idProducto = prod.id;
       
@@ -1744,7 +1742,6 @@ app.post('/crear-pedido-sp', async (req, res) => {
         const matchNombre = prod.nombre.match(/^(\d+)-/);
         if (matchNombre) {
           idProducto = parseInt(matchNombre[1]);
-          console.log(`📝 ID extraído del nombre: ${idProducto}`);
         }
       }
       
@@ -1753,7 +1750,6 @@ app.post('/crear-pedido-sp', async (req, res) => {
         const matchImg = prod.img.match(/\/(\d+)-[^/]+\.(jpg|jpeg|png|webp)/i);
         if (matchImg) {
           idProducto = parseInt(matchImg[1]);
-          console.log(`📝 ID extraído de la imagen: ${idProducto} desde ${prod.img}`);
         }
       }
       
@@ -1762,60 +1758,34 @@ app.post('/crear-pedido-sp', async (req, res) => {
         const matchTitle = prod.title.match(/^(\d+)-/);
         if (matchTitle) {
           idProducto = parseInt(matchTitle[1]);
-          console.log(`📝 ID extraído del título: ${idProducto}`);
-        }
-      }
-      
-      // 5. Último intento: buscar cualquier número al inicio del nombre
-      if (!idProducto && prod.nombre) {
-        const matchNumero = prod.nombre.match(/(\d+)/);
-        if (matchNumero) {
-          idProducto = parseInt(matchNumero[1]);
-          console.log(`📝 ID extraído como primer número del nombre: ${idProducto}`);
         }
       }
       
       if (idProducto) {
         const cantidad = parseInt(prod.cantidad) || 1;
-        console.log(`✅ Agregando ${cantidad} unidades del producto ID: ${idProducto}`);
         
         // Agregar el ID tantas veces como cantidad se solicite
         for (let i = 0; i < cantidad; i++) {
           productosIds.push(idProducto);
         }
-      } else {
-        console.error(`❌ No se pudo extraer ID del producto:`, {
-          nombre: prod.nombre,
-          img: prod.img,
-          id: prod.id
-        });
       }
     }
     
-    if (productosIds.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No se pudieron extraer los IDs de los productos del carrito' 
-      });
-    }
-    
     const idsString = productosIds.join(',');
-    console.log('🆔 IDs de productos para SP:', idsString);
+    console.log('🆔 IDs para SP:', idsString);
     
     const dbClient = await pool.connect();
     try {
       // Llamar al stored procedure directamente con los IDs del carrito incluyendo teléfono y payment ID
       // NOTA: Ahora recibimos mp_payment_id desde el frontend cuando está disponible
-      console.log('🔍 Payment ID que se enviará al SP:', mp_payment_id || 'null (llamada sin payment ID)');
+      console.log('🔍 Payment ID para SP:', mp_payment_id || 'null');
       
       await dbClient.query(
         'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
         [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, telefono_cliente || '', metodo_pago, tipo_entrega, mp_payment_id]
       );
       
-      console.log('✅ Stored procedure ejecutado exitosamente');
-      console.log('✅ Productos procesados:', productosIds.length);
-      console.log('✅ Payment ID procesado:', mp_payment_id ? `"${mp_payment_id}"` : 'null');
+      console.log('✅ SP ejecutado - Productos:', productosIds.length, 'Payment ID:', mp_payment_id || 'null');
       
       res.json({
         success: true,
