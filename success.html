@@ -10,7 +10,13 @@
     <!-- Favicon-->
     <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel=            if (orderId) {
+                // Esperar un poco más para asegurar que el pedido esté completamente procesado
+                console.log('⏰ Esperando 4 segundos antes de consultar número de pedido...');
+                setTimeout(() => {
+                    consultarNumeroPedidoReal(orderId, numeroPedidoDiv);
+                }, 4000);
+            } else {heet">
     <!-- Font Awesome-->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
     <!-- Custom CSS -->
@@ -172,8 +178,8 @@
                         // Si tenemos todos los datos, crear el pedido en la base de datos
                         if (paymentId && productos.length > 0 && checkoutData && checkoutData.nombre && totalCompra) {
                           // Verificar primero si el pedido ya fue procesado por el webhook
-                          console.log('⏰ Esperando 3 segundos para dar tiempo al procesamiento...');
-                          await new Promise(resolve => setTimeout(resolve, 3000));
+                          console.log('⏰ Esperando 6 segundos para dar tiempo al procesamiento...');
+                          await new Promise(resolve => setTimeout(resolve, 6000));
                           await verificarYCrearPedido(paymentId, productos, totalCompra, checkoutData);
             } else {
                 // Si no tenemos todos los datos, solo confirmar que el pago fue exitoso
@@ -324,24 +330,18 @@
     async function crearPedidoEnBD(paymentId, productos, total, datosComprador) {
             const startTime = Date.now();
             console.log('🚀 === INICIANDO CREACIÓN PEDIDO EN BD ===');
-            console.log('⏰ Timestamp:', new Date().toISOString());
-            console.log('🌐 Location:', window.location.href);
-            console.log('🌍 Hostname:', window.location.hostname);
             
             try {
-                // Validación simplificada de datos
-                console.log('🔍 === VALIDACIÓN DATOS ENTRADA ===');
-                console.log('paymentId:', paymentId, typeof paymentId);
-                console.log('productos:', productos ? 'Array con ' + productos.length + ' items' : 'undefined/null');
+                // Validación de datos
+                console.log('🔍 Validando datos de entrada...');
                 
                 if (!productos || productos.length === 0) {
                     throw new Error('Lista de productos vacía o faltante');
                 }
                 
-                console.log('✅ Validación de datos exitosa');
+                console.log('✅ Validación exitosa');
                 
-                // Detectar entorno y configurar API
-                console.log('🌐 === CONFIGURACIÓN ENTORNO ===');
+                // Detectar entorno
                 const isProduction = window.location.hostname.includes('capristorezte.com.ar');
                 const API_BASE = isProduction
                     ? 'https://capri-store.onrender.com'
@@ -545,11 +545,11 @@
             const numeroPedidoDiv = document.getElementById('numero-pedido');
             
             if (orderId) {
-                // Esperar un poco para asegurar que el pedido esté completamente procesado
-                console.log('⏰ Esperando 2 segundos antes de consultar número de pedido...');
+                // Esperar tiempo suficiente para asegurar que el pedido esté completamente procesado
+                console.log('⏰ Esperando 8 segundos antes de consultar número de pedido...');
                 setTimeout(() => {
-                    consultarNumeroPedidoReal(orderId, numeroPedidoDiv);
-                }, 2000);
+                    consultarNumeroPedidoReal(orderId, numeroPedidoDiv, 1);
+                }, 8000);
             } else {
                 // Si no hay orderId, mostrar número genérico basado en timestamp
                 const now = Date.now();
@@ -559,27 +559,17 @@
         }
 
         // Función para consultar el número real del pedido desde la base de datos
-        async function consultarNumeroPedidoReal(paymentId, numeroPedidoDiv) {
+        async function consultarNumeroPedidoReal(paymentId, numeroPedidoDiv, intento = 1) {
             try {
-                console.log(`🔍 === INICIANDO CONSULTA NÚMERO PEDIDO ===`);
-                console.log(`💳 Payment ID: ${paymentId}`);
-                console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+                console.log(`🔍 Consultando pedido para payment ID: ${paymentId} (intento ${intento})`);
                 
                 // Detectar entorno
                 const isProduction = window.location.hostname.includes('capristorezte.com.ar');
                 const API_BASE = isProduction ? 'https://capri-store.onrender.com' : '';
                 
-                console.log(`🌐 API Base: ${API_BASE}`);
-                console.log(`🔗 URL completa: ${API_BASE}/numero-pedido/${paymentId}`);
-                
-                // PASO 1: Intentar buscar por payment ID con mayor timeout
-                console.log(`🔍 PASO 1: Buscando por payment ID...`);
-                
+                // PASO 1: Buscar por payment ID con timeout
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => {
-                    console.log('⏰ Timeout de 10 segundos alcanzado para consulta número pedido');
-                    controller.abort();
-                }, 10000); // 10 segundos de timeout
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
                 const response = await fetch(`${API_BASE}/numero-pedido/${paymentId}`, {
                     method: 'GET',
@@ -589,56 +579,41 @@
                 
                 clearTimeout(timeoutId);
                 
-                console.log(`📥 Response status: ${response.status}`);
-                console.log(`📥 Response ok: ${response.ok}`);
+                console.log(`📥 Response: ${response.status} ${response.ok ? 'OK' : 'ERROR'}`);
                 
                 if (response.ok) {
                     const resultado = await response.json();
-                    console.log(`📋 Resultado completo:`, JSON.stringify(resultado, null, 2));
+                    console.log(`📋 Resultado:`, resultado);
                     
                     if (resultado.existe) {
-                        console.log(`✅ PEDIDO ENCONTRADO!`);
-                        console.log(`📋 ID pedido completo: ${resultado.id_pedido_completo}`);
-                        console.log(`🔢 Número display: ${resultado.numero_display}`);
-                        console.log(`📞 Teléfono cliente: ${resultado.telefono_cliente}`);
-                        console.log(`🔍 Método de búsqueda: ${resultado.metodo_busqueda || 'normal'}`);
-                        
+                        console.log(`✅ ENCONTRADO: ${resultado.id_pedido_completo} -> ${resultado.numero_display}`);
                         mostrarNumeroPedidoEnPantalla(resultado.numero_display, numeroPedidoDiv, resultado.id_pedido_completo);
                         return; // ✅ Encontrado, salir
                     } else {
-                        console.log(`❌ PEDIDO NO ENCONTRADO en base de datos`);
-                        console.log(`🔍 Payment ID consultado: ${resultado.payment_id_consultado}`);
+                        console.log(`❌ NO EXISTE en BD para payment ID: ${paymentId}`);
                     }
                 } else {
-                    console.log(`❌ Error HTTP: ${response.status} ${response.statusText}`);
                     const errorText = await response.text();
-                    console.log(`📄 Error response text: ${errorText}`);
+                    console.log(`❌ Error HTTP: ${response.status} - ${errorText}`);
                 }
                 
-                // PASO 2: Si no encontró por payment ID, intentar por artículos del carrito
-                console.log('🔍 PASO 2: Intentando por artículos del carrito...');
+                // PASO 2: Buscar por artículos del carrito
+                console.log('� Intentando por artículos...');
                 const carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
                 const checkoutData = JSON.parse(localStorage.getItem('checkoutData') || 'null');
                 
-                console.log('🛒 Carrito:', carrito);
-                console.log('🛒 CheckoutData:', checkoutData);
-                
-                // Extraer IDs de artículos del carrito o checkoutData
                 let articulosIds = [];
-                
                 if (checkoutData && checkoutData.items) {
                     articulosIds = checkoutData.items
                         .map(item => parseInt(item.id))
                         .filter(id => !isNaN(id) && id > 0);
-                    console.log('🛒 IDs desde checkoutData:', articulosIds);
                 } else if (carrito && carrito.length > 0) {
                     articulosIds = carrito
                         .map(item => parseInt(item.id))
                         .filter(id => !isNaN(id) && id > 0);
-                    console.log('🛒 IDs desde carrito:', articulosIds);
                 }
                 
-                console.log(`🛒 IDs de artículos finales: ${articulosIds}`);
+                console.log(`🛒 IDs artículos: ${articulosIds}`);
                 
                 if (articulosIds.length > 0) {
                     try {
@@ -650,40 +625,42 @@
                         
                         if (articulosResponse.ok) {
                             const resultadoArticulos = await articulosResponse.json();
-                            console.log('🛒 Resultado búsqueda por artículos:', resultadoArticulos);
+                            console.log('🛒 Resultado artículos:', resultadoArticulos);
                             
                             if (resultadoArticulos.existe) {
-                                console.log(`✅ PEDIDO ENCONTRADO POR ARTÍCULOS: ${resultadoArticulos.id_pedido_completo}`);
-                                console.log(`🛒 Artículos encontrados: ${resultadoArticulos.articulos_encontrados}`);
+                                console.log(`✅ ENCONTRADO POR ARTÍCULOS: ${resultadoArticulos.id_pedido_completo} -> ${resultadoArticulos.numero_display}`);
                                 mostrarNumeroPedidoEnPantalla(resultadoArticulos.numero_display, numeroPedidoDiv, resultadoArticulos.id_pedido_completo);
                                 return; // ✅ Encontrado, salir
                             }
                         }
                     } catch (articulosError) {
-                        console.error('❌ Error buscando por artículos:', articulosError);
+                        console.error('❌ Error búsqueda artículos:', articulosError.message);
                     }
                 }
                 
-                // PASO 3: Fallback final
-                console.log('⚠️ === FALLBACK FINAL ===');
-                console.log('❌ No se encontró pedido por ningún método');
+                // PASO 3: Reintentar si es el primer o segundo intento
+                if (intento <= 2) {
+                    console.log(`🔄 Reintentando en 3 segundos... (intento ${intento + 1}/3)`);
+                    setTimeout(() => {
+                        consultarNumeroPedidoReal(paymentId, numeroPedidoDiv, intento + 1);
+                    }, 3000);
+                    return;
+                }
+                
+                // PASO 4: Fallback final después de todos los reintentos
+                console.log('❌ FALLBACK - No se encontró pedido después de 3 intentos');
                 const ahora = new Date();
                 const numeroFallback = String(ahora.getMinutes()).padStart(2, '0');
-                console.log(`🆘 Usando número fallback basado en minutos actuales: ${numeroFallback}`);
-                console.log(`🕐 Minutos actuales: ${ahora.getMinutes()}`);
+                console.log(`🆘 Usando minutos actuales: ${numeroFallback}`);
                 mostrarNumeroPedidoEnPantalla(numeroFallback, numeroPedidoDiv, `TEMP-${numeroFallback}`);
                 
             } catch (error) {
-                console.error('❌ === ERROR CRÍTICO EN CONSULTA ===');
-                console.error('Error tipo:', error.constructor.name);
-                console.error('Error mensaje:', error.message);
-                console.error('Error stack:', error.stack);
+                console.error('❌ ERROR CRÍTICO:', error.message);
                 
-                // Fallback: mostrar número genérico basado en timestamp
+                // Fallback: mostrar número genérico
                 const ahora = new Date();
                 const numeroFallback = String(ahora.getMinutes()).padStart(2, '0');
-                console.log(`🆘 Error crítico - usando número fallback: ${numeroFallback}`);
-                console.log(`🕐 Minutos actuales: ${ahora.getMinutes()}`);
+                console.log(`🆘 Error - usando minutos: ${numeroFallback}`);
                 mostrarNumeroPedidoEnPantalla(numeroFallback, numeroPedidoDiv, `ERROR-${numeroFallback}`);
             }
         }
