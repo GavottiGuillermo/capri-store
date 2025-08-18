@@ -274,13 +274,9 @@ app.post('/crear-preferencia', async (req, res) => {
       },
       auto_return: "approved",
       site_id: "MLA",
-      purpose: "wallet_purchase",
-      binary_mode: false,
+      binary_mode: true,
       statement_descriptor: "CAPRI STORE",
-      marketplace: "NONE",
-      marketplace_fee: 0,
       external_reference: "capri-" + Date.now() + "-ids-" + items.map(i => `${i.id}x${i.quantity}`).join(","),
-      expires: false,
       payer: {
         name: datosCompradorMeta?.nombre || "Cliente",
         surname: datosCompradorMeta?.apellido || "Capri Store"
