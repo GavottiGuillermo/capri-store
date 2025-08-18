@@ -172,6 +172,8 @@
                         // Si tenemos todos los datos, crear el pedido en la base de datos
                         if (paymentId && productos.length > 0 && checkoutData && checkoutData.nombre && totalCompra) {
                           // Verificar primero si el pedido ya fue procesado por el webhook
+                          console.log('⏰ Esperando 3 segundos para dar tiempo al procesamiento...');
+                          await new Promise(resolve => setTimeout(resolve, 3000));
                           await verificarYCrearPedido(paymentId, productos, totalCompra, checkoutData);
             } else {
                 // Si no tenemos todos los datos, solo confirmar que el pago fue exitoso
@@ -543,8 +545,11 @@
             const numeroPedidoDiv = document.getElementById('numero-pedido');
             
             if (orderId) {
-                // Consultar el número real del pedido
-                consultarNumeroPedidoReal(orderId, numeroPedidoDiv);
+                // Esperar un poco para asegurar que el pedido esté completamente procesado
+                console.log('⏰ Esperando 2 segundos antes de consultar número de pedido...');
+                setTimeout(() => {
+                    consultarNumeroPedidoReal(orderId, numeroPedidoDiv);
+                }, 2000);
             } else {
                 // Si no hay orderId, mostrar número genérico basado en timestamp
                 const now = Date.now();
@@ -556,34 +561,67 @@
         // Función para consultar el número real del pedido desde la base de datos
         async function consultarNumeroPedidoReal(paymentId, numeroPedidoDiv) {
             try {
-                console.log(`🔍 Consultando número real del pedido para payment ID: ${paymentId}`);
+                console.log(`🔍 === INICIANDO CONSULTA NÚMERO PEDIDO ===`);
+                console.log(`💳 Payment ID: ${paymentId}`);
+                console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
                 
                 // Detectar entorno
                 const isProduction = window.location.hostname.includes('capristorezte.com.ar');
                 const API_BASE = isProduction ? 'https://capri-store.onrender.com' : '';
                 
-                // PASO 1: Intentar buscar por payment ID
+                console.log(`🌐 API Base: ${API_BASE}`);
+                console.log(`🔗 URL completa: ${API_BASE}/numero-pedido/${paymentId}`);
+                
+                // PASO 1: Intentar buscar por payment ID con mayor timeout
+                console.log(`🔍 PASO 1: Buscando por payment ID...`);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    console.log('⏰ Timeout de 10 segundos alcanzado para consulta número pedido');
+                    controller.abort();
+                }, 10000); // 10 segundos de timeout
+                
                 const response = await fetch(`${API_BASE}/numero-pedido/${paymentId}`, {
                     method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
+                
+                console.log(`📥 Response status: ${response.status}`);
+                console.log(`📥 Response ok: ${response.ok}`);
                 
                 if (response.ok) {
                     const resultado = await response.json();
+                    console.log(`📋 Resultado completo:`, JSON.stringify(resultado, null, 2));
                     
                     if (resultado.existe) {
-                        console.log(`✅ Número de pedido encontrado: ${resultado.id_pedido_completo} -> ${resultado.numero_display}`);
+                        console.log(`✅ PEDIDO ENCONTRADO!`);
+                        console.log(`📋 ID pedido completo: ${resultado.id_pedido_completo}`);
+                        console.log(`🔢 Número display: ${resultado.numero_display}`);
                         console.log(`📞 Teléfono cliente: ${resultado.telefono_cliente}`);
                         console.log(`🔍 Método de búsqueda: ${resultado.metodo_busqueda || 'normal'}`);
+                        
                         mostrarNumeroPedidoEnPantalla(resultado.numero_display, numeroPedidoDiv, resultado.id_pedido_completo);
                         return; // ✅ Encontrado, salir
+                    } else {
+                        console.log(`❌ PEDIDO NO ENCONTRADO en base de datos`);
+                        console.log(`🔍 Payment ID consultado: ${resultado.payment_id_consultado}`);
                     }
+                } else {
+                    console.log(`❌ Error HTTP: ${response.status} ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.log(`📄 Error response text: ${errorText}`);
                 }
                 
                 // PASO 2: Si no encontró por payment ID, intentar por artículos del carrito
-                console.log('⚠️ No se encontró por payment ID, intentando por artículos del carrito...');
+                console.log('🔍 PASO 2: Intentando por artículos del carrito...');
                 const carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
                 const checkoutData = JSON.parse(localStorage.getItem('checkoutData') || 'null');
+                
+                console.log('🛒 Carrito:', carrito);
+                console.log('🛒 CheckoutData:', checkoutData);
                 
                 // Extraer IDs de artículos del carrito o checkoutData
                 let articulosIds = [];
@@ -592,46 +630,60 @@
                     articulosIds = checkoutData.items
                         .map(item => parseInt(item.id))
                         .filter(id => !isNaN(id) && id > 0);
+                    console.log('🛒 IDs desde checkoutData:', articulosIds);
                 } else if (carrito && carrito.length > 0) {
                     articulosIds = carrito
                         .map(item => parseInt(item.id))
                         .filter(id => !isNaN(id) && id > 0);
+                    console.log('🛒 IDs desde carrito:', articulosIds);
                 }
                 
-                console.log(`🛒 IDs de artículos del carrito para buscar: ${articulosIds}`);
+                console.log(`🛒 IDs de artículos finales: ${articulosIds}`);
                 
                 if (articulosIds.length > 0) {
-                    const articulosResponse = await fetch(`${API_BASE}/numero-pedido-por-articulos`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ articulos_ids: articulosIds })
-                    });
-                    
-                    if (articulosResponse.ok) {
-                        const resultadoArticulos = await articulosResponse.json();
+                    try {
+                        const articulosResponse = await fetch(`${API_BASE}/numero-pedido-por-articulos`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ articulos_ids: articulosIds })
+                        });
                         
-                        if (resultadoArticulos.existe) {
-                            console.log(`✅ Pedido encontrado por artículos: ${resultadoArticulos.id_pedido_completo}`);
-                            console.log(`🛒 Artículos encontrados: ${resultadoArticulos.articulos_encontrados}`);
-                            mostrarNumeroPedidoEnPantalla(resultadoArticulos.numero_display, numeroPedidoDiv, resultadoArticulos.id_pedido_completo);
-                            return; // ✅ Encontrado, salir
+                        if (articulosResponse.ok) {
+                            const resultadoArticulos = await articulosResponse.json();
+                            console.log('🛒 Resultado búsqueda por artículos:', resultadoArticulos);
+                            
+                            if (resultadoArticulos.existe) {
+                                console.log(`✅ PEDIDO ENCONTRADO POR ARTÍCULOS: ${resultadoArticulos.id_pedido_completo}`);
+                                console.log(`🛒 Artículos encontrados: ${resultadoArticulos.articulos_encontrados}`);
+                                mostrarNumeroPedidoEnPantalla(resultadoArticulos.numero_display, numeroPedidoDiv, resultadoArticulos.id_pedido_completo);
+                                return; // ✅ Encontrado, salir
+                            }
                         }
+                    } catch (articulosError) {
+                        console.error('❌ Error buscando por artículos:', articulosError);
                     }
                 }
                 
                 // PASO 3: Fallback final
-                console.log('⚠️ No se encontró pedido por ningún método');
+                console.log('⚠️ === FALLBACK FINAL ===');
+                console.log('❌ No se encontró pedido por ningún método');
                 const ahora = new Date();
                 const numeroFallback = String(ahora.getMinutes()).padStart(2, '0');
                 console.log(`🆘 Usando número fallback basado en minutos actuales: ${numeroFallback}`);
+                console.log(`🕐 Minutos actuales: ${ahora.getMinutes()}`);
                 mostrarNumeroPedidoEnPantalla(numeroFallback, numeroPedidoDiv, `TEMP-${numeroFallback}`);
                 
             } catch (error) {
-                console.error('❌ Error consultando número de pedido:', error);
+                console.error('❌ === ERROR CRÍTICO EN CONSULTA ===');
+                console.error('Error tipo:', error.constructor.name);
+                console.error('Error mensaje:', error.message);
+                console.error('Error stack:', error.stack);
+                
                 // Fallback: mostrar número genérico basado en timestamp
                 const ahora = new Date();
                 const numeroFallback = String(ahora.getMinutes()).padStart(2, '0');
-                console.log(`🆘 Error en consulta - usando número fallback: ${numeroFallback}`);
+                console.log(`🆘 Error crítico - usando número fallback: ${numeroFallback}`);
+                console.log(`🕐 Minutos actuales: ${ahora.getMinutes()}`);
                 mostrarNumeroPedidoEnPantalla(numeroFallback, numeroPedidoDiv, `ERROR-${numeroFallback}`);
             }
         }
