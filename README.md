@@ -25,20 +25,20 @@ cp .env.example .env
 ### 2. Configurar Zoho Mail para correos automáticos
 ```env
 # Email principal de Capri Store
-EMAIL_USER=contacto@capristore.com.ar
+SMTP_USER=contacto@capristore.com.ar
 
 # Contraseña de aplicación de Zoho (NO tu contraseña normal)
-EMAIL_PASS=tu_contraseña_de_aplicacion_zoho
+SMTP_PASS=tu_contraseña_de_aplicacion_zoho
 
 # Emails administrativos que recibirán consultas
 ADMIN_EMAILS=gavottiguillermo@gmail.com,luisinaolivieri.lo@gmail.com
 ```
 
-**⚠️ IMPORTANTE**: Para `EMAIL_PASS` debes usar una **contraseña específica de aplicación**:
+**⚠️ IMPORTANTE**: Para `SMTP_PASS` debes usar una **contraseña específica de aplicación**:
 1. Ve a [Zoho Mail](https://mail.zoho.com) → Configuración → Seguridad
 2. Busca "Contraseñas de aplicación" o "App Passwords"
 3. Genera una nueva contraseña para "Aplicación de correo"
-4. Usa esa contraseña generada en `EMAIL_PASS`
+4. Usa esa contraseña generada en `SMTP_PASS`
 
 ### 3. Configurar Mercado Pago
 ```env

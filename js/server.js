@@ -15,14 +15,14 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 console.log('🔧 === VALIDANDO CONFIGURACIÓN ===');
 
 // Verificar variables de email
-if (!process.env.EMAIL_USER) {
-  console.error('❌ EMAIL_USER no configurado en variables de entorno');
-  console.error('💡 Configura tu email de Zoho en la variable EMAIL_USER');
+if (!process.env.SMTP_USER) {
+  console.error('❌ SMTP_USER no configurado en variables de entorno');
+  console.error('💡 Configura tu email de Zoho en la variable SMTP_USER');
 }
 
-if (!process.env.EMAIL_PASS) {
-  console.error('❌ EMAIL_PASS no configurado en variables de entorno');
-  console.error('💡 Configura tu contraseña de aplicación de Zoho en EMAIL_PASS');
+if (!process.env.SMTP_PASS) {
+  console.error('❌ SMTP_PASS no configurado en variables de entorno');
+  console.error('💡 Configura tu contraseña de aplicación de Zoho en SMTP_PASS');
 }
 
 if (!process.env.ADMIN_EMAILS) {
@@ -36,7 +36,7 @@ if (!process.env.ADMIN_EMAILS) {
   });
 }
 
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.ADMIN_EMAILS) {
+if (process.env.SMTP_USER && process.env.SMTP_PASS && process.env.ADMIN_EMAILS) {
   console.log('✅ Configuración de correos: COMPLETA');
 } else {
   console.log('⚠️ Configuración de correos: INCOMPLETA - Algunas funciones de email no funcionarán');
@@ -431,15 +431,15 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
   
   try {
     // Verificar credenciales
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
       console.error('❌ Credenciales de email no configuradas');
       throw new Error('Credenciales de email no configuradas');
     }
 
     // Verificar si la contraseña no es la de placeholder
-    if (process.env.EMAIL_PASS === 'tu_contraseña_de_aplicacion_zoho_aqui') {
-      console.error('❌ EMAIL_PASS contiene valor de placeholder - necesita configuración real');
-      throw new Error('EMAIL_PASS necesita ser configurado con una contraseña de aplicación válida de Zoho');
+    if (process.env.SMTP_PASS === 'tu_contraseña_de_aplicacion_zoho_aqui') {
+      console.error('❌ SMTP_PASS contiene valor de placeholder - necesita configuración real');
+      throw new Error('SMTP_PASS necesita ser configurado con una contraseña de aplicación válida de Zoho');
     }
 
     // Validar datos de entrada
@@ -453,8 +453,8 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
       port: 465,
       secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
       },
       connectionTimeout: 10000, // 10 segundos
       greetingTimeout: 5000,     // 5 segundos
@@ -528,7 +528,7 @@ Capri Store
 Justa Lima 123, Zárate`;
 
     const mailOptions = {
-      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      from: `"Capri Store" <${process.env.SMTP_USER}>`,
       to: datosComprador.email,
       subject: `Confirmación de compra #${numeroPedido} - Capri Store`,
       text: emailText
@@ -567,7 +567,7 @@ Justa Lima 123, Zárate`;
     
     // Clasificar tipos de errores para mejor debugging
     if (error.message.includes('535')) {
-      console.error('🔐 Error de autenticación - Verifica EMAIL_USER y EMAIL_PASS en .env');
+      console.error('🔐 Error de autenticación - Verifica SMTP_USER y SMTP_PASS en .env');
       console.error('💡 Asegúrate de usar una contraseña de aplicación de Zoho, no la contraseña normal');
     } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
       console.error('⏰ Error de timeout - El servidor SMTP tardó demasiado en responder');
@@ -1711,13 +1711,13 @@ app.post('/confirmar-compra', async (req, res) => {
       port: 465,
       secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
       }
     });
     
     const mailOptions = {
-      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      from: `"Capri Store" <${process.env.SMTP_USER}>`,
       to: email,
       subject: 'Confirmación de compra - Capri Store',
       text: 
@@ -1737,196 +1737,9 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 ¡Te esperamos!`
     };
     
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true, numeroPedido });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Endpoint para crear pedido con stored procedure
-app.post('/crear-pedido-sp', async (req, res) => {
-  console.log('🚀 Request a /crear-pedido-sp');
-  console.log('📋 Body completo:', JSON.stringify(req.body, null, 2));
-  
-  try {
-    const { productos, monto_total, nombre_cliente, correo_cliente, telefono_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro', mp_payment_id = null } = req.body;
-    
-    console.log('📦 Productos recibidos:', productos?.length || 0);
-    console.log('💰 Monto total:', monto_total);
-    console.log(' Payment ID recibido:', mp_payment_id);
-    
-    if (!productos?.length || !monto_total || !nombre_cliente || !correo_cliente) {
-      return res.status(400).json({ success: false, error: 'Faltan datos requeridos' });
-    }
-
-    // Extraer IDs de productos directamente del carrito
-    const productosIds = [];
-    
-    for (const prod of productos) {
-      // El ID del producto puede venir de varias fuentes
-      let idProducto = prod.id;
-      
-      // 1. Intentar extraer del campo id directo
-      if (!idProducto && prod.nombre) {
-        // 2. Extraer del nombre (formato: "123-Nombre del producto")
-        const matchNombre = prod.nombre.match(/^(\d+)-/);
-        if (matchNombre) {
-          idProducto = parseInt(matchNombre[1]);
-        }
-      }
-      
-      // 3. Extraer de la imagen (formato: "/123-producto.jpg" o "assets/img/portfolio/123-producto.jpg")
-      if (!idProducto && prod.img) {
-        const matchImg = prod.img.match(/\/(\d+)-[^/]+\.(jpg|jpeg|png|webp)/i);
-        if (matchImg) {
-          idProducto = parseInt(matchImg[1]);
-        }
-      }
-      
-      // 4. Extraer del título si tiene formato "123-Nombre" (para compatibilidad con títulos de MercadoPago)
-      if (!idProducto && prod.title) {
-        const matchTitle = prod.title.match(/^(\d+)-/);
-        if (matchTitle) {
-          idProducto = parseInt(matchTitle[1]);
-        }
-      }
-      
-      if (idProducto) {
-        const cantidad = parseInt(prod.cantidad) || 1;
-        
-        // Agregar el ID tantas veces como cantidad se solicite
-        for (let i = 0; i < cantidad; i++) {
-          productosIds.push(idProducto);
-        }
-      }
-    }
-    
-    const idsString = productosIds.join(',');
-    console.log('🆔 IDs para SP:', idsString);
-    
-    const dbClient = await pool.connect();
-    try {
-      // Llamar al stored procedure directamente con los IDs del carrito incluyendo teléfono y payment ID
-      // NOTA: Ahora recibimos mp_payment_id desde el frontend cuando está disponible
-      console.log('🔍 Payment ID para SP:', mp_payment_id || 'null');
-      
-      await dbClient.query(
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
-        [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, telefono_cliente || '', metodo_pago, tipo_entrega, mp_payment_id]
-      );
-      
-      console.log('✅ SP ejecutado - Productos:', productosIds.length, 'Payment ID:', mp_payment_id || 'null');
-      
-      res.json({
-        success: true,
-        mensaje: 'Pedido creado exitosamente con stored procedure',
-        productosIds: idsString,
-        cliente: nombre_cliente,
-        productos_procesados: productosIds.length,
-        mp_payment_id_guardado: mp_payment_id
-      });
-      
-    } finally {
-      dbClient.release();
-    }
-    
-  } catch (error) {
-    console.error('❌ Error en crear-pedido-sp:', error.message);
-    console.error('Stack:', error.stack);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      details: 'Error al ejecutar stored procedure'
-    });
-  }
-});
-
-// ===============================
-// ENDPOINT PARA FORMULARIO DE CONTACTO
-// ===============================
-app.post('/contact', async (req, res) => {
-  console.log('📧 === RECIBIDO FORMULARIO DE CONTACTO ===');
-  console.log('📋 Datos:', JSON.stringify(req.body, null, 2));
-  
-  try {
-    const { nombre, email, mensaje } = req.body;
-    
-    // Validación de datos
-    if (!nombre || !email || !mensaje) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Todos los campos son obligatorios' 
-      });
-    }
-    
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Email inválido' 
-      });
-    }
-    
-    // Verificar credenciales de email
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.error('❌ Credenciales de email no configuradas');
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Error de configuración del servidor' 
-      });
-    }
-    
-    // Verificar que los emails administrativos estén configurados
-    if (!process.env.ADMIN_EMAILS) {
-      console.error('❌ ADMIN_EMAILS no configurado en variables de entorno');
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Error de configuración del servidor' 
-      });
-    }
-    
-    const transporter = nodemailer.createTransporter({
-      host: 'smtp.zoho.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-    
-    // Obtener emails administrativos desde variables de entorno
-    const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
-    
-    // Email de confirmación para el usuario
-    const emailConfirmacionUsuario = {
-      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Confirmación de contacto - Capri Store',
-      text: `¡Hola ${nombre}!
-
-Gracias por contactarte con nosotros. Hemos recibido tu mensaje:
-
-"${mensaje}"
-
-Nuestro equipo lo revisará y te responderemos a la brevedad.
-
-📞 También podes contactarnos por:
-• WhatsApp: +54 9 11 1234 5678
-• Email: contacto@capristore.com.ar
-• Local: Justa Lima 123, Zárate, Buenos Aires
-
-¡Gracias por elegirnos!
-
-Capri Store
-Tu tienda de ropa favorita`
-    };
-    
     // Email para los administradores
     const emailParaAdmins = {
-      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      from: `"Capri Store" <${process.env.SMTP_USER}>`,
       to: adminEmails,
       subject: `Nueva consulta de ${nombre} - Capri Store`,
       text: `Nueva consulta recibida desde el sitio web:
