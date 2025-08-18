@@ -9,6 +9,41 @@ const crypto = require('crypto');
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+// ===============================
+// VALIDACIÓN DE VARIABLES DE ENTORNO
+// ===============================
+console.log('🔧 === VALIDANDO CONFIGURACIÓN ===');
+
+// Verificar variables de email
+if (!process.env.EMAIL_USER) {
+  console.error('❌ EMAIL_USER no configurado en variables de entorno');
+  console.error('💡 Configura tu email de Zoho en la variable EMAIL_USER');
+}
+
+if (!process.env.EMAIL_PASS) {
+  console.error('❌ EMAIL_PASS no configurado en variables de entorno');
+  console.error('💡 Configura tu contraseña de aplicación de Zoho en EMAIL_PASS');
+}
+
+if (!process.env.ADMIN_EMAILS) {
+  console.error('❌ ADMIN_EMAILS no configurado en variables de entorno');
+  console.error('💡 Configura los emails administrativos separados por comas');
+} else {
+  const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
+  console.log('✅ Emails administrativos configurados:', adminEmails.length, 'emails');
+  adminEmails.forEach((email, index) => {
+    console.log(`   ${index + 1}. ${email}`);
+  });
+}
+
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.ADMIN_EMAILS) {
+  console.log('✅ Configuración de correos: COMPLETA');
+} else {
+  console.log('⚠️ Configuración de correos: INCOMPLETA - Algunas funciones de email no funcionarán');
+}
+
+console.log('🔧 === FIN VALIDACIÓN ===\n');
+
 const app = express();
 
 // Almacén en memoria para notificaciones de webhook
@@ -1803,6 +1838,140 @@ app.post('/crear-pedido-sp', async (req, res) => {
       success: false, 
       error: error.message,
       details: 'Error al ejecutar stored procedure'
+    });
+  }
+});
+
+// ===============================
+// ENDPOINT PARA FORMULARIO DE CONTACTO
+// ===============================
+app.post('/contact', async (req, res) => {
+  console.log('📧 === RECIBIDO FORMULARIO DE CONTACTO ===');
+  console.log('📋 Datos:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const { nombre, email, mensaje } = req.body;
+    
+    // Validación de datos
+    if (!nombre || !email || !mensaje) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Todos los campos son obligatorios' 
+      });
+    }
+    
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email inválido' 
+      });
+    }
+    
+    // Verificar credenciales de email
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('❌ Credenciales de email no configuradas');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error de configuración del servidor' 
+      });
+    }
+    
+    // Verificar que los emails administrativos estén configurados
+    if (!process.env.ADMIN_EMAILS) {
+      console.error('❌ ADMIN_EMAILS no configurado en variables de entorno');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error de configuración del servidor' 
+      });
+    }
+    
+    const transporter = nodemailer.createTransporter({
+      host: 'smtp.zoho.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+    
+    // Obtener emails administrativos desde variables de entorno
+    const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
+    
+    // Email de confirmación para el usuario
+    const emailConfirmacionUsuario = {
+      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Confirmación de contacto - Capri Store',
+      text: `¡Hola ${nombre}!
+
+Gracias por contactarte con nosotros. Hemos recibido tu mensaje:
+
+"${mensaje}"
+
+Nuestro equipo lo revisará y te responderemos a la brevedad.
+
+📞 También podes contactarnos por:
+• WhatsApp: +54 9 11 1234 5678
+• Email: contacto@capristore.com.ar
+• Local: Justa Lima 123, Zárate, Buenos Aires
+
+¡Gracias por elegirnos!
+
+Capri Store
+Tu tienda de ropa favorita`
+    };
+    
+    // Email para los administradores
+    const emailParaAdmins = {
+      from: `"Capri Store" <${process.env.EMAIL_USER}>`,
+      to: adminEmails,
+      subject: `Nueva consulta de ${nombre} - Capri Store`,
+      text: `Nueva consulta recibida desde el sitio web:
+
+👤 DATOS DEL CONTACTO:
+Nombre: ${nombre}
+Email: ${email}
+
+💬 MENSAJE:
+"${mensaje}"
+
+📅 Fecha: ${new Date().toLocaleString('es-AR', { 
+  timeZone: 'America/Argentina/Buenos_Aires',
+  year: 'numeric',
+  month: 'long', 
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit'
+})}
+
+---
+Responde directamente a este email para contactar al cliente.
+
+Capri Store - Sistema Automático`
+    };
+    
+    // Enviar ambos emails
+    console.log('📧 Enviando email de confirmación al usuario...');
+    await transporter.sendMail(emailConfirmacionUsuario);
+    console.log('✅ Email de confirmación enviado al usuario');
+    
+    console.log('📧 Enviando notificación a administradores...');
+    await transporter.sendMail(emailParaAdmins);
+    console.log('✅ Email enviado a administradores');
+    
+    res.json({ 
+      success: true, 
+      message: 'Mensaje enviado correctamente. Recibirás una confirmación por email.' 
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al procesar formulario de contacto:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al enviar el mensaje. Intenta nuevamente.' 
     });
   }
 });

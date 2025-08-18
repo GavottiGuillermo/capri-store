@@ -230,27 +230,34 @@
   <section class="bg-vino-tinto text-white main-section py-5" id="contacto">
     <div class="container max-w-3xl">
       <h2 class="display-5 font-weight-bold mb-5 text-center">Contacto</h2>
-      <form action="#" class="bg-white rounded-lg p-4 text-vino-tinto shadow-lg" method="POST" novalidate>
+      
+      <!-- Mensajes de éxito y error -->
+      <div id="contactAlert" style="display: none;"></div>
+      
+      <form id="contactForm" class="bg-white rounded-lg p-4 text-vino-tinto shadow-lg" method="POST" novalidate>
         <div class="form-group">
-          <label class="font-weight-bold" for="nombre">Nombre</label>
+          <label class="font-weight-bold" for="nombre">Nombre *</label>
           <input class="form-control border-rosado" id="nombre" name="nombre" placeholder="Tu nombre" required type="text"/>
+          <div class="invalid-feedback">Por favor ingresa tu nombre.</div>
         </div>
         <div class="form-group">
-          <label class="font-weight-bold" for="email">Correo Electrónico</label>
+          <label class="font-weight-bold" for="email">Correo Electrónico *</label>
           <input class="form-control border-rosado" id="email" name="email" placeholder="tuemail@ejemplo.com" required type="email"/>
+          <div class="invalid-feedback">Por favor ingresa un email válido.</div>
         </div>
         <div class="form-group">
-          <label class="font-weight-bold" for="mensaje">Mensaje</label>
+          <label class="font-weight-bold" for="mensaje">Mensaje *</label>
           <textarea class="form-control border-rosado" id="mensaje" name="mensaje" placeholder="Escribe tu mensaje aquí" required rows="4"></textarea>
+          <div class="invalid-feedback">Por favor escribe tu mensaje.</div>
         </div>
-        <button class="btn btn-rosado btn-block font-weight-bold py-3" type="submit">
-          Enviar Mensaje
+        <button id="enviarContacto" class="btn btn-rosado btn-block font-weight-bold py-3" type="submit">
+          <i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje
         </button>
       </form>
       <div class="mt-4 text-center">
         <p><i class="fas fa-phone-alt mr-2"></i>+54 9 11 1234 5678</p>
         <p><i class="fas fa-envelope mr-2"></i>contacto@capristore.com.ar</p>
-        <p><i class="fas fa-map-marker-alt mr-2"></i>Av. Moda 1234, Buenos Aires, Argentina</p>
+        <p><i class="fas fa-map-marker-alt mr-2"></i>Justa Lima 123, Zárate, Buenos Aires</p>
       </div>
     </div>
   </section>
@@ -936,6 +943,104 @@
           if (typeof refrescarStock === 'function') refrescarStock();
         });
       }
+
+      // ===============================
+      // MANEJO DEL FORMULARIO DE CONTACTO
+      // ===============================
+      const contactForm = document.getElementById('contactForm');
+      const contactAlert = document.getElementById('contactAlert');
+      const enviarContactoBtn = document.getElementById('enviarContacto');
+
+      if (contactForm) {
+        contactForm.addEventListener('submit', async function(e) {
+          e.preventDefault();
+          
+          // Limpiar mensajes anteriores
+          contactAlert.style.display = 'none';
+          contactAlert.className = '';
+          
+          // Obtener datos del formulario
+          const formData = new FormData(contactForm);
+          const datos = {
+            nombre: formData.get('nombre').trim(),
+            email: formData.get('email').trim(),
+            mensaje: formData.get('mensaje').trim()
+          };
+          
+          // Validación básica
+          if (!datos.nombre || !datos.email || !datos.mensaje) {
+            mostrarAlerta('Por favor completa todos los campos.', 'error');
+            return;
+          }
+          
+          // Validar email
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(datos.email)) {
+            mostrarAlerta('Por favor ingresa un email válido.', 'error');
+            return;
+          }
+          
+          // Mostrar estado de carga
+          enviarContactoBtn.disabled = true;
+          enviarContactoBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Enviando...';
+          
+          try {
+            // Determinar la URL del backend
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const backendUrl = isLocalhost 
+              ? 'http://localhost:3001' 
+              : 'https://capri-store.onrender.com';
+            
+            const response = await fetch(`${backendUrl}/contact`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(datos)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+              mostrarAlerta(
+                '¡Mensaje enviado correctamente! Recibirás una confirmación por email y te responderemos a la brevedad.',
+                'success'
+              );
+              contactForm.reset();
+            } else {
+              mostrarAlerta(result.error || 'Error al enviar el mensaje. Intenta nuevamente.', 'error');
+            }
+            
+          } catch (error) {
+            console.error('Error al enviar formulario de contacto:', error);
+            mostrarAlerta(
+              'Error de conexión. Por favor verifica tu internet e intenta nuevamente.',
+              'error'
+            );
+          } finally {
+            // Restaurar botón
+            enviarContactoBtn.disabled = false;
+            enviarContactoBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje';
+          }
+        });
+      }
+
+      // Función para mostrar alertas
+      function mostrarAlerta(mensaje, tipo) {
+        contactAlert.style.display = 'block';
+        contactAlert.className = tipo === 'success' 
+          ? 'alert alert-success mb-3' 
+          : 'alert alert-danger mb-3';
+        contactAlert.innerHTML = `
+          <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+          <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-triangle'} mr-2"></i>
+          ${mensaje}
+        `;
+        
+        // Scroll suave al formulario
+        contactForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
     });
   </script>
 </body>
