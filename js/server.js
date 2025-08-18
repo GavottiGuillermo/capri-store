@@ -1262,7 +1262,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
     console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
     
-    // Buscar el pedido usando la nueva columna mp_payment_id
+    // PASO 1: Buscar el pedido usando la nueva columna mp_payment_id
     const pedidoResult = await executeQueryWithRetry(
       pool,
       `SELECT 
@@ -1290,7 +1290,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       const numeroCompleto = idPedidoCompleto.substring(1); // "0001"
       const ultimosDosDigitos = numeroCompleto.slice(-2); // "01"
       
-      console.log(`✅ Pedido encontrado - ID pedido: ${idPedidoCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
+      console.log(`✅ Pedido encontrado por mp_payment_id - ID pedido: ${idPedidoCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
       console.log(`📞 Teléfono cliente: ${pedido.telefono_cliente}`);
       
       res.json({
@@ -1301,14 +1301,15 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         telefono_cliente: pedido.telefono_cliente,
         total: pedido.total,
         fecha_pedido: pedido.fecha_pedido,
-        productos_count: parseInt(pedido.productos_count)
+        productos_count: parseInt(pedido.productos_count),
+        metodo_busqueda: 'mp_payment_id'
       });
       
     } else {
       console.log(`❌ No se encontró pedido para payment ID: ${paymentId} en columna mp_payment_id`);
       
-      // Fallback 1: buscar por timestamp reciente (último pedido creado)
-      console.log(`🔍 Intentando fallback: pedido más reciente...`);
+      // PASO 2: Buscar por pedidos recientes (últimos 5 minutos) - Fallback más amplio
+      console.log(`🔍 FALLBACK 1: Buscando pedidos recientes...`);
       const fallbackResult = await executeQueryWithRetry(
         pool,
         `SELECT 
@@ -1320,7 +1321,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
           COUNT(*) as productos_count
          FROM productos p
          WHERE p.id_pedido IS NOT NULL 
-           AND p.pedido_fecha >= NOW() - INTERVAL '2 minutes'
+           AND p.pedido_fecha >= NOW() - INTERVAL '5 minutes'
          GROUP BY p.id_pedido
          ORDER BY MAX(p.pedido_fecha) DESC
          LIMIT 1`,
@@ -1334,7 +1335,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         const numeroCompleto = idPedidoCompleto.substring(1);
         const ultimosDosDigitos = numeroCompleto.slice(-2);
         
-        console.log(`✅ Pedido encontrado (fallback) - ID pedido: ${idPedidoCompleto}`);
+        console.log(`✅ Pedido encontrado (fallback recientes) - ID pedido: ${idPedidoCompleto}`);
         
         res.json({
           existe: true,
@@ -1345,12 +1346,15 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
           total: pedido.total,
           fecha_pedido: pedido.fecha_pedido,
           productos_count: parseInt(pedido.productos_count),
+          metodo_busqueda: 'pedido_reciente',
           encontrado_por_fallback: true
         });
       } else {
+        console.log(`❌ No se encontraron pedidos recientes`);
         res.json({
           existe: false,
-          message: 'Número de pedido no encontrado'
+          message: 'Número de pedido no encontrado',
+          payment_id_consultado: paymentId
         });
       }
     }
@@ -1359,6 +1363,146 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     console.error('❌ Error al consultar número de pedido:', error);
     res.status(500).json({
       error: 'Error al consultar número de pedido',
+      details: error.message
+    });
+  }
+});
+
+// Endpoint alternativo para buscar pedido por IDs de artículos comprados
+app.post('/numero-pedido-por-articulos', async (req, res) => {
+  try {
+    const { articulos_ids } = req.body;
+    console.log(`🔍 Buscando número de pedido por artículos IDs: ${articulos_ids}`);
+    
+    if (!articulos_ids || !Array.isArray(articulos_ids) || articulos_ids.length === 0) {
+      return res.status(400).json({
+        error: 'Se requiere array de IDs de artículos'
+      });
+    }
+    
+    // Buscar pedidos que contengan alguno de estos artículos en los últimos 10 minutos
+    const pedidoResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        DISTINCT p.id_pedido,
+        MAX(p.pedido_fecha) as fecha_pedido,
+        MAX(p.pedido_nombre_cliente) as nombre_cliente,
+        MAX(p.pedido_telefono_cliente) as telefono_cliente,
+        MAX(p.pedido_monto_total) as total,
+        MAX(p.mp_payment_id) as mp_payment_id,
+        COUNT(*) as productos_count,
+        string_agg(DISTINCT p.id_articulo::text, ',') as articulos_encontrados
+       FROM productos p
+       WHERE p.id_pedido IS NOT NULL 
+         AND p.id_articulo = ANY($1::int[])
+         AND p.pedido_fecha >= NOW() - INTERVAL '10 minutes'
+       GROUP BY p.id_pedido
+       ORDER BY MAX(p.pedido_fecha) DESC
+       LIMIT 1`,
+      [articulos_ids],
+      3
+    );
+    
+    if (pedidoResult.rows.length > 0 && pedidoResult.rows[0].id_pedido) {
+      const pedido = pedidoResult.rows[0];
+      
+      // El id_pedido viene en formato "P0001", extraer los últimos 2 dígitos numéricos
+      const idPedidoCompleto = pedido.id_pedido;
+      const numeroCompleto = idPedidoCompleto.substring(1);
+      const ultimosDosDigitos = numeroCompleto.slice(-2);
+      
+      console.log(`✅ Pedido encontrado por artículos - ID pedido: ${idPedidoCompleto}, Artículos: ${pedido.articulos_encontrados}`);
+      
+      res.json({
+        existe: true,
+        id_pedido_completo: idPedidoCompleto,
+        numero_display: ultimosDosDigitos,
+        nombre_cliente: pedido.nombre_cliente,
+        telefono_cliente: pedido.telefono_cliente,
+        total: pedido.total,
+        fecha_pedido: pedido.fecha_pedido,
+        productos_count: parseInt(pedido.productos_count),
+        mp_payment_id: pedido.mp_payment_id,
+        articulos_encontrados: pedido.articulos_encontrados,
+        metodo_busqueda: 'articulos_ids'
+      });
+      
+    } else {
+      console.log(`❌ No se encontró pedido para los artículos: ${articulos_ids.join(',')}`);
+      res.json({
+        existe: false,
+        message: 'No se encontró pedido con esos artículos',
+        articulos_consultados: articulos_ids
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error al consultar pedido por artículos:', error);
+    res.status(500).json({
+      error: 'Error al consultar pedido por artículos',
+      details: error.message
+    });
+  }
+});
+
+// Endpoint de debugging para ver pedidos recientes
+app.get('/debug-pedidos-recientes', async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG] Consultando pedidos recientes...');
+    
+    const pedidosResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        p.id_pedido,
+        p.id_articulo,
+        p.mp_payment_id,
+        p.pedido_fecha,
+        p.pedido_nombre_cliente,
+        p.pedido_monto_total,
+        p.prenda,
+        p.talle
+       FROM productos p
+       WHERE p.id_pedido IS NOT NULL 
+         AND p.pedido_fecha >= NOW() - INTERVAL '1 hour'
+       ORDER BY p.pedido_fecha DESC
+       LIMIT 20`,
+      [],
+      3
+    );
+    
+    console.log(`🔍 [DEBUG] Encontrados ${pedidosResult.rows.length} registros de pedidos recientes`);
+    
+    // Agrupar por pedido
+    const pedidosAgrupados = {};
+    pedidosResult.rows.forEach(row => {
+      if (!pedidosAgrupados[row.id_pedido]) {
+        pedidosAgrupados[row.id_pedido] = {
+          id_pedido: row.id_pedido,
+          mp_payment_id: row.mp_payment_id,
+          fecha: row.pedido_fecha,
+          cliente: row.pedido_nombre_cliente,
+          total: row.pedido_monto_total,
+          articulos: []
+        };
+      }
+      pedidosAgrupados[row.id_pedido].articulos.push({
+        id_articulo: row.id_articulo,
+        prenda: row.prenda,
+        talle: row.talle
+      });
+    });
+    
+    res.json({
+      pedidos_encontrados: Object.keys(pedidosAgrupados).length,
+      registros_totales: pedidosResult.rows.length,
+      pedidos: Object.values(pedidosAgrupados),
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en debug pedidos:', error);
+    res.status(500).json({
+      error: 'Error consultando pedidos de debugging',
       details: error.message
     });
   }
