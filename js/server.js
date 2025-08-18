@@ -166,6 +166,22 @@ async function verificarConexionBD() {
     const client = await pool.connect();
     console.log('✅ Conexión exitosa a PostgreSQL (Neon)');
     await client.query('SELECT NOW()');
+    
+    // Verificar si existe la columna mp_payment_id
+    const columnCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'productos' 
+        AND column_name = 'mp_payment_id'
+    `);
+    
+    if (columnCheck.rows.length > 0) {
+      console.log('✅ Columna mp_payment_id existe en tabla productos');
+    } else {
+      console.log('⚠️ ATENCIÓN: Columna mp_payment_id NO existe en tabla productos');
+      console.log('💡 Ejecuta: ALTER TABLE productos ADD COLUMN mp_payment_id TEXT;');
+    }
+    
     console.log('✅ Stored procedure sp_crear_pedido_web disponible en BD');
     client.release();
   } catch (error) {
@@ -1348,6 +1364,71 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
   }
 });
 
+// Endpoint para testear el flujo completo de pedido con payment ID
+app.post('/test-pedido-completo', async (req, res) => {
+  try {
+    const { paymentId, productosIds, monto, nombre, email, telefono } = req.body;
+    
+    console.log(`🧪 [TEST] Creando pedido completo con payment ID: ${paymentId}`);
+    
+    const dbClient = await pool.connect();
+    try {
+      // Simular llamada al SP con payment ID
+      await dbClient.query(
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+        [productosIds, parseFloat(monto), nombre, email, telefono || '', 'MercadoPago', 'Retiro', paymentId]
+      );
+      
+      console.log('✅ SP ejecutado exitosamente con payment ID');
+      
+      // Consultar el pedido creado
+      const pedidoResult = await dbClient.query(
+        `SELECT 
+          DISTINCT p.id_pedido,
+          p.mp_payment_id,
+          MAX(p.pedido_fecha) as fecha_pedido,
+          COUNT(*) as productos_count
+         FROM productos p
+         WHERE p.mp_payment_id = $1
+         GROUP BY p.id_pedido, p.mp_payment_id`,
+        [paymentId]
+      );
+      
+      if (pedidoResult.rows.length > 0) {
+        const pedido = pedidoResult.rows[0];
+        const idPedidoCompleto = pedido.id_pedido;
+        const numeroCompleto = idPedidoCompleto.substring(1);
+        const ultimosDosDigitos = numeroCompleto.slice(-2);
+        
+        res.json({
+          success: true,
+          message: 'Pedido creado y encontrado exitosamente',
+          id_pedido_completo: idPedidoCompleto,
+          numero_display: ultimosDosDigitos,
+          mp_payment_id: pedido.mp_payment_id,
+          productos_count: pedido.productos_count,
+          fecha_pedido: pedido.fecha_pedido
+        });
+      } else {
+        res.json({
+          success: false,
+          error: 'Pedido creado pero no se pudo consultar'
+        });
+      }
+      
+    } finally {
+      dbClient.release();
+    }
+    
+  } catch (error) {
+    console.error('🧪 [TEST] Error en test-pedido-completo:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Endpoint para simular webhook manualmente (solo para testing)
 app.post('/test-webhook/:paymentId', async (req, res) => {
   const { paymentId } = req.params;
@@ -1483,11 +1564,12 @@ app.post('/crear-pedido-sp', async (req, res) => {
   console.log('📋 Body completo:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { productos, monto_total, nombre_cliente, correo_cliente, telefono_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro' } = req.body;
+    const { productos, monto_total, nombre_cliente, correo_cliente, telefono_cliente, metodo_pago = 'MercadoPago', tipo_entrega = 'Retiro', mp_payment_id = null } = req.body;
     
     console.log('📦 Productos recibidos:', productos?.length || 0);
     console.log('💰 Monto total:', monto_total);
     console.log('📞 Teléfono cliente:', telefono_cliente);
+    console.log('💳 Payment ID recibido:', mp_payment_id);
     
     if (!productos?.length || !monto_total || !nombre_cliente || !correo_cliente) {
       return res.status(400).json({ success: false, error: 'Faltan datos requeridos' });
@@ -1578,21 +1660,26 @@ app.post('/crear-pedido-sp', async (req, res) => {
     
     const dbClient = await pool.connect();
     try {
-      // Llamar al stored procedure directamente con los IDs del carrito incluyendo teléfono
+      // Llamar al stored procedure directamente con los IDs del carrito incluyendo teléfono y payment ID
+      // NOTA: Ahora recibimos mp_payment_id desde el frontend cuando está disponible
+      console.log('🔍 Payment ID que se enviará al SP:', mp_payment_id || 'null (llamada sin payment ID)');
+      
       await dbClient.query(
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7)',
-        [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, telefono_cliente || '', metodo_pago, tipo_entrega]
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+        [idsString, parseFloat(monto_total), nombre_cliente, correo_cliente, telefono_cliente || '', metodo_pago, tipo_entrega, mp_payment_id]
       );
       
       console.log('✅ Stored procedure ejecutado exitosamente');
       console.log('✅ Productos procesados:', productosIds.length);
+      console.log('✅ Payment ID procesado:', mp_payment_id ? `"${mp_payment_id}"` : 'null');
       
       res.json({
         success: true,
         mensaje: 'Pedido creado exitosamente con stored procedure',
         productosIds: idsString,
         cliente: nombre_cliente,
-        productos_procesados: productosIds.length
+        productos_procesados: productosIds.length,
+        mp_payment_id_guardado: mp_payment_id
       });
       
     } finally {

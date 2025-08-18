@@ -405,7 +405,8 @@
                     correo_cliente: datosComprador.email || 'cliente@web.com',
                     telefono_cliente: datosComprador.telefono || '',
                     metodo_pago: 'MercadoPago',
-                    tipo_entrega: 'Retiro'
+                    tipo_entrega: 'Retiro',
+                    mp_payment_id: paymentId // ✅ Agregar payment ID desde el frontend
                 };
                 
                 console.log('Request data:', JSON.stringify(requestData, null, 2));
@@ -570,8 +571,9 @@
                     const resultado = await response.json();
                     
                     if (resultado.existe) {
-                        console.log(`✅ Número de pedido encontrado: ${resultado.numero_completo} -> ${resultado.numero_display}`);
-                        mostrarNumeroPedidoEnPantalla(resultado.numero_display, numeroPedidoDiv, resultado.numero_completo);
+                        console.log(`✅ Número de pedido encontrado: ${resultado.id_pedido_completo} -> ${resultado.numero_display}`);
+                        console.log(`📞 Teléfono cliente: ${resultado.telefono_cliente}`);
+                        mostrarNumeroPedidoEnPantalla(resultado.numero_display, numeroPedidoDiv, resultado.id_pedido_completo);
                     } else {
                         console.log('⚠️ No se encontró número de pedido en la base de datos');
                         // Fallback: usar los últimos 2 dígitos del payment ID
