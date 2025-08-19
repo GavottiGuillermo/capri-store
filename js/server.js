@@ -1850,7 +1850,7 @@ app.post('/contact', async (req, res) => {
     
     // Configurar transporter
     console.log(`🔌 [${requestId}] Configurando transporter SMTP...`);
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
       port: 465,
       secure: true,
