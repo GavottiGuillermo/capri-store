@@ -447,8 +447,9 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
     // Configurar transporter con timeout y reintentos
     const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false, // Para puerto 587
+      requireTLS: true, // Requiere TLS
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -1715,8 +1716,9 @@ app.post('/confirmar-compra', async (req, res) => {
     
     const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false, // Para puerto 587
+      requireTLS: true, // Requiere TLS
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -1852,8 +1854,9 @@ app.post('/contact', async (req, res) => {
     console.log(`🔌 [${requestId}] Configurando transporter SMTP...`);
     const transporter = nodemailer.createTransport({
       host: 'smtp.zoho.com',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false, // Para puerto 587
+      requireTLS: true, // Requiere TLS
       auth: {
         user: smtpUser,
         pass: smtpPass
