@@ -1882,27 +1882,7 @@ app.post('/contact', async (req, res) => {
       });
     }
     
-    // Email de confirmación para el usuario
-    console.log(`📧 [${requestId}] Preparando email de confirmación para el usuario...`);
-    const emailConfirmacionUsuario = {
-      from: `"Capri Store" <${smtpUser}>`,
-      to: email,
-      subject: 'Confirmación de contacto - Capri Store',
-      text: `Hola ${nombre},
-
-¡Gracias por contactarte con nosotros!
-
-Recibimos tu mensaje:
-"${mensaje}"
-
-Te responderemos a la brevedad.
-
-Saludos cordiales,
-Equipo Capri Store
-Justa Lima 123, Zárate`
-    };
-    
-    // Email para los administradores
+    // Email para los administradores (ÚNICO EMAIL QUE SE ENVÍA)
     console.log(`👨‍💼 [${requestId}] Preparando email para administradores...`);
     const emailParaAdmins = {
       from: `"Capri Store" <${smtpUser}>`,
@@ -1932,21 +1912,27 @@ Responde directamente a este email para contactar al cliente.
 Capri Store - Sistema Automático`
     };
     
-    console.log(`📧 [${requestId}] Configuración de emails preparada:`);
-    console.log(`- Email usuario: de "${emailConfirmacionUsuario.from}" a "${emailConfirmacionUsuario.to}"`);
+    console.log(`📧 [${requestId}] Configuración de email preparada:`);
     console.log(`- Email admins: de "${emailParaAdmins.from}" a [${adminEmailList.join(', ')}]`);
     
-    // Enviar email de confirmación al usuario
+    // Enviar SOLO notificación a administradores (NO al usuario)
     console.log(`� [${requestId}] Enviando email de confirmación al usuario...`);
     try {
-      const infoUsuario = await transporter.sendMail(emailConfirmacionUsuario);
-      console.log(`✅ [${requestId}] Email de confirmación enviado al usuario exitosamente`);
-      console.log(`- Message ID: ${infoUsuario.messageId}`);
-      console.log(`- Response: ${infoUsuario.response}`);
-    } catch (emailUserError) {
-      console.error(`❌ [${requestId}] Error al enviar email de confirmación al usuario:`, emailUserError.message);
-      console.error(`❌ [${requestId}] Stack trace:`, emailUserError.stack);
-      // Continuar para intentar enviar a los admins
+      const infoAdmins = await transporter.sendMail(emailParaAdmins);
+      console.log(`✅ [${requestId}] Email enviado a administradores exitosamente`);
+      console.log(`- Message ID: ${infoAdmins.messageId}`);
+      console.log(`- Response: ${infoAdmins.response}`);
+    } catch (emailAdminError) {
+      console.error(`❌ [${requestId}] Error al enviar email a administradores:`, emailAdminError.message);
+      console.error(`❌ [${requestId}] Stack trace:`, emailAdminError.stack);
+      
+      // Si falla el envío, devolver error
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error al enviar la consulta. Intenta nuevamente.',
+        requestId: requestId,
+        details: process.env.NODE_ENV === 'development' ? emailAdminError.message : undefined
+      });
     }
     
     // Enviar notificación a administradores
@@ -1969,7 +1955,7 @@ Capri Store - Sistema Automático`
     
     res.json({ 
       success: true, 
-      message: 'Mensaje enviado correctamente. Recibirás una confirmación por email.',
+      message: 'Tu consulta fue enviada correctamente. Nos pondremos en contacto contigo a la brevedad.',
       requestId: requestId,
       processingTime: `${duration}ms`
     });
