@@ -166,9 +166,6 @@ app.use(cors({
   ]
 }));
 
-
-
-
 // Configura Mercado Pago - detectar entorno automáticamente
 const isProduction = process.env.NODE_ENV === 'production';
 const accessToken = isProduction 
@@ -601,6 +598,16 @@ app.get('/health', (req, res) => {
     webhook_url: process.env.NODE_ENV === 'production' 
       ? 'https://www.capristorezte.com.ar/webhook' 
       : 'http://localhost:3001/webhook'
+  });
+});
+
+// Endpoint de prueba para contact
+app.get('/contact-test', (req, res) => {
+  console.log('🧪 Contact test endpoint hit');
+  res.status(200).json({ 
+    message: 'Contact endpoint is working', 
+    timestamp: new Date().toISOString(),
+    method: 'GET'
   });
 });
 
@@ -1737,10 +1744,166 @@ O retira tu pedido por nuestro local en el centro de la ciudad de Zárate.
 ¡Te esperamos!`
     };
     
+    res.json({ 
+      success: true, 
+      message: 'Compra confirmada correctamente. Recibirás un email con los detalles.' 
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al confirmar compra:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al confirmar la compra. Intenta nuevamente.' 
+    });
+  }
+});
+
+// =====================================
+// ENDPOINT PARA FORMULARIO DE CONTACTO
+// =====================================
+
+// Middleware específico para debuggear el endpoint contact
+app.use('/contact', (req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`🔍 [${timestamp}] [DEBUG] Middleware /contact ejecutado`);
+  console.log('- Método:', req.method);
+  console.log('- URL completa:', req.originalUrl);
+  console.log('- Content-Type:', req.headers['content-type']);
+  console.log('- User-Agent:', req.headers['user-agent']);
+  console.log('- Origin:', req.headers.origin);
+  console.log('- Body size:', JSON.stringify(req.body).length, 'bytes');
+  console.log('- Headers completos:', JSON.stringify(req.headers, null, 2));
+  
+  if (req.method === 'POST') {
+    console.log('- Body completo:', JSON.stringify(req.body, null, 2));
+  }
+  
+  next();
+});
+
+app.post('/contact', async (req, res) => {
+  const startTime = Date.now();
+  const timestamp = new Date().toISOString();
+  const requestId = Math.random().toString(36).substring(7);
+  
+  console.log(`📧 [${timestamp}] === FORMULARIO DE CONTACTO RECIBIDO === [ID: ${requestId}]`);
+  console.log(`📋 Request ID: ${requestId}`);
+  console.log('📋 Datos recibidos:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    console.log(`⚡ [${requestId}] === INICIANDO PROCESAMIENTO ===`);
+    const { nombre, email, mensaje } = req.body;
+    
+    console.log(`🔍 [${requestId}] Datos extraídos del body:`);
+    console.log(`- Nombre: "${nombre}" (tipo: ${typeof nombre}, length: ${nombre?.length || 0})`);
+    console.log(`- Email: "${email}" (tipo: ${typeof email}, length: ${email?.length || 0})`);
+    console.log(`- Mensaje: "${mensaje}" (tipo: ${typeof mensaje}, length: ${mensaje?.length || 0})`);
+    
+    // Validar datos requeridos
+    console.log(`✅ [${requestId}] Validando campos requeridos...`);
+    if (!nombre || !email || !mensaje) {
+      console.error(`❌ [${requestId}] Datos incompletos en formulario de contacto`);
+      console.error(`- Nombre presente: ${!!nombre}`);
+      console.error(`- Email presente: ${!!email}`);
+      console.error(`- Mensaje presente: ${!!mensaje}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Todos los campos son requeridos',
+        requestId: requestId
+      });
+    }
+    
+    // Validar email
+    console.log(`📧 [${requestId}] Validando formato de email...`);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.error(`❌ [${requestId}] Email inválido:`, email);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email inválido',
+        requestId: requestId
+      });
+    }
+    console.log(`✅ [${requestId}] Email válido: ${email}`);
+    
+    // Verificar configuración de email
+    console.log(`🔧 [${requestId}] Verificando configuración de email...`);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const adminEmails = process.env.ADMIN_EMAILS;
+    
+    console.log(`- SMTP_USER configurado: ${!!smtpUser} ${smtpUser ? `(${smtpUser})` : ''}`);
+    console.log(`- SMTP_PASS configurado: ${!!smtpPass} ${smtpPass ? '(****)' : ''}`);
+    console.log(`- ADMIN_EMAILS configurado: ${!!adminEmails} ${adminEmails ? `(${adminEmails})` : ''}`);
+    
+    if (!smtpUser || !smtpPass || !adminEmails) {
+      console.error(`❌ [${requestId}] Configuración de email incompleta`);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Servicio de email no disponible temporalmente',
+        requestId: requestId
+      });
+    }
+    
+    const adminEmailList = adminEmails.split(',').map(email => email.trim());
+    console.log(`📧 [${requestId}] Emails de administradores:`, adminEmailList);
+    
+    // Configurar transporter
+    console.log(`🔌 [${requestId}] Configurando transporter SMTP...`);
+    const transporter = nodemailer.createTransporter({
+      host: 'smtp.zoho.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 5000,
+      socketTimeout: 15000
+    });
+    
+    // Verificar conexión SMTP
+    console.log(`🔍 [${requestId}] Verificando conexión SMTP...`);
+    try {
+      await transporter.verify();
+      console.log(`✅ [${requestId}] Conexión SMTP verificada exitosamente`);
+    } catch (verifyError) {
+      console.error(`❌ [${requestId}] Error al verificar conexión SMTP:`, verifyError.message);
+      console.error(`❌ [${requestId}] Stack trace:`, verifyError.stack);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error de configuración del servicio de email',
+        details: verifyError.message,
+        requestId: requestId
+      });
+    }
+    
+    // Email de confirmación para el usuario
+    console.log(`📧 [${requestId}] Preparando email de confirmación para el usuario...`);
+    const emailConfirmacionUsuario = {
+      from: `"Capri Store" <${smtpUser}>`,
+      to: email,
+      subject: 'Confirmación de contacto - Capri Store',
+      text: `Hola ${nombre},
+
+¡Gracias por contactarte con nosotros!
+
+Recibimos tu mensaje:
+"${mensaje}"
+
+Te responderemos a la brevedad.
+
+Saludos cordiales,
+Equipo Capri Store
+Justa Lima 123, Zárate`
+    };
+    
     // Email para los administradores
+    console.log(`👨‍💼 [${requestId}] Preparando email para administradores...`);
     const emailParaAdmins = {
-      from: `"Capri Store" <${process.env.SMTP_USER}>`,
-      to: adminEmails,
+      from: `"Capri Store" <${smtpUser}>`,
+      to: adminEmailList,
       subject: `Nueva consulta de ${nombre} - Capri Store`,
       text: `Nueva consulta recibida desde el sitio web:
 
@@ -1766,31 +1929,67 @@ Responde directamente a este email para contactar al cliente.
 Capri Store - Sistema Automático`
     };
     
-    // Enviar ambos emails
-    console.log('📧 Enviando email de confirmación al usuario...');
-    await transporter.sendMail(emailConfirmacionUsuario);
-    console.log('✅ Email de confirmación enviado al usuario');
+    console.log(`📧 [${requestId}] Configuración de emails preparada:`);
+    console.log(`- Email usuario: de "${emailConfirmacionUsuario.from}" a "${emailConfirmacionUsuario.to}"`);
+    console.log(`- Email admins: de "${emailParaAdmins.from}" a [${adminEmailList.join(', ')}]`);
     
-    console.log('📧 Enviando notificación a administradores...');
-    await transporter.sendMail(emailParaAdmins);
-    console.log('✅ Email enviado a administradores');
+    // Enviar email de confirmación al usuario
+    console.log(`� [${requestId}] Enviando email de confirmación al usuario...`);
+    try {
+      const infoUsuario = await transporter.sendMail(emailConfirmacionUsuario);
+      console.log(`✅ [${requestId}] Email de confirmación enviado al usuario exitosamente`);
+      console.log(`- Message ID: ${infoUsuario.messageId}`);
+      console.log(`- Response: ${infoUsuario.response}`);
+    } catch (emailUserError) {
+      console.error(`❌ [${requestId}] Error al enviar email de confirmación al usuario:`, emailUserError.message);
+      console.error(`❌ [${requestId}] Stack trace:`, emailUserError.stack);
+      // Continuar para intentar enviar a los admins
+    }
+    
+    // Enviar notificación a administradores
+    console.log(`� [${requestId}] Enviando notificación a administradores...`);
+    try {
+      const infoAdmins = await transporter.sendMail(emailParaAdmins);
+      console.log(`✅ [${requestId}] Email enviado a administradores exitosamente`);
+      console.log(`- Message ID: ${infoAdmins.messageId}`);
+      console.log(`- Response: ${infoAdmins.response}`);
+    } catch (emailAdminError) {
+      console.error(`❌ [${requestId}] Error al enviar email a administradores:`, emailAdminError.message);
+      console.error(`❌ [${requestId}] Stack trace:`, emailAdminError.stack);
+    }
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log(`🎉 [${requestId}] === PROCESAMIENTO COMPLETADO ===`);
+    console.log(`⏱️ [${requestId}] Tiempo total: ${duration}ms`);
     
     res.json({ 
       success: true, 
-      message: 'Mensaje enviado correctamente. Recibirás una confirmación por email.' 
+      message: 'Mensaje enviado correctamente. Recibirás una confirmación por email.',
+      requestId: requestId,
+      processingTime: `${duration}ms`
     });
     
   } catch (error) {
-    console.error('❌ Error al procesar formulario de contacto:', error);
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.error(`💥 [${requestId}] === ERROR AL PROCESAR FORMULARIO DE CONTACTO ===`);
+    console.error(`⏱️ [${requestId}] Tiempo hasta error: ${duration}ms`);
+    console.error(`❌ [${requestId}] Error mensaje:`, error.message);
+    console.error(`❌ [${requestId}] Stack trace completo:`, error.stack);
+    console.error(`❌ [${requestId}] Error objeto completo:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    
     res.status(500).json({ 
       success: false, 
-      error: 'Error al enviar el mensaje. Intenta nuevamente.' 
+      error: 'Error al enviar el mensaje. Intenta nuevamente.',
+      requestId: requestId,
+      processingTime: `${duration}ms`,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
-
-// Servir archivos estáticos desde la carpeta raíz del proyecto
-app.use(express.static(path.join(__dirname, '..')));
 
 const PORT = process.env.PORT || 3001;
 
