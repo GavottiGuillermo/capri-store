@@ -445,11 +445,16 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
     }
 
     // Configurar transporter con timeout y reintentos
+    // Usar variables de entorno para toda la configuración
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true';
+    
     const transporter = nodemailer.createTransport({
-      host: 'smtp.zoho.com',
-      port: 587,
-      secure: false, // Para puerto 587
-      requireTLS: true, // Requiere TLS
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      requireTLS: !smtpSecure, // Solo requerir TLS si no es secure
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -526,7 +531,7 @@ Capri Store
 Justa Lima 123, Zárate`;
 
     const mailOptions = {
-      from: `"Capri Store" <${process.env.SMTP_USER}>`,
+      from: `"Capri Store" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       to: datosComprador.email,
       subject: `Confirmación de compra #${numeroPedido} - Capri Store`,
       text: emailText
@@ -1714,11 +1719,16 @@ app.post('/confirmar-compra', async (req, res) => {
     
     const numeroPedido = Math.floor(100000 + Math.random() * 900000);
     
+    // Usar variables de entorno para configuración SMTP
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true';
+    
     const transporter = nodemailer.createTransport({
-      host: 'smtp.zoho.com',
-      port: 587,
-      secure: false, // Para puerto 587
-      requireTLS: true, // Requiere TLS
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      requireTLS: !smtpSecure, // Solo requerir TLS si no es secure
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -1726,7 +1736,7 @@ app.post('/confirmar-compra', async (req, res) => {
     });
     
     const mailOptions = {
-      from: `"Capri Store" <${process.env.SMTP_USER}>`,
+      from: `"Capri Store" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       to: email,
       subject: 'Confirmación de compra - Capri Store',
       text: 
@@ -1852,11 +1862,22 @@ app.post('/contact', async (req, res) => {
     
     // Configurar transporter
     console.log(`🔌 [${requestId}] Configurando transporter SMTP...`);
+    
+    // Usar variables de entorno para toda la configuración
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true';
+    
+    console.log(`🔧 [${requestId}] Configuración SMTP:`);
+    console.log(`- Host: ${smtpHost}`);
+    console.log(`- Port: ${smtpPort}`);
+    console.log(`- Secure: ${smtpSecure}`);
+    
     const transporter = nodemailer.createTransport({
-      host: 'smtp.zoho.com',
-      port: 587,
-      secure: false, // Para puerto 587
-      requireTLS: true, // Requiere TLS
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      requireTLS: !smtpSecure, // Solo requerir TLS si no es secure
       auth: {
         user: smtpUser,
         pass: smtpPass
@@ -1885,7 +1906,7 @@ app.post('/contact', async (req, res) => {
     // Email para los administradores (ÚNICO EMAIL QUE SE ENVÍA)
     console.log(`👨‍💼 [${requestId}] Preparando email para administradores...`);
     const emailParaAdmins = {
-      from: `"Capri Store" <${smtpUser}>`,
+      from: `"Capri Store" <${process.env.SMTP_FROM || smtpUser}>`,
       to: adminEmailList,
       subject: `Nueva consulta de ${nombre} - Capri Store`,
       text: `Nueva consulta recibida desde el sitio web:
