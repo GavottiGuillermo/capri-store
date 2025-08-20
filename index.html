@@ -97,6 +97,38 @@
       overflow: visible !important;
     }
     
+    /* Estilos para botón de contacto deshabilitado */
+    .btn-contacto-disabled {
+      background-color: #cccccc !important;
+      color: #666666 !important;
+      border-color: #cccccc !important;
+      cursor: not-allowed !important;
+      opacity: 0.7 !important;
+    }
+    
+    .btn-contacto-disabled:hover {
+      background-color: #cccccc !important;
+      color: #666666 !important;
+      border-color: #cccccc !important;
+      cursor: not-allowed !important;
+    }
+    
+    /* Transición suave para el cambio de estado */
+    .btn-contacto-transition {
+      transition: all 0.3s ease !important;
+    }
+    
+    /* Efecto sutil para campos del formulario de contacto */
+    .form-control.campo-valido {
+      border-color: #28a745 !important;
+      box-shadow: 0 0 0 0.1rem rgba(40, 167, 69, 0.25) !important;
+    }
+    
+    .form-control.campo-invalido {
+      border-color: #dc3545 !important;
+      box-shadow: 0 0 0 0.1rem rgba(220, 53, 69, 0.25) !important;
+    }
+    
   .card-product img { height: 250px; object-fit: cover; }
   .card-product { min-height: 100%; border-radius: 1rem; overflow: hidden; }
   /* Forzar borde sólido y color uniforme en tarjetas */
@@ -250,7 +282,7 @@
           <textarea class="form-control border-rosado" id="mensaje" name="mensaje" placeholder="Escribe tu mensaje aquí" required rows="4"></textarea>
           <div class="invalid-feedback">Por favor escribe tu mensaje.</div>
         </div>
-        <button id="enviarContacto" class="btn btn-rosado btn-block font-weight-bold py-3" type="submit">
+        <button id="enviarContacto" class="btn btn-contacto-disabled btn-block font-weight-bold py-3 btn-contacto-transition" type="submit" disabled>
           <i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje
         </button>
       </form>
@@ -951,6 +983,84 @@
       const contactAlert = document.getElementById('contactAlert');
       const enviarContactoBtn = document.getElementById('enviarContacto');
 
+      // Función para validar campos y cambiar estado del botón
+      function validarCamposContacto() {
+        const nombreField = document.getElementById('nombre');
+        const emailField = document.getElementById('email');
+        const mensajeField = document.getElementById('mensaje');
+        
+        const nombre = nombreField.value.trim();
+        const email = emailField.value.trim();
+        const mensaje = mensajeField.value.trim();
+        
+        // Validar email básico
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const emailValido = emailRegex.test(email);
+        
+        // Aplicar estilos visuales a los campos
+        // Nombre
+        if (nombre) {
+          nombreField.classList.remove('campo-invalido');
+          nombreField.classList.add('campo-valido');
+        } else {
+          nombreField.classList.remove('campo-valido');
+          if (nombreField.value.length > 0) { // Solo mostrar inválido si el usuario ha empezado a escribir
+            nombreField.classList.add('campo-invalido');
+          }
+        }
+        
+        // Email
+        if (email && emailValido) {
+          emailField.classList.remove('campo-invalido');
+          emailField.classList.add('campo-valido');
+        } else {
+          emailField.classList.remove('campo-valido');
+          if (emailField.value.length > 0) {
+            emailField.classList.add('campo-invalido');
+          }
+        }
+        
+        // Mensaje
+        if (mensaje) {
+          mensajeField.classList.remove('campo-invalido');
+          mensajeField.classList.add('campo-valido');
+        } else {
+          mensajeField.classList.remove('campo-valido');
+          if (mensajeField.value.length > 0) {
+            mensajeField.classList.add('campo-invalido');
+          }
+        }
+        
+        // Verificar si todos los campos están completos y el email es válido
+        const todosLosCarposCompletos = nombre && email && mensaje && emailValido;
+        
+        if (todosLosCarposCompletos) {
+          // Habilitar botón
+          enviarContactoBtn.disabled = false;
+          enviarContactoBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3 btn-contacto-transition';
+        } else {
+          // Deshabilitar botón
+          enviarContactoBtn.disabled = true;
+          enviarContactoBtn.className = 'btn btn-contacto-disabled btn-block font-weight-bold py-3 btn-contacto-transition';
+        }
+      }
+
+      // Agregar event listeners a los campos del formulario
+      if (contactForm) {
+        const campos = ['nombre', 'email', 'mensaje'];
+        campos.forEach(campoId => {
+          const campo = document.getElementById(campoId);
+          if (campo) {
+            // Validar en tiempo real mientras el usuario escribe
+            campo.addEventListener('input', validarCamposContacto);
+            campo.addEventListener('blur', validarCamposContacto);
+          }
+        });
+
+        // Validación inicial
+        validarCamposContacto();
+      }
+
       if (contactForm) {
         contactForm.addEventListener('submit', async function(e) {
           e.preventDefault();
@@ -1007,6 +1117,13 @@
                 'success'
               );
               contactForm.reset();
+              
+              // Después de reset, revalidar para deshabilitar el botón
+              setTimeout(() => {
+                if (typeof validarCamposContacto === 'function') {
+                  validarCamposContacto();
+                }
+              }, 100);
             } else {
               mostrarAlerta(result.error || 'Error al enviar el mensaje. Intenta nuevamente.', 'error');
             }
@@ -1020,7 +1137,15 @@
           } finally {
             // Restaurar botón
             enviarContactoBtn.disabled = false;
+            enviarContactoBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3 btn-contacto-transition';
             enviarContactoBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje';
+            
+            // Re-validar campos para mantener estado correcto
+            setTimeout(() => {
+              if (typeof validarCamposContacto === 'function') {
+                validarCamposContacto();
+              }
+            }, 100);
           }
         });
       }

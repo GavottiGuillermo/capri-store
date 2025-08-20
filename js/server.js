@@ -471,7 +471,11 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
     }
     
     productos.forEach((producto, index) => {
-      const totalProducto = producto.cantidad * producto.precio;
+      // Convertir a números para evitar errores de tipo
+      const precioNumerico = parseFloat(producto.precio) || 0;
+      const cantidadNumerica = parseInt(producto.cantidad) || 0;
+      const totalProducto = cantidadNumerica * precioNumerico;
+      
       subtotal += totalProducto;
       const talleInfo = producto.talle ? ` - Talle: ${producto.talle}` : '';
       
@@ -481,10 +485,10 @@ async function enviarCorreoConfirmacion(datosComprador, productos, total, numero
             <strong>${producto.nombre}</strong>${talleInfo}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center; color: #333;">
-            ${producto.cantidad}
+            ${cantidadNumerica}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; color: #333;">
-            $${producto.precio.toFixed(2)}
+            $${precioNumerico.toFixed(2)}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold; color: #6b0a0a;">
             $${totalProducto.toFixed(2)}
@@ -677,7 +681,12 @@ Gracias por tu compra en Capri Store. Tu pedido ha sido confirmado exitosamente.
 NÚMERO DE PEDIDO: ${numeroCorto} (Completo: ${numeroPedido})
 
 RESUMEN DE TU COMPRA:
-${productos.map((p, i) => `${i+1}. ${p.nombre}${p.talle ? ` (Talle: ${p.talle})` : ''}\n   Cantidad: ${p.cantidad} x $${p.precio.toFixed(2)} = $${(p.cantidad * p.precio).toFixed(2)}`).join('\n')}
+${productos.map((p, i) => {
+  const precioNumerico = parseFloat(p.precio) || 0;
+  const cantidadNumerica = parseInt(p.cantidad) || 0;
+  const totalProducto = cantidadNumerica * precioNumerico;
+  return `${i+1}. ${p.nombre}${p.talle ? ` (Talle: ${p.talle})` : ''}\n   Cantidad: ${cantidadNumerica} x $${precioNumerico.toFixed(2)} = $${totalProducto.toFixed(2)}`;
+}).join('\n')}
 
 Subtotal: $${subtotal.toFixed(2)}
 ${subtotal !== parseFloat(total) ? `Envío: $${(parseFloat(total) - subtotal).toFixed(2)}\n` : ''}Total: $${parseFloat(total).toFixed(2)}
@@ -842,7 +851,12 @@ DATOS DEL CLIENTE:
 - Tipo de entrega: ${tipoEntrega === 'envio' ? 'Envío a domicilio' : 'Retiro en local'}
 
 PRODUCTOS COMPRADOS:
-${productos.map((p, i) => `${i+1}. ${p.nombre}${p.talle ? ` (Talle: ${p.talle})` : ''}\n   Cantidad: ${p.cantidad} x $${p.precio.toFixed(2)} = $${(p.cantidad * p.precio).toFixed(2)}`).join('\n')}
+${productos.map((p, i) => {
+  const precioNumerico = parseFloat(p.precio) || 0;
+  const cantidadNumerica = parseInt(p.cantidad) || 0;
+  const totalProducto = cantidadNumerica * precioNumerico;
+  return `${i+1}. ${p.nombre}${p.talle ? ` (Talle: ${p.talle})` : ''}\n   Cantidad: ${cantidadNumerica} x $${precioNumerico.toFixed(2)} = $${totalProducto.toFixed(2)}`;
+}).join('\n')}
 
 TOTALES:
 Subtotal: $${subtotal.toFixed(2)}
