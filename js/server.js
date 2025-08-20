@@ -311,7 +311,8 @@ app.post('/crear-preferencia', async (req, res) => {
       external_reference: "capri-" + Date.now() + "-ids-" + items.map(i => `${i.id}x${i.quantity}`).join(","),
       payer: {
         name: datosCompradorMeta?.nombre || "Cliente",
-        surname: datosCompradorMeta?.apellido || "Capri Store"
+        surname: datosCompradorMeta?.apellido || "Capri Store",
+        email: datosCompradorMeta?.email || null
       },
       additional_info: {
         items: items.map(item => ({
@@ -325,7 +326,9 @@ app.post('/crear-preferencia', async (req, res) => {
         })),
         payer: {
           first_name: datosCompradorMeta?.nombre || "Cliente",
-          last_name: datosCompradorMeta?.apellido || "Capri Store"
+          last_name: datosCompradorMeta?.apellido || "Capri Store",
+          email: datosCompradorMeta?.email || null,
+          phone: datosCompradorMeta?.telefono || null
         },
         shipments: {
           receiver_address: {
@@ -800,7 +803,11 @@ async function enviarCorreoAdministradores(datosComprador, productos, total, num
     
     if (productos && Array.isArray(productos)) {
       productos.forEach((producto) => {
-        const totalProducto = producto.cantidad * producto.precio;
+        // Convertir a números para evitar errores de tipo
+        const precioNumerico = parseFloat(producto.precio) || 0;
+        const cantidadNumerica = parseInt(producto.cantidad) || 0;
+        const totalProducto = cantidadNumerica * precioNumerico;
+        
         subtotal += totalProducto;
         const talleInfo = producto.talle ? ` - Talle: ${producto.talle}` : '';
         
@@ -810,10 +817,10 @@ async function enviarCorreoAdministradores(datosComprador, productos, total, num
               <strong>${producto.nombre}</strong>${talleInfo}
             </td>
             <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center; color: #333;">
-              ${producto.cantidad}
+              ${cantidadNumerica}
             </td>
             <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; color: #333;">
-              $${producto.precio.toFixed(2)}
+              $${precioNumerico.toFixed(2)}
             </td>
             <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold; color: #6b0a0a;">
               $${totalProducto.toFixed(2)}
@@ -1149,7 +1156,11 @@ app.post('/webhook', async (req, res) => {
       console.log('📦 Items del pedido:', itemsSimple.length);
       console.log('📋 Items metadata:', JSON.stringify(itemsSimple, null, 2));
       console.log('👤 Datos del comprador:', JSON.stringify(datosComprador, null, 2));
-      console.log('🔍 Additional info items:', JSON.stringify(additionalInfo.items, null, 2));
+      console.log('� DEBUG - Emails disponibles:');
+      console.log('  - datosComprador.email:', datosComprador.email);
+      console.log('  - additionalInfoPayer.email:', (additionalInfo.payer || {}).email);
+      console.log('  - payment.payer.email:', payment.payer?.email);
+      console.log('�🔍 Additional info items:', JSON.stringify(additionalInfo.items, null, 2));
 
       // Si no hay items en metadata, intentar reconstruir desde los items del payment
       let productos = [];
@@ -1260,10 +1271,40 @@ app.post('/webhook', async (req, res) => {
             : `${payment.payer?.first_name || 'Cliente'} ${payment.payer?.last_name || ''}`.trim())
         || 'Cliente Webhook';
         
-      const correoCliente = datosComprador.email 
-        || additionalInfoPayer.email 
-        || payment.payer?.email 
-        || 'webhook@capristore.com';
+      const correoCliente = (() => {
+        // Función para verificar si es un email de prueba de MercadoPago
+        const esEmailPruebaMercadoPago = (email) => {
+          if (!email) return false;
+          return email.includes('@testuser.com') || email.includes('test_user_');
+        };
+        
+        // Priorizar datos del comprador si no es email de prueba
+        if (datosComprador.email && !esEmailPruebaMercadoPago(datosComprador.email)) {
+          console.log('📧 Usando email del datosComprador:', datosComprador.email);
+          return datosComprador.email;
+        }
+        
+        // Intentar additional_info si no es email de prueba
+        if (additionalInfoPayer.email && !esEmailPruebaMercadoPago(additionalInfoPayer.email)) {
+          console.log('📧 Usando email del additionalInfoPayer:', additionalInfoPayer.email);
+          return additionalInfoPayer.email;
+        }
+        
+        // Si tenemos que usar email de prueba de datosComprador, al menos avisamos
+        if (datosComprador.email && esEmailPruebaMercadoPago(datosComprador.email)) {
+          console.log('⚠️ USANDO EMAIL DE PRUEBA del datosComprador:', datosComprador.email);
+          return datosComprador.email;
+        }
+        
+        // Como último recurso, usar email del payer de MercadoPago
+        if (payment.payer?.email) {
+          console.log('📧 Usando email del payment.payer (último recurso):', payment.payer.email);
+          return payment.payer.email;
+        }
+        
+        console.log('❌ No se pudo obtener email válido, usando fallback');
+        return 'webhook@capristore.com';
+      })();
         
       const telefonoCliente = datosComprador.telefono 
         || additionalInfoPayer.phone?.number 
@@ -1275,7 +1316,12 @@ app.post('/webhook', async (req, res) => {
       const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
 
       console.log('🚀 Ejecutando stored procedure...');
-      console.log('📋 Datos del comprador disponibles:', {
+      console.log('📋 Datos del comprador disponibles:');
+      console.log('  - Nombre completo:', nombreCompleto);
+      console.log('  - Email seleccionado:', correoCliente);
+      console.log('  - Teléfono:', telefonoCliente);
+      console.log('  - Tipo entrega:', tipoEntrega);
+      console.log('📋 Datos:', {
         'datosComprador.telefono': datosComprador.telefono,
         'additionalInfoPayer.phone': additionalInfoPayer.phone,
         'payment.payer.phone': payment.payer?.phone,
@@ -1696,24 +1742,22 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
     console.log(`🔍 Buscando número de pedido para payment ID: ${paymentId}`);
     
-    // PASO 1: Buscar el pedido usando la nueva columna mp_payment_id
+    // PASO 1: Buscar el pedido usando la nueva columna mp_payment_id (consulta optimizada)
     const pedidoResult = await executeQueryWithRetry(
       pool,
       `SELECT 
-        DISTINCT p.id_pedido,
-        MAX(p.pedido_fecha) as fecha_pedido,
-        MAX(p.pedido_nombre_cliente) as nombre_cliente,
-        MAX(p.pedido_telefono_cliente) as telefono_cliente,
-        MAX(p.pedido_monto_total) as total,
-        COUNT(*) as productos_count
+        p.id_pedido,
+        p.pedido_fecha,
+        p.pedido_nombre_cliente,
+        p.pedido_telefono_cliente,
+        p.pedido_monto_total
        FROM productos p
-       WHERE p.id_pedido IS NOT NULL 
-         AND p.mp_payment_id = $1
-       GROUP BY p.id_pedido
-       ORDER BY MAX(p.pedido_fecha) DESC
+       WHERE p.mp_payment_id = $1 
+         AND p.id_pedido IS NOT NULL
+       ORDER BY p.pedido_fecha DESC
        LIMIT 1`,
       [paymentId],
-      3
+      2 // Reducir reintentos de 3 a 2
     );
     
     if (pedidoResult.rows.length > 0 && pedidoResult.rows[0].id_pedido) {
@@ -1725,17 +1769,16 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       const ultimosDosDigitos = numeroCompleto.slice(-2); // "01"
       
       console.log(`✅ Pedido encontrado por mp_payment_id - ID pedido: ${idPedidoCompleto}, Últimos 2 dígitos: ${ultimosDosDigitos}`);
-      console.log(`📞 Teléfono cliente: ${pedido.telefono_cliente}`);
+      console.log(`📞 Teléfono cliente: ${pedido.pedido_telefono_cliente}`);
       
       res.json({
         existe: true,
         id_pedido_completo: idPedidoCompleto,
         numero_display: ultimosDosDigitos,
-        nombre_cliente: pedido.nombre_cliente,
-        telefono_cliente: pedido.telefono_cliente,
-        total: pedido.total,
-        fecha_pedido: pedido.fecha_pedido,
-        productos_count: parseInt(pedido.productos_count),
+        nombre_cliente: pedido.pedido_nombre_cliente,
+        telefono_cliente: pedido.pedido_telefono_cliente,
+        total: pedido.pedido_monto_total,
+        fecha_pedido: pedido.pedido_fecha,
         metodo_busqueda: 'mp_payment_id'
       });
       

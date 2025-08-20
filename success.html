@@ -544,11 +544,21 @@
             const numeroPedidoDiv = document.getElementById('numero-pedido');
             
             if (orderId) {
-                // El webhook procesa rápidamente, reducir espera inicial
-                console.log('⏰ Esperando 6 segundos antes de consultar número de pedido...');
+                // Mostrar loader inmediatamente
+                numeroPedidoDiv.innerHTML = `
+                    <div class="mt-4 mb-4 p-4 border rounded text-center" style="background-color: #f8f9fa;">
+                        <div class="spinner-border text-success me-3" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <strong class="text-success">Obteniendo número de pedido...</strong>
+                        <div class="small text-muted mt-2">Un momento por favor</div>
+                    </div>`;
+                
+                // Reducir espera inicial a solo 2 segundos
+                console.log('⏰ Esperando 2 segundos antes de consultar número de pedido...');
                 setTimeout(() => {
                     consultarNumeroPedidoReal(orderId, numeroPedidoDiv, 1);
-                }, 6000);
+                }, 2000);
             } else {
                 // Si no hay orderId, mostrar número genérico basado en timestamp
                 const now = Date.now();
@@ -591,7 +601,7 @@
                 
                 // PASO 1: Buscar por payment ID con timeout optimizado
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 6000); // Reducido de 10 a 6 segundos
+                const timeoutId = setTimeout(() => controller.abort(), 3000); // Reducido a 3 segundos
                 
                 const consultaUrl = `${API_BASE}/numero-pedido/${paymentId}`;
                 console.log(`📡 Consultando URL: ${consultaUrl}`);
@@ -663,12 +673,12 @@
                     }
                 }
                 
-                // PASO 3: Reintentar si es el primer o segundo intento
+                // PASO 3: Reintentar si es el primer o segundo intento (más rápido)
                 if (intento <= 2) {
-                    console.log(`🔄 Reintentando en 2 segundos... (intento ${intento + 1}/3)`);
+                    console.log(`🔄 Reintentando en 1 segundo... (intento ${intento + 1}/3)`);
                     setTimeout(() => {
                         consultarNumeroPedidoReal(paymentId, numeroPedidoDiv, intento + 1);
-                    }, 2000);
+                    }, 1000); // Reducido de 2000 a 1000ms
                     return;
                 }
                 
