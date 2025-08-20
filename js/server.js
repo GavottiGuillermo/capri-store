@@ -829,17 +829,60 @@ async function enviarCorreoAdministradores(datosComprador, productos, total, num
       });
     }
 
-    // Extraer últimos 2 dígitos del número de pedido
-    const numeroCorto = numeroPedido.slice(-2);
+    // Extraer últimos 2 dígitos del número de pedido para mostrar prominentemente
+    let numeroCorto = '00';
+    if (numeroPedido && typeof numeroPedido === 'string') {
+      // Si es formato P0001, extraer los dígitos
+      if (numeroPedido.startsWith('P')) {
+        const numeroSinP = numeroPedido.substring(1); // "0001"
+        numeroCorto = numeroSinP.slice(-2); // "01"
+      } else {
+        // Si es solo número, tomar últimos 2 dígitos
+        numeroCorto = numeroPedido.slice(-2).padStart(2, '0');
+      }
+    }
     
     // Determinar tipo de entrega
     const tipoEntrega = datosComprador.tipoEntrega || 'retiro';
     const iconoEntrega = tipoEntrega === 'envio' ? '🚚' : '🏪';
 
-    const nombreCompleto = [datosComprador.nombre, datosComprador.apellido]
-      .filter(Boolean)
-      .join(' ')
-      .trim() || datosComprador.nombre;
+    // Procesar nombre completo correctamente
+    let nombreCompleto = 'Cliente';
+    if (typeof datosComprador === 'string') {
+      nombreCompleto = datosComprador;
+    } else if (datosComprador.nombre) {
+      nombreCompleto = [datosComprador.nombre, datosComprador.apellido]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || datosComprador.nombre;
+    }
+
+    // Procesar teléfono correctamente - puede venir como objeto o string
+    let telefonoMostrar = 'No proporcionado';
+    if (datosComprador.telefono) {
+      if (typeof datosComprador.telefono === 'string') {
+        telefonoMostrar = datosComprador.telefono;
+      } else if (typeof datosComprador.telefono === 'object') {
+        // Si es un objeto, intentar extraer el número
+        const telObj = datosComprador.telefono;
+        if (telObj.number) {
+          telefonoMostrar = `${telObj.area_code || ''}${telObj.number}${telObj.extension ? ' ext. ' + telObj.extension : ''}`.trim();
+        } else {
+          telefonoMostrar = 'Formato no válido';
+        }
+      }
+    }
+
+    // Obtener fecha en horario de Argentina
+    const fechaArgentina = new Date().toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
 
     // Versión texto plano
     const emailText = `NUEVA COMPRA - CAPRI STORE
@@ -849,12 +892,12 @@ Se ha procesado exitosamente un nuevo pedido:
 DATOS DEL PEDIDO:
 - Número de Pedido: ${numeroCorto} (Completo: ${numeroPedido})
 - Payment ID: ${paymentId}
-- Fecha: ${new Date().toLocaleString('es-AR')}
+- Fecha: ${fechaArgentina}
 
 DATOS DEL CLIENTE:
 - Nombre: ${nombreCompleto}
 - Email: ${datosComprador.email}
-- Teléfono: ${datosComprador.telefono || 'No proporcionado'}
+- Teléfono: ${telefonoMostrar}
 - Tipo de entrega: ${tipoEntrega === 'envio' ? 'Envío a domicilio' : 'Retiro en local'}
 
 PRODUCTOS COMPRADOS:
@@ -877,7 +920,7 @@ PROCESO:
 
 ---
 Sistema de gestión de pedidos - Capri Store
-Generado automáticamente el ${new Date().toLocaleString('es-AR')}`;
+Generado automáticamente el ${fechaArgentina}`;
 
     const mailOptions = {
       from: `"Capri Store Admin 🛒" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
@@ -1342,16 +1385,32 @@ app.post('/webhook', async (req, res) => {
       console.log(`🔍 Payment ID que se enviará: "${id}"`);
 
       // Ejecutar stored procedure con payment ID incluido (8 parámetros)
-      const spPromise = dbClient.query(
+      const spResult = await dbClient.query(
         'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
         [idsString, montoTotal, nombreCompleto, correoCliente, telefonoCliente, metodoPago, tipoEntrega, id]
       );
-      const spTimeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout ejecutando stored procedure después de 15 segundos')), 15000)
-      );
-      
-      await Promise.race([spPromise, spTimeoutPromise]);
       console.log(`✅ Pedido creado exitosamente por webhook para payment ${id}`);
+      
+      // Obtener el ID real del pedido recién creado
+      let pedidoIdReal = null;
+      try {
+        console.log('🔍 Consultando ID real del pedido recién creado...');
+        const pedidoQuery = await dbClient.query(
+          'SELECT id_pedido FROM productos WHERE mp_payment_id = $1 AND id_pedido IS NOT NULL ORDER BY pedido_fecha DESC LIMIT 1',
+          [id]
+        );
+        
+        if (pedidoQuery.rows.length > 0) {
+          pedidoIdReal = pedidoQuery.rows[0].id_pedido;
+          console.log(`✅ ID real del pedido: ${pedidoIdReal}`);
+        } else {
+          console.log('⚠️ No se pudo obtener ID real del pedido, usando payment ID como fallback');
+          pedidoIdReal = id;
+        }
+      } catch (error) {
+        console.error('❌ Error obteniendo ID real del pedido:', error.message);
+        pedidoIdReal = id;
+      }
 
       // Almacenar notificación de webhook exitoso
       storeWebhookNotification(id, 'webhook-created', payment.external_reference);
@@ -1396,8 +1455,8 @@ app.post('/webhook', async (req, res) => {
                 talle: p.talle || null
               })),
               montoTotal,
-              id,
-              id // paymentId
+              pedidoIdReal, // Usar ID real del pedido en lugar de payment ID
+              id // paymentId de MercadoPago
             );
             
             if (resultadoEmailAdmin.success) {
