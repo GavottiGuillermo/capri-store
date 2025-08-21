@@ -238,13 +238,14 @@ const client = new MercadoPagoConfig({
 app.post('/crear-preferencia', async (req, res) => {
   console.log('=== INICIO /crear-preferencia ===');
   console.log('Request body (raw):', JSON.stringify(req.body, null, 2));
+  console.log('🔍 datosComprador recibidos:', JSON.stringify(req.body.datosComprador, null, 2));
   
   try {
     const items = req.body.items;
     const datosCompradorMeta = req.body.datosComprador || null;
     
     console.log('Items recibidos:', JSON.stringify(items, null, 2));
-    console.log('Datos comprador:', JSON.stringify(datosCompradorMeta, null, 2));
+    console.log('Datos comprador (después de extraer):', JSON.stringify(datosCompradorMeta, null, 2));
     
     // Validación de items
     if (!Array.isArray(items) || items.length === 0) {
@@ -326,9 +327,12 @@ app.post('/crear-preferencia', async (req, res) => {
         })),
         payer: {
           first_name: datosCompradorMeta?.nombre || "Cliente",
-          last_name: datosCompradorMeta?.apellido || "Capri Store",
+          last_name: datosCompradorMeta?.apellido || "Capri Store", 
           email: datosCompradorMeta?.email || null,
-          phone: datosCompradorMeta?.telefono || null
+          phone: {
+            area_code: "",
+            number: datosCompradorMeta?.telefono || null
+          }
         },
         shipments: {
           receiver_address: {
@@ -347,6 +351,14 @@ app.post('/crear-preferencia', async (req, res) => {
     };
     
     console.log('Preference enviada a Mercado Pago:', JSON.stringify(preference, null, 2));
+    console.log('🔍 Metadata específico que se envía:');
+    console.log('  - itemsSimple:', JSON.stringify(preference.metadata.itemsSimple, null, 2));
+    console.log('  - datosComprador:', JSON.stringify(preference.metadata.datosComprador, null, 2));
+    console.log('🔍 Additional_info.payer que se envía:');
+    console.log('  - first_name:', preference.additional_info.payer.first_name);
+    console.log('  - last_name:', preference.additional_info.payer.last_name);
+    console.log('  - email:', preference.additional_info.payer.email);
+    console.log('  - phone:', JSON.stringify(preference.additional_info.payer.phone));
     console.log('🔍 Configuración específica:');
     console.log('- Entorno:', isProduction ? 'PRODUCCIÓN' : 'DESARROLLO');
     console.log('- Frontend URL:', frontendUrl);
@@ -1199,11 +1211,15 @@ app.post('/webhook', async (req, res) => {
       console.log('📦 Items del pedido:', itemsSimple.length);
       console.log('📋 Items metadata:', JSON.stringify(itemsSimple, null, 2));
       console.log('👤 Datos del comprador:', JSON.stringify(datosComprador, null, 2));
-      console.log('� DEBUG - Emails disponibles:');
+      console.log('🔍 DEBUG - Emails disponibles:');
       console.log('  - datosComprador.email:', datosComprador.email);
       console.log('  - additionalInfoPayer.email:', (additionalInfo.payer || {}).email);
       console.log('  - payment.payer.email:', payment.payer?.email);
-      console.log('�🔍 Additional info items:', JSON.stringify(additionalInfo.items, null, 2));
+      console.log('🔍 DEBUG - Teléfonos disponibles:');
+      console.log('  - datosComprador.telefono:', typeof datosComprador.telefono, JSON.stringify(datosComprador.telefono));
+      console.log('  - additionalInfoPayer.phone:', typeof additionalInfoPayer.phone, JSON.stringify(additionalInfoPayer.phone));
+      console.log('  - payment.payer.phone:', typeof payment.payer?.phone, JSON.stringify(payment.payer?.phone));
+      console.log('🔍 Additional info items:', JSON.stringify(additionalInfo.items, null, 2));
 
       // Si no hay items en metadata, intentar reconstruir desde los items del payment
       let productos = [];
@@ -1318,51 +1334,111 @@ app.post('/webhook', async (req, res) => {
         // Función para verificar si es un email de prueba de MercadoPago
         const esEmailPruebaMercadoPago = (email) => {
           if (!email) return false;
-          return email.includes('@testuser.com') || email.includes('test_user_');
+          return email.includes('@testuser.com') || email.includes('test_user_') || email === 'test@example.com';
         };
         
-        // Priorizar datos del comprador si no es email de prueba
+        console.log('🔍 ANALIZANDO EMAILS DISPONIBLES:');
+        console.log('  1. datosComprador.email:', datosComprador.email, '- Es prueba MP?', esEmailPruebaMercadoPago(datosComprador.email));
+        console.log('  2. additionalInfoPayer.email:', additionalInfoPayer.email, '- Es prueba MP?', esEmailPruebaMercadoPago(additionalInfoPayer.email));
+        console.log('  3. payment.payer.email:', payment.payer?.email, '- Es prueba MP?', esEmailPruebaMercadoPago(payment.payer?.email));
+        
+        // PRIORIDAD 1: datosComprador.email (del checkout) si no es email de prueba
         if (datosComprador.email && !esEmailPruebaMercadoPago(datosComprador.email)) {
-          console.log('📧 Usando email del datosComprador:', datosComprador.email);
+          console.log('✅ SELECCIONADO: email del datosComprador (checkout):', datosComprador.email);
           return datosComprador.email;
         }
         
-        // Intentar additional_info si no es email de prueba
+        // PRIORIDAD 2: additional_info si no es email de prueba
         if (additionalInfoPayer.email && !esEmailPruebaMercadoPago(additionalInfoPayer.email)) {
-          console.log('📧 Usando email del additionalInfoPayer:', additionalInfoPayer.email);
+          console.log('✅ SELECCIONADO: email del additionalInfoPayer:', additionalInfoPayer.email);
           return additionalInfoPayer.email;
         }
         
-        // Si tenemos que usar email de prueba de datosComprador, al menos avisamos
-        if (datosComprador.email && esEmailPruebaMercadoPago(datosComprador.email)) {
+        // PRIORIDAD 3: payment.payer si no es email de prueba
+        if (payment.payer?.email && !esEmailPruebaMercadoPago(payment.payer?.email)) {
+          console.log('✅ SELECCIONADO: email del payment.payer:', payment.payer.email);
+          return payment.payer.email;
+        }
+        
+        // TEMPORAL PARA DEBUG: Si no hay email real, intentar usar cualquier email disponible
+        // pero avisando que es de prueba
+        if (datosComprador.email) {
           console.log('⚠️ USANDO EMAIL DE PRUEBA del datosComprador:', datosComprador.email);
           return datosComprador.email;
         }
         
-        // Como último recurso, usar email del payer de MercadoPago
+        if (additionalInfoPayer.email) {
+          console.log('⚠️ USANDO EMAIL DE PRUEBA del additionalInfoPayer:', additionalInfoPayer.email);
+          return additionalInfoPayer.email;
+        }
+        
         if (payment.payer?.email) {
-          console.log('📧 Usando email del payment.payer (último recurso):', payment.payer.email);
+          console.log('⚠️ USANDO EMAIL DE PRUEBA del payment.payer (último recurso):', payment.payer.email);
           return payment.payer.email;
         }
         
-        console.log('❌ No se pudo obtener email válido, usando fallback');
+        console.log('❌ No se encontró ningún email válido, usando fallback');
         return 'webhook@capristore.com';
       })();
         
-      const telefonoCliente = datosComprador.telefono 
-        || additionalInfoPayer.phone?.number 
-        || additionalInfoPayer.phone 
-        || payment.payer?.phone?.number 
-        || payment.payer?.phone
-        || '0000000000'; // Teléfono por defecto para webhooks sin teléfono
+      const telefonoCliente = (() => {
+        console.log('🔍 ANALIZANDO TELÉFONOS DISPONIBLES:');
+        console.log('  1. datosComprador.telefono:', typeof datosComprador.telefono, JSON.stringify(datosComprador.telefono));
+        console.log('  2. additionalInfoPayer.phone:', typeof additionalInfoPayer.phone, JSON.stringify(additionalInfoPayer.phone));
+        console.log('  3. payment.payer.phone:', typeof payment.payer?.phone, JSON.stringify(payment.payer?.phone));
+        
+        // Función para procesar teléfonos objeto o string
+        const procesarTelefono = (tel) => {
+          if (!tel) return null;
+          
+          if (typeof tel === 'string' && tel.trim() && tel !== 'null') {
+            return tel.trim();
+          }
+          
+          if (typeof tel === 'object') {
+            if (tel.number && tel.number !== null) {
+              return `${tel.area_code || ''}${tel.number}${tel.extension ? ' ext. ' + tel.extension : ''}`.trim();
+            }
+          }
+          
+          return null;
+        };
+        
+        // PRIORIDAD 1: datosComprador.telefono (del checkout)
+        const tel1 = procesarTelefono(datosComprador.telefono);
+        if (tel1) {
+          console.log('✅ SELECCIONADO: teléfono del datosComprador:', tel1);
+          return tel1;
+        }
+        
+        // PRIORIDAD 2: additionalInfoPayer.phone
+        const tel2 = procesarTelefono(additionalInfoPayer.phone);
+        if (tel2) {
+          console.log('✅ SELECCIONADO: teléfono del additionalInfoPayer:', tel2);
+          return tel2;
+        }
+        
+        // PRIORIDAD 3: payment.payer.phone
+        const tel3 = procesarTelefono(payment.payer?.phone);
+        if (tel3) {
+          console.log('✅ SELECCIONADO: teléfono del payment.payer:', tel3);
+          return tel3;
+        }
+        
+        console.log('⚠️ No se encontró teléfono válido, usando fallback');
+        return '0000000000';
+      })();
       const metodoPago = 'MercadoPago'; // Solo "MercadoPago" aquí
       const tipoEntrega = datosComprador.tipoEntrega === 'envio' ? 'Envio' : 'Retiro';
 
       console.log('🚀 Ejecutando stored procedure...');
-      console.log('📋 Datos del comprador disponibles:');
+      console.log('📋 DATOS FINALES DEL COMPRADOR:');
       console.log('  - Nombre completo:', nombreCompleto);
       console.log('  - Email seleccionado:', correoCliente);
-      console.log('  - Teléfono:', telefonoCliente);
+      console.log('  - Teléfono seleccionado:', telefonoCliente);
+      console.log('  - Tipo de entrega:', tipoEntrega);
+      console.log('  - Método de pago:', metodoPago);
+      console.log('📋 DEBUG - Tipo de teléfono:', typeof telefonoCliente, JSON.stringify(telefonoCliente));
       console.log('  - Tipo entrega:', tipoEntrega);
       console.log('📋 Datos:', {
         'datosComprador.telefono': datosComprador.telefono,
