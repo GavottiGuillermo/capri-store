@@ -173,8 +173,40 @@ app.post('/crear-preferencia', async (req, res) => {
   
   try {
     console.log('Creando preferencia de pago...');
+    console.log('📦 Datos recibidos:', JSON.stringify(req.body, null, 2));
     
-    const { items, payer } = req.body;
+    const { items, datosComprador } = req.body;
+    
+    // Validar datos requeridos
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        error: 'Items requeridos',
+        message: 'Se requiere al menos un item'
+      });
+    }
+    
+    if (!datosComprador || !datosComprador.email) {
+      console.log('❌ Datos comprador recibidos:', datosComprador);
+      return res.status(400).json({
+        error: 'Datos del comprador incompletos',
+        message: 'Email del comprador es requerido',
+        received_data: datosComprador
+      });
+    }
+    
+    console.log('📧 Email del comprador:', datosComprador.email);
+    console.log('🛍️ Items:', items.length, 'productos');
+    
+    // Construir objeto payer para MercadoPago
+    const payer = {
+      name: datosComprador.nombre || '',
+      surname: datosComprador.apellido || '',
+      email: datosComprador.email,
+      phone: {
+        area_code: '11', // Código de área por defecto para Argentina
+        number: datosComprador.telefono?.replace(/\D/g, '') || ''
+      }
+    };
     
     const preference = new Preference(client);
     const result = await preference.create({
