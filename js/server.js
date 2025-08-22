@@ -130,7 +130,28 @@ async function initializeDatabase() {
 // ===============================
 // CONFIGURACIÓN DE MERCADO PAGO
 // ===============================
+console.log('🔧 Configurando MercadoPago...');
+
+// Validar token de acceso
+if (!process.env.MP_ACCESS_TOKEN) {
+  console.error('❌ ERROR CRÍTICO: MP_ACCESS_TOKEN no está configurado en las variables de entorno');
+  process.exit(1);
+}
+
+// Verificar formato del token
+const tokenStart = process.env.MP_ACCESS_TOKEN.substring(0, 20);
+console.log('🔑 Token MercadoPago configurado:', tokenStart + '...');
+
+if (process.env.MP_ACCESS_TOKEN.startsWith('TEST-')) {
+  console.log('🧪 Usando token de PRUEBA de MercadoPago');
+} else if (process.env.MP_ACCESS_TOKEN.startsWith('APP_USR-')) {
+  console.log('🚀 Usando token de PRODUCCIÓN de MercadoPago');
+} else {
+  console.warn('⚠️ Formato de token no reconocido - verificar configuración');
+}
+
 const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+console.log('✅ Cliente MercadoPago configurado correctamente');
 
 // ===============================
 // FUNCIONES AUXILIARES
@@ -234,10 +255,25 @@ app.post('/crear-preferencia', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error al crear preferencia:', error);
+    console.error('❌ Error al crear preferencia:');
+    console.error('📋 Detalles completos del error:', JSON.stringify(error, null, 2));
+    console.error('🔍 Mensaje:', error.message);
+    console.error('🔍 Código:', error.status || error.code);
+    
+    // Errores específicos de MercadoPago
+    if (error.message === 'invalid_token') {
+      console.error('🔑 Error de token - verificar MP_ACCESS_TOKEN en variables de entorno');
+      return res.status(401).json({
+        error: 'Error de autenticación con MercadoPago',
+        message: 'Token de acceso inválido o expirado',
+        details: 'Verificar configuración de MP_ACCESS_TOKEN'
+      });
+    }
+    
     res.status(500).json({
       error: 'Error al crear preferencia',
-      message: error.message
+      message: error.message,
+      mp_error: error
     });
   }
 });
