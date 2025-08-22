@@ -36,9 +36,12 @@ console.log('✅ Express app creada exitosamente');
 // Almacén en memoria para notificaciones de webhook
 const webhookNotifications = new Map();
 
+console.log('🔧 Configurando middlewares básicos...');
+
 // ===============================
 // CONFIGURACIÓN DE MIDDLEWARES
 // ===============================
+console.log('📝 Configurando CORS...');
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -52,10 +55,14 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with']
 }));
+console.log('✅ CORS configurado exitosamente');
 
+console.log('📝 Configurando parsers JSON y URL...');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+console.log('✅ Parsers configurados exitosamente');
 
+console.log('📝 Configurando middleware de preflight...');
 // Middleware adicional para manejar preflight requests
 app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -64,9 +71,12 @@ app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(200);
 });
+console.log('✅ Middleware de preflight configurado');
 
+console.log('📝 Configurando archivos estáticos...');
 // Servir archivos estáticos desde la carpeta raíz
 app.use(express.static(path.join(__dirname, '..')));
+console.log('✅ Archivos estáticos configurados');
 
 // ===============================
 // CONFIGURACIÓN DE BASE DE DATOS
@@ -150,6 +160,7 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ===============================
 // ENDPOINT: CREAR PREFERENCIA DE MERCADO PAGO
 // ===============================
+console.log('📝 Definiendo endpoint POST /crear-preferencia...');
 app.post('/crear-preferencia', async (req, res) => {
   // Headers CORS explícitos para este endpoint
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -193,10 +204,12 @@ app.post('/crear-preferencia', async (req, res) => {
     });
   }
 });
+console.log('✅ Endpoint POST /crear-preferencia definido exitosamente');
 
 // ===============================
 // ENDPOINT: WEBHOOK DE MERCADO PAGO  
 // ===============================
+console.log('📝 Definiendo endpoint POST /webhook...');
 app.post('/webhook', async (req, res) => {
   try {
     const { type, data } = req.body;
@@ -255,10 +268,12 @@ app.post('/webhook', async (req, res) => {
     res.status(500).send('Error');
   }
 });
+console.log('✅ Endpoint POST /webhook definido exitosamente');
 
 // ===============================
 // ENDPOINT: STATUS DEL WEBHOOK - SIMPLIFICADO TEMPORALMENTE
 // ===============================
+console.log('📝 Definiendo endpoints de webhook status...');
 app.get('/webhook-status-test', (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -270,6 +285,7 @@ app.get('/webhook-status-test', (req, res) => {
   res.json({ processed, payment_id: paymentId, status: 'test-ok' });
 });
 
+console.log('📝 Definiendo endpoint GET /webhook-status/:paymentId...');
 app.get('/webhook-status/:paymentId', (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -280,10 +296,12 @@ app.get('/webhook-status/:paymentId', (req, res) => {
   
   res.json({ processed, payment_id: paymentId });
 });
+console.log('✅ Endpoint GET /webhook-status/:paymentId definido');
 
 // ===============================
 // ENDPOINT PRINCIPAL: CONSULTAR PEDIDO POR MP_PAYMENT_ID
 // ===============================
+console.log('📝 Definiendo endpoints de número de pedido...');
 // Versión de test sin parámetros de ruta
 app.get('/numero-pedido-test', async (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -292,6 +310,7 @@ app.get('/numero-pedido-test', async (req, res) => {
   res.json({ status: 'endpoint-test-ok', message: 'Endpoint funcionando' });
 });
 
+console.log('📝 Definiendo endpoint GET /numero-pedido/:paymentId...');
 app.get('/numero-pedido/:paymentId', async (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -349,10 +368,12 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     });
   }
 });
+console.log('✅ Endpoint GET /numero-pedido/:paymentId definido');
 
 // ===============================
 // ENDPOINT DE SALUD
 // ===============================
+console.log('📝 Definiendo endpoints básicos...');
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -379,6 +400,7 @@ app.use((error, req, res, next) => {
     timestamp: new Date().toISOString() 
   });
 });
+console.log('✅ Todos los endpoints definidos exitosamente');
 
 // ===============================
 // SERVIDOR HTTP
