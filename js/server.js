@@ -9,6 +9,10 @@ const crypto = require('crypto');
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+console.log('🔧 === INICIANDO SERVIDOR ===');
+console.log('📂 Directorio de trabajo:', __dirname);
+console.log('🌐 NODE_ENV:', process.env.NODE_ENV || 'development');
+
 // ===============================
 // VALIDACIÓN DE VARIABLES DE ENTORNO
 // ===============================
@@ -25,7 +29,9 @@ if (process.env.ADMIN_EMAILS) {
   console.log('⚠️ ADMIN_EMAILS no configurado');
 }
 
+console.log('✅ Creando instancia de Express...');
 const app = express();
+console.log('✅ Express app creada exitosamente');
 
 // Almacén en memoria para notificaciones de webhook
 const webhookNotifications = new Map();
@@ -251,8 +257,19 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ===============================
-// ENDPOINT: STATUS DEL WEBHOOK
+// ENDPOINT: STATUS DEL WEBHOOK - SIMPLIFICADO TEMPORALMENTE
 // ===============================
+app.get('/webhook-status-test', (req, res) => {
+  // Headers CORS explícitos
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  const paymentId = req.query.paymentId;
+  const processed = webhookNotifications.has(paymentId);
+  
+  res.json({ processed, payment_id: paymentId, status: 'test-ok' });
+});
+
 app.get('/webhook-status/:paymentId', (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -267,6 +284,14 @@ app.get('/webhook-status/:paymentId', (req, res) => {
 // ===============================
 // ENDPOINT PRINCIPAL: CONSULTAR PEDIDO POR MP_PAYMENT_ID
 // ===============================
+// Versión de test sin parámetros de ruta
+app.get('/numero-pedido-test', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  res.json({ status: 'endpoint-test-ok', message: 'Endpoint funcionando' });
+});
+
 app.get('/numero-pedido/:paymentId', async (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -323,6 +348,36 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       message: error.message
     });
   }
+});
+
+// ===============================
+// ENDPOINT DE SALUD
+// ===============================
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'capri-store-api'
+  });
+});
+
+// Endpoint de test básico
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Capri Store API funcionando', 
+    endpoints: ['/health', '/crear-preferencia', '/webhook', '/numero-pedido/:paymentId'] 
+  });
+});
+
+// Manejo de errores global
+app.use((error, req, res, next) => {
+  console.error('💥 Error global capturado:', error);
+  res.status(500).json({ 
+    error: 'Error interno del servidor', 
+    message: error.message,
+    timestamp: new Date().toISOString() 
+  });
 });
 
 // ===============================
