@@ -39,7 +39,8 @@ app.use(cors({
     'http://127.0.0.1:3000', 
     'http://localhost:8080',
     'http://127.0.0.1:8080',
-    'https://capristorezte.com.ar'
+    'https://capristorezte.com.ar',
+    'https://www.capristorezte.com.ar'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -48,6 +49,15 @@ app.use(cors({
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Middleware adicional para manejar preflight requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-requested-with');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 // Servir archivos estáticos desde la carpeta raíz
 app.use(express.static(path.join(__dirname, '..')));
@@ -135,6 +145,10 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ENDPOINT: CREAR PREFERENCIA DE MERCADO PAGO
 // ===============================
 app.post('/crear-preferencia', async (req, res) => {
+  // Headers CORS explícitos para este endpoint
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   try {
     console.log('Creando preferencia de pago...');
     
@@ -240,6 +254,10 @@ app.post('/webhook', async (req, res) => {
 // ENDPOINT: STATUS DEL WEBHOOK
 // ===============================
 app.get('/webhook-status/:paymentId', (req, res) => {
+  // Headers CORS explícitos
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   const { paymentId } = req.params;
   const processed = webhookNotifications.has(paymentId);
   
@@ -250,6 +268,10 @@ app.get('/webhook-status/:paymentId', (req, res) => {
 // ENDPOINT PRINCIPAL: CONSULTAR PEDIDO POR MP_PAYMENT_ID
 // ===============================
 app.get('/numero-pedido/:paymentId', async (req, res) => {
+  // Headers CORS explícitos
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   try {
     const { paymentId } = req.params;
     console.log(`Consultando pedido para payment ID: ${paymentId}`);
