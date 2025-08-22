@@ -62,16 +62,21 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 console.log('✅ Parsers configurados exitosamente');
 
-console.log('📝 Configurando middleware de preflight...');
-// Middleware adicional para manejar preflight requests
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
+console.log('📝 Configurando middleware de preflight (alternativo)...');
+// Middleware CORS alternativo más explícito
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-requested-with');
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
 });
-console.log('✅ Middleware de preflight configurado');
+console.log('✅ Middleware de preflight alternativo configurado');
 
 console.log('📝 Configurando archivos estáticos...');
 // Servir archivos estáticos desde la carpeta raíz
