@@ -31,3 +31,10 @@ coverage/
 *.local
 *.swp
 *.swo
+
+# Backup files
+*_old*
+*_backup*
+*_final*
+server_old_complex.js
+server_final.js
