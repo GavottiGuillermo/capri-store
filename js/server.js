@@ -133,24 +133,24 @@ async function initializeDatabase() {
 console.log('🔧 Configurando MercadoPago...');
 
 // Validar token de acceso
-if (!process.env.MP_ACCESS_TOKEN) {
-  console.error('❌ ERROR CRÍTICO: MP_ACCESS_TOKEN no está configurado en las variables de entorno');
+if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
+  console.error('❌ ERROR CRÍTICO: MERCADOPAGO_ACCESS_TOKEN no está configurado en las variables de entorno');
   process.exit(1);
 }
 
 // Verificar formato del token
-const tokenStart = process.env.MP_ACCESS_TOKEN.substring(0, 20);
+const tokenStart = process.env.MERCADOPAGO_ACCESS_TOKEN.substring(0, 20);
 console.log('🔑 Token MercadoPago configurado:', tokenStart + '...');
 
-if (process.env.MP_ACCESS_TOKEN.startsWith('TEST-')) {
+if (process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('TEST-')) {
   console.log('🧪 Usando token de PRUEBA de MercadoPago');
-} else if (process.env.MP_ACCESS_TOKEN.startsWith('APP_USR-')) {
+} else if (process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('APP_USR-')) {
   console.log('🚀 Usando token de PRODUCCIÓN de MercadoPago');
 } else {
   console.warn('⚠️ Formato de token no reconocido - verificar configuración');
 }
 
-const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+const client = new MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN });
 console.log('✅ Cliente MercadoPago configurado correctamente');
 
 // ===============================
@@ -262,11 +262,11 @@ app.post('/crear-preferencia', async (req, res) => {
     
     // Errores específicos de MercadoPago
     if (error.message === 'invalid_token') {
-      console.error('🔑 Error de token - verificar MP_ACCESS_TOKEN en variables de entorno');
+      console.error('🔑 Error de token - verificar MERCADOPAGO_ACCESS_TOKEN en variables de entorno');
       return res.status(401).json({
         error: 'Error de autenticación con MercadoPago',
         message: 'Token de acceso inválido o expirado',
-        details: 'Verificar configuración de MP_ACCESS_TOKEN'
+        details: 'Verificar configuración de MERCADOPAGO_ACCESS_TOKEN'
       });
     }
     
