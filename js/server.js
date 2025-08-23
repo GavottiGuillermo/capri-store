@@ -292,14 +292,39 @@ app.post('/webhook', async (req, res) => {
   try {
     console.log('🔔 Webhook recibido - datos completos:', JSON.stringify(req.body, null, 2));
     
-    const { type, data } = req.body;
+    const { type, data, action, topic, resource } = req.body;
     
-    if (type === 'payment') {
-      const paymentId = data.id;
-      console.log(`💳 Webhook recibido para pago: ${paymentId}`);
-      console.log(`🔍 Tipo de evento: ${type}`);
+    // Filtrar solo los eventos de pago que necesitamos procesar
+    let paymentId = null;
+    let shouldProcess = false;
+    
+    if (type === 'payment' && data?.id) {
+      paymentId = data.id;
+      shouldProcess = true;
+      console.log(`💳 Webhook payment recibido para pago: ${paymentId}`);
+    } else if (action === 'payment.created' && data?.id) {
+      paymentId = data.id;
+      shouldProcess = true;
+      console.log(`💳 Webhook payment.created recibido para pago: ${paymentId}`);
+    } else if (topic === 'payment' && resource) {
+      paymentId = resource;
+      shouldProcess = true;
+      console.log(`� Webhook topic payment recibido para pago: ${paymentId}`);
+    } else {
+      console.log(`ℹ️ Webhook ignorado - tipo: ${type || topic}, action: ${action}`);
+      return res.status(200).send('OK - Ignored');
+    }
+    
+    if (shouldProcess && paymentId) {
+      // Verificar si ya fue procesado para evitar duplicados
+      if (webhookNotifications.has(paymentId)) {
+        console.log(`⚠️ Pago ${paymentId} ya fue procesado anteriormente - ignorando`);
+        return res.status(200).send('OK - Already processed');
+      }
       
-      // Marcar como procesado
+      console.log(`🔍 Procesando pago: ${paymentId}`);
+      
+      // Marcar como procesado ANTES de procesar para evitar duplicados
       webhookNotifications.set(paymentId, true);
       
       // Obtener información del pago
@@ -362,7 +387,11 @@ app.post('/webhook', async (req, res) => {
         } catch (error) {
           console.error('❌ Error al procesar pedido en webhook:', error);
         }
+      } else {
+        console.log(`⚠️ Pago ${paymentId} no está aprobado - estado: ${paymentInfo.status}`);
       }
+    } else {
+      console.log(`ℹ️ No se encontró paymentId válido en el webhook`);
     }
     
     res.status(200).send('OK');
