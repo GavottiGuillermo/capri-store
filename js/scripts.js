@@ -74,25 +74,6 @@
 
 // Cargar carrito desde localStorage o iniciar vacío
 let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
-// Al cargar, verificar si hay items sin stock y alertar
-try {
-  const agotados = JSON.parse(localStorage.getItem('agotados') || '[]');
-  if (Array.isArray(agotados) && agotados.length && Array.isArray(cartItems) && cartItems.length) {
-    const originales = cartItems.length;
-    cartItems = cartItems.filter(it => {
-      try {
-        const path = decodeURIComponent(it.img || '');
-        const m = path.match(/\/(\d+)-[^/]+/);
-        const id = m && m[1] ? parseInt(m[1], 10) : null;
-        return !(id && agotados.includes(id));
-      } catch { return true; }
-    });
-    if (cartItems.length !== originales) {
-      guardarCarrito();
-      setTimeout(() => alert('Algunos artículos de tu carrito quedaron sin stock y fueron removidos.'), 100);
-    }
-  }
-} catch {}
 
 // Guardar el carrito en localStorage
 function guardarCarrito() {
@@ -101,166 +82,17 @@ function guardarCarrito() {
 
 // Agregar un producto al carrito (permite repetidos con cantidad)
 function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
-  // Evitar agregar si agotado
-  try {
-    let id = null;
-    
-    // NUEVO: Extraer ID desde el objeto producto si está disponible
-    if (producto) {
-      // Opción 1: ID directo en el objeto
-      if (producto.id) {
-        id = parseInt(producto.id, 10);
-      }
-      // Opción 2: Usar originalData si está disponible
-      else if (producto.originalData) {
-        // Intentar extraer desde .txt primero
-        if (producto.originalData.txt) {
-          const match = producto.originalData.txt.match(/\/(\d+)[-_]?[^/]*\//i);
-          if (match && match[1]) {
-            id = parseInt(match[1], 10);
-          }
-        }
-        // Luego desde .imagen si no se encontró en txt
-        if (!id && producto.originalData.imagen) {
-          const match = producto.originalData.imagen.match(/\/(\d+)[-_]?[^/]*\//i);
-          if (match && match[1]) {
-            id = parseInt(match[1], 10);
-          }
-        }
-      }
-      // Opción 3: Extraer ID del nombre de la carpeta desde .txt o .imagen directamente
-      else if (producto.txt) {
-        const match = producto.txt.match(/\/(\d+)[-_]?[^/]*\//i);
-        if (match && match[1]) {
-          id = parseInt(match[1], 10);
-        }
-      }
-      else if (producto.imagen || producto.img) {
-        const url = producto.imagen || producto.img;
-        const match = url.match(/\/(\d+)[-_]?[^/]*\//i);
-        if (match && match[1]) {
-          id = parseInt(match[1], 10);
-        }
-      }
-    }
-    
-    // FALLBACK: Método anterior desde la imagen
-    if (!id) {
-      const path = decodeURIComponent(img || '');
-      const m = path.match(/\/(\d+)-[^/]+/);
-      id = m && m[1] ? parseInt(m[1], 10) : null;
-    }
-    
-    const agotados = JSON.parse(localStorage.getItem('agotados') || '[]');
-    if (id && Array.isArray(agotados) && agotados.includes(id)) {
-      mostrarPopup('Este artículo está sin stock');
-      return;
-    }
-  } catch {}
-  
   // Validar datos antes de agregar
   if (!nombre || isNaN(Number(precio)) || !img || isNaN(Number(cantidad)) || Number(cantidad) < 1) return;
   
   precio = Number(precio);
   cantidad = Number(cantidad);
   
-  // Extraer ID del producto (misma lógica que arriba)
-  let productId = null;
-  try {
-    console.log('🔍 === EXTRAYENDO ID DEL PRODUCTO ===');
-    console.log('📦 Producto recibido:', producto);
-    console.log('🖼️ Imagen recibida:', img);
-    console.log('📝 Nombre recibido:', nombre);
-    
-    // NUEVO: Extraer ID desde el objeto producto si está disponible
-    if (producto) {
-      console.log('✅ Producto disponible, buscando ID...');
-      
-      // Opción 1: ID directo en el objeto
-      if (producto.id) {
-        productId = parseInt(producto.id, 10);
-        console.log('✅ ID directo encontrado:', productId);
-      }
-      // Opción 2: Usar originalData si está disponible
-      else if (producto.originalData) {
-        console.log('🔍 Usando originalData:', producto.originalData);
-        
-        // Intentar extraer desde .txt primero
-        if (producto.originalData.txt) {
-          console.log('🔍 Analizando URL .txt:', producto.originalData.txt);
-          const match = producto.originalData.txt.match(/\/(\d+)[-_]?[^/]*\//i);
-          if (match && match[1]) {
-            productId = parseInt(match[1], 10);
-            console.log('✅ ID extraído de originalData.txt:', productId, 'desde:', producto.originalData.txt);
-          } else {
-            console.log('❌ No se encontró ID en .txt URL pattern');
-          }
-        }
-        // Luego desde .imagen si no se encontró en txt
-        if (!productId && producto.originalData.imagen) {
-          console.log('🔍 Analizando URL .imagen:', producto.originalData.imagen);
-          const match = producto.originalData.imagen.match(/\/(\d+)[-_]?[^/]*\//i);
-          if (match && match[1]) {
-            productId = parseInt(match[1], 10);
-            console.log('✅ ID extraído de originalData.imagen:', productId, 'desde:', producto.originalData.imagen);
-          } else {
-            console.log('❌ No se encontró ID en .imagen URL pattern');
-          }
-        }
-      }
-      // Opción 3: Extraer ID del nombre de la carpeta desde .txt o .imagen directamente
-      else if (producto.txt) {
-        console.log('🔍 Analizando URL .txt directo:', producto.txt);
-        const match = producto.txt.match(/\/(\d+)[-_]?[^/]*\//i);
-        if (match && match[1]) {
-          productId = parseInt(match[1], 10);
-          console.log('✅ ID extraído de .txt:', productId, 'desde:', producto.txt);
-        }
-      }
-      else if (producto.imagen || producto.img) {
-        const url = producto.imagen || producto.img;
-        console.log('🔍 Analizando URL .imagen directo:', url);
-        const match = url.match(/\/(\d+)[-_]?[^/]*\//i);
-        if (match && match[1]) {
-          productId = parseInt(match[1], 10);
-          console.log('✅ ID extraído de .imagen:', productId, 'desde:', url);
-        }
-      }
-    }
-    
-    // FALLBACK: Método anterior desde la imagen
-    if (!productId) {
-      const path = decodeURIComponent(img || '');
-      const match = path.match(/\/(\d+)-[^/]+/);
-      if (match && match[1]) {
-        productId = parseInt(match[1], 10);
-        console.log('✅ ID extraído (fallback):', productId, 'desde:', img);
-      }
-    }
-    
-    if (!productId) {
-      console.warn('⚠️ No se pudo extraer ID del producto. Detalles:');
-      console.warn('- Nombre:', nombre);
-      console.warn('- Imagen:', img);  
-      console.warn('- Producto objeto:', producto);
-      if (producto?.originalData) {
-        console.warn('- originalData.txt:', producto.originalData.txt);
-        console.warn('- originalData.imagen:', producto.originalData.imagen);
-      }
-    } else {
-      console.log('🎉 ID del producto extraído exitosamente:', productId);
-    }
-    
-  } catch (e) {
-    console.warn('❌ Error extrayendo ID del producto:', e.message);
-  }
-  
   const idx = cartItems.findIndex(item => item.nombre === nombre && item.img === img);
   if (idx !== -1) {
     cartItems[idx].cantidad += cantidad;
   } else {
     cartItems.push({ 
-      id: productId,  // ⭐ ID del producto extraído de la carpeta
       nombre, 
       precio, 
       img, 
@@ -444,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function() {
         Number(producto.precio),
         producto.img,
         quantity,
-        producto  // ⭐ AGREGADO: pasar el objeto producto completo
+        producto
       );
       mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${size}) x${quantity}`);
       productForm.reset();
@@ -702,6 +534,13 @@ function smoothScrollTo(target, duration = 1000) {
   }
   
   requestAnimationFrame(animation);
+}
+
+// Función para limpiar carrito después de compra exitosa (usada por success.js)
+function limpiarCarritoDespuesDeCompra() {
+  console.log('🧹 Limpiando carrito después de compra exitosa...');
+  vaciarCarrito();
+  mostrarPopup('¡Compra realizada! El carrito ha sido vaciado.');
 }
 
 
