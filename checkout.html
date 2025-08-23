@@ -10,9 +10,9 @@
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
     body { font-family: 'Montserrat', sans-serif; }
-  .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
-  .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
-    
+    .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+    .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
+
     /* Clase específica para mensaje informativo de envío */
     .mensaje-informativo-envio {
       background: linear-gradient(45deg, #d1ecf1, #e8f5f8) !important;
@@ -110,24 +110,24 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="nombre">Nombre *</label>
-                <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Tu nombre" required>
+                <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Tu nombre" required autocomplete="given-name">
                 <div class="invalid-feedback">Por favor ingresa tu nombre.</div>
               </div>
               <div class="col-md-6 mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="apellido">Apellido *</label>
-                <input type="text" class="form-control" id="apellido" name="apellido" placeholder="Tu apellido" required>
+                <input type="text" class="form-control" id="apellido" name="apellido" placeholder="Tu apellido" required autocomplete="family-name">
                 <div class="invalid-feedback">Por favor ingresa tu apellido.</div>
               </div>
             </div>
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="email">Correo Electrónico *</label>
-                <input type="email" class="form-control" id="email" name="email" placeholder="tu@email.com" required>
+                <input type="email" class="form-control" id="email" name="email" placeholder="tu@email.com" required autocomplete="email">
                 <div class="invalid-feedback">Por favor ingresa un correo válido.</div>
               </div>
               <div class="col-md-6 mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="telefono">Teléfono *</label>
-                <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="+54 9 11 1234 5678" required>
+                <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="+54 9 11 1234 5678" required autocomplete="tel">
                 <div class="invalid-feedback">Por favor ingresa tu teléfono.</div>
               </div>
             </div>
@@ -165,7 +165,7 @@
               <div class="mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="calleNumero">Calle y número *</label>
                 <input type="text" class="form-control" id="calleNumero" name="calleNumero" 
-                       placeholder="Ej: Av. Corrientes 1234" disabled>
+                       placeholder="Ej: Av. Corrientes 1234" disabled autocomplete="street-address">
                 <div class="invalid-feedback">Por favor ingresa la dirección completa.</div>
               </div>
 
@@ -174,13 +174,13 @@
                 <div class="col-md-4 mb-3">
                   <label class="font-weight-bold text-vino-tinto" for="codigoPostal">Código Postal *</label>
                   <input type="text" class="form-control" id="codigoPostal" name="codigoPostal" 
-                         placeholder="Ej: 2800" disabled>
+                         placeholder="Ej: 2800" disabled autocomplete="postal-code">
                   <div class="invalid-feedback">Por favor ingresa tu código postal.</div>
                 </div>
                 <div class="col-md-8 mb-3">
                   <label class="font-weight-bold text-vino-tinto" for="ciudad">Ciudad *</label>
                   <input type="text" class="form-control" id="ciudad" name="ciudad" 
-                         placeholder="Ej: Buenos Aires" disabled>
+                         placeholder="Ej: Buenos Aires" disabled autocomplete="address-level2">
                   <div class="invalid-feedback">Por favor ingresa tu ciudad.</div>
                 </div>
               </div>
@@ -188,7 +188,7 @@
               <!-- Provincia/Estado -->
               <div class="mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="provincia">Provincia/Estado *</label>
-                <select class="form-control" id="provincia" name="provincia" disabled>
+                <select class="form-control" id="provincia" name="provincia" disabled autocomplete="address-level1">
                   <option value="">Seleccionar provincia</option>
                   <option value="Buenos Aires">Buenos Aires</option>
                   <option value="Catamarca">Catamarca</option>
@@ -222,7 +222,7 @@
               <div class="mb-3">
                 <label class="font-weight-bold text-vino-tinto" for="referencias">Referencias adicionales (opcional)</label>
                 <textarea class="form-control" id="referencias" name="referencias" rows="2" 
-                          placeholder="Ej: Portero, timbre, entre calles, piso, departamento..." disabled></textarea>
+                          placeholder="Ej: Portero, timbre, entre calles, piso, departamento..." disabled autocomplete="off"></textarea>
                 <small class="text-muted">Ayúdanos con detalles para que el envío llegue sin problemas</small>
               </div>
 
