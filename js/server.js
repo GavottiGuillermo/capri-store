@@ -316,16 +316,16 @@ app.post('/webhook', async (req, res) => {
     }
     
     if (shouldProcess && paymentId) {
-      // Verificar si ya fue procesado para evitar duplicados
+      // VERIFICACIÓN CRÍTICA: Solo procesar si NO ha sido procesado antes
       if (webhookNotifications.has(paymentId)) {
-        console.log(`⚠️ Pago ${paymentId} ya fue procesado anteriormente - ignorando`);
+        console.log(`⚠️ Pago ${paymentId} ya fue procesado anteriormente - IGNORANDO WEBHOOK`);
         return res.status(200).send('OK - Already processed');
       }
       
-      console.log(`🔍 Procesando pago: ${paymentId}`);
-      
-      // Marcar como procesado ANTES de procesar para evitar duplicados
+      // MARCAR INMEDIATAMENTE como procesado para evitar race conditions
       webhookNotifications.set(paymentId, true);
+      console.log(`🔒 Pago ${paymentId} marcado como procesado - procediendo...`);
+      console.log(`🔍 Procesando pago: ${paymentId}`);
       
       // Obtener información del pago
       const payment = new Payment(client);
