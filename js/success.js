@@ -14,47 +14,44 @@ const urlParams = new URLSearchParams(window.location.search);
 const paymentId = urlParams.get('payment_id') || urlParams.get('paymentId');
 console.log('💳 Payment ID detectado en URL:', paymentId);
 
-// Ejecutar inmediatamente (sin esperar DOMContentLoaded)
-console.log('🏃‍♂️ EJECUTANDO INMEDIATAMENTE - Sin esperar DOM');
-try {
-    // Buscar número de pedido inmediatamente si tenemos payment_id
-    if (paymentId) {
-        console.log('🔍 Payment ID encontrado, consultando inmediatamente:', paymentId);
-        consultarNumeroPedido(paymentId);
-    } else {
-        console.log('❌ No se encontró payment_id en la URL');
-        console.log('📋 Parámetros disponibles:', Array.from(urlParams.entries()));
-    }
-} catch (error) {
-    console.error('❌ Error en ejecución inmediata:', error);
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎉 Success.js cargado - Página de éxito iniciada');
     console.log('🔍 DOM Content Loaded ejecutado');
     
     try {
         // Inicializar funciones principales
-        console.log('📋 Iniciando mostrarDatosCompra...');
-        mostrarDatosCompra();
-        
         console.log('🔍 Iniciando consultarYMostrarNumeroPedido...');
         consultarYMostrarNumeroPedido();
         
-        console.log('⚙️ Iniciando configurarEventos...');
-        configurarEventos();
-        
-        // Configurar evento del botón del carrito
-        const cartButton = document.getElementById('cart-button');
-        if (cartButton && typeof toggleSidebar === 'function') {
-            cartButton.addEventListener('click', toggleSidebar);
-        }
-        
-        console.log('✅ Todas las funciones inicializadas correctamente');
+        console.log('✅ Funciones inicializadas correctamente');
     } catch (error) {
         console.error('❌ Error en la inicialización:', error);
     }
 });
+
+// Función principal para consultar número de pedido
+function consultarYMostrarNumeroPedido() {
+    console.log('🔍 === INICIANDO CONSULTA DE NÚMERO DE PEDIDO ===');
+    
+    try {
+        // Obtener payment_id de la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentId = urlParams.get('payment_id') || urlParams.get('paymentId');
+        
+        console.log('💳 Payment ID desde URL:', paymentId);
+        
+        if (paymentId) {
+            console.log('✅ Payment ID encontrado, consultando...');
+            consultarNumeroPedido(paymentId);
+        } else {
+            console.error('❌ No se encontró payment_id en la URL');
+            mostrarError('No se pudo obtener la información del pago. Por favor contacte soporte.');
+        }
+    } catch (error) {
+        console.error('❌ Error en consultarYMostrarNumeroPedido:', error);
+        mostrarError('Error al procesar la información del pago.');
+    }
+}
 
 // Función simplificada para consultar número de pedido
 function consultarNumeroPedido(paymentId) {
@@ -91,100 +88,87 @@ function consultarNumeroPedido(paymentId) {
             console.log('🔢 Número display:', data.numero_display);
             mostrarNumeroPedido(data.numero_display, data.id_pedido_completo);
         } else {
-            console.log('❌ Pedido no encontrado');
+            console.log('❌ Pedido no encontrado, reintentando...');
             setTimeout(() => consultarNumeroPedido(paymentId), 2000);
         }
     })
     .catch(error => {
         console.error('❌ Error en consulta:', error);
-        // Reintentar después de 3 segundos
         setTimeout(() => consultarNumeroPedido(paymentId), 3000);
     });
 }
 
-// Función para mostrar el número de pedido en la página
+// Función CRÍTICA: mostrar el número de pedido y hacer visible el contenedor
 function mostrarNumeroPedido(numeroDisplay, idCompleto) {
     console.log('🎯 === MOSTRAR NUMERO PEDIDO ===');
     console.log('🔢 Numero display:', numeroDisplay);
     console.log('🆔 ID completo:', idCompleto);
     
-    // Ocultar mensaje de procesamiento
+    // PASO 1: Ocultar mensaje de procesamiento
     const procesandoDiv = document.getElementById('procesando-pedido');
     if (procesandoDiv) {
         procesandoDiv.classList.add('d-none');
         console.log('✅ Mensaje de procesamiento ocultado');
+    } else {
+        console.log('⚠️ Elemento procesando-pedido no encontrado');
     }
     
-    // Mostrar confirmación
+    // PASO 2: MOSTRAR el contenedor de confirmación (CRÍTICO)
     const confirmadoDiv = document.getElementById('pedido-confirmado');
     if (confirmadoDiv) {
+        console.log('🔍 Estado inicial del contenedor:', confirmadoDiv.className);
         confirmadoDiv.classList.remove('d-none');
-        console.log('✅ Mensaje de confirmación mostrado');
+        confirmadoDiv.style.display = 'block'; // Forzar display
+        console.log('✅ Contenedor pedido-confirmado mostrado');
+        console.log('🔍 Estado final del contenedor:', confirmadoDiv.className);
+    } else {
+        console.error('❌ Contenedor pedido-confirmado NO encontrado');
     }
     
-    // Mostrar número de pedido
+    // PASO 3: Insertar número de pedido
     const numeroPedidoDiv = document.getElementById('numero-pedido');
     if (numeroPedidoDiv) {
-        numeroPedidoDiv.innerHTML = `
-            <div class="mt-3 p-3 bg-light rounded">
-                <h6 class="mb-2 capri-color">Tu número de pedido es:</h6>
-                <h4 class="capri-color fw-bold">${numeroDisplay}</h4>
-                <small class="text-muted">ID: ${idCompleto}</small>
+        const htmlContent = `
+            <div class="mt-3 p-3 bg-light rounded border" style="border-color: #6b0a0a !important;">
+                <div class="text-center">
+                    <h6 class="mb-2 capri-color">Tu número de pedido es:</h6>
+                    <h2 class="capri-color fw-bold" style="font-size: 2.5rem;">${numeroDisplay}</h2>
+                    <small class="text-muted">ID: ${idCompleto}</small>
+                </div>
             </div>
         `;
+        
+        numeroPedidoDiv.innerHTML = htmlContent;
         console.log('✅ Número de pedido insertado en DOM');
+        console.log('🔍 HTML insertado:', htmlContent.substring(0, 100) + '...');
+        
+        // VERIFICAR VISIBILIDAD DEL ELEMENTO Y SU PADRE
+        console.log('🔍 Verificando visibilidad...');
+        console.log('- Element display:', getComputedStyle(numeroPedidoDiv).display);
+        console.log('- Element visibility:', getComputedStyle(numeroPedidoDiv).visibility);
+        
+        const parent = numeroPedidoDiv.parentElement;
+        if (parent) {
+            console.log('- Parent display:', getComputedStyle(parent).display);
+            console.log('- Parent visibility:', getComputedStyle(parent).visibility);
+        }
+        
     } else {
         console.error('❌ Elemento numero-pedido no encontrado');
     }
-}
-
-// Función principal para mostrar datos de la compra
-function mostrarDatosCompra() {
-    console.log('📋 mostrarDatosCompra() ejecutada');
-}
-
-// Función principal para consultar número de pedido
-function consultarYMostrarNumeroPedido() {
-    console.log('🔍 consultarYMostrarNumeroPedido() iniciada');
     
-    try {
-        // Obtener payment_id de la URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const paymentId = urlParams.get('payment_id') || urlParams.get('paymentId');
-        
-        console.log('💳 Payment ID desde URL:', paymentId);
-        console.log('📋 Todos los parámetros:', Object.fromEntries(urlParams));
-        
-        if (paymentId) {
-            console.log('✅ Payment ID encontrado, consultando...');
-            consultarNumeroPedido(paymentId);
-        } else {
-            console.error('❌ No se encontró payment_id en la URL');
-            // Mostrar error al usuario
-            mostrarError('No se pudo obtener la información del pago. Por favor contacte soporte.');
-        }
-    } catch (error) {
-        console.error('❌ Error en consultarYMostrarNumeroPedido:', error);
-        mostrarError('Error al procesar la información del pago.');
-    }
-}
-
-// Función para configurar eventos
-function configurarEventos() {
-    console.log('⚙️ configurarEventos() ejecutada');
+    console.log('🎊 === PROCESO COMPLETADO ===');
 }
 
 // Función para mostrar errores
 function mostrarError(mensaje) {
     console.log('❌ Mostrando error:', mensaje);
     
-    // Ocultar mensaje de procesamiento
     const procesandoDiv = document.getElementById('procesando-pedido');
     if (procesandoDiv) {
         procesandoDiv.classList.add('d-none');
     }
     
-    // Mostrar error
     const confirmadoDiv = document.getElementById('pedido-confirmado');
     if (confirmadoDiv) {
         confirmadoDiv.className = 'alert alert-warning';
@@ -195,5 +179,6 @@ function mostrarError(mensaje) {
             <p class="mb-0">${mensaje}</p>
         `;
         confirmadoDiv.classList.remove('d-none');
+        confirmadoDiv.style.display = 'block';
     }
 }
