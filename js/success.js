@@ -1,18 +1,43 @@
 // js/success.js - Lógica para la página de éxito de compra
 // Cumple con CSP (Content Security Policy) de MercadoPago
 
+console.log('🚀 === SUCCESS.JS INICIANDO ===');
+console.log('📅 Timestamp:', new Date().toISOString());
+console.log('🌐 URL actual:', window.location.href);
+console.log('📋 Parámetros URL:', window.location.search);
+
+// Test inmediato (sin esperar DOM)
+console.log('🧪 TEST INMEDIATO - Archivo success.js cargado');
+
+// Test de parámetros URL
+const urlParams = new URLSearchParams(window.location.search);
+const paymentId = urlParams.get('payment_id') || urlParams.get('paymentId');
+console.log('💳 Payment ID detectado en URL:', paymentId);
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎉 Success.js cargado - Página de éxito iniciada');
+    console.log('🔍 DOM Content Loaded ejecutado');
     
-    // Inicializar funciones principales
-    mostrarDatosCompra();
-    consultarYMostrarNumeroPedido();
-    configurarEventos();
-    
-    // Configurar evento del botón del carrito
-    const cartButton = document.getElementById('cart-button');
-    if (cartButton && typeof toggleSidebar === 'function') {
-        cartButton.addEventListener('click', toggleSidebar);
+    try {
+        // Inicializar funciones principales
+        console.log('📋 Iniciando mostrarDatosCompra...');
+        mostrarDatosCompra();
+        
+        console.log('🔍 Iniciando consultarYMostrarNumeroPedido...');
+        consultarYMostrarNumeroPedido();
+        
+        console.log('⚙️ Iniciando configurarEventos...');
+        configurarEventos();
+        
+        // Configurar evento del botón del carrito
+        const cartButton = document.getElementById('cart-button');
+        if (cartButton && typeof toggleSidebar === 'function') {
+            cartButton.addEventListener('click', toggleSidebar);
+        }
+        
+        console.log('✅ Todas las funciones inicializadas correctamente');
+    } catch (error) {
+        console.error('❌ Error en la inicialización:', error);
     }
 });
 
