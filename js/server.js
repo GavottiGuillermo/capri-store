@@ -676,11 +676,108 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ===============================
+// ENDPOINT TEMPORAL: FORZAR PROCESAMIENTO DE PAGO MANUAL
+// ===============================
+console.log('📝 Definiendo endpoint POST /forzar-pago-manual...');
+app.post('/forzar-pago-manual/:paymentId', async (req, res) => {
+  const { paymentId } = req.params;
+  
+  console.log(`🔧 === FORZANDO PROCESAMIENTO MANUAL ===`);
+  console.log(`💳 Payment ID: ${paymentId}`);
+  
+  try {
+    // Obtener información del pago desde MercadoPago
+    const payment = await mercadopago.payment.findById(paymentId);
+    console.log('💳 Información del pago desde MP:', JSON.stringify(payment.body, null, 2));
+    
+    if (payment.body.status === 'approved') {
+      console.log('✅ Pago aprobado, procesando manualmente...');
+      
+      // Crear datos básicos del pedido
+      const pedidoData = {
+        mp_payment_id: paymentId,
+        email: payment.body.payer.email,
+        monto_total: payment.body.transaction_amount,
+        metodo_pago: payment.body.payment_method_id,
+        estado_pago: payment.body.status,
+        // Datos básicos por defecto
+        nombre_comprador: payment.body.payer.first_name || 'No especificado',
+        apellido_comprador: payment.body.payer.last_name || 'No especificado',
+        telefono_comprador: (payment.body.payer.phone?.area_code || '') + (payment.body.payer.phone?.number || '') || 'No especificado',
+        productos: JSON.stringify([{
+          nombre: 'Producto procesado manualmente',
+          talle: 'N/A',
+          cantidad: 1,
+          precio: payment.body.transaction_amount
+        }]),
+        tipo_entrega: 'envio',
+        calle_numero: 'Dirección no especificada',
+        codigo_postal: '0000',
+        ciudad: 'Ciudad no especificada',
+        provincia: 'Provincia no especificada',
+        referencias: 'Procesamiento manual'
+      };
+      
+      console.log('📦 Datos del pedido a insertar:', pedidoData);
+      
+      // Ejecutar el stored procedure
+      const result = await executeQueryWithRetry(
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)',
+        [
+          pedidoData.mp_payment_id,
+          pedidoData.email,
+          pedidoData.nombre_comprador,
+          pedidoData.apellido_comprador,
+          pedidoData.telefono_comprador,
+          pedidoData.productos,
+          pedidoData.monto_total,
+          pedidoData.metodo_pago,
+          pedidoData.estado_pago,
+          pedidoData.tipo_entrega,
+          pedidoData.calle_numero,
+          pedidoData.codigo_postal,
+          pedidoData.ciudad,
+          pedidoData.provincia,
+          pedidoData.referencias,
+          0 // costo_envio por defecto
+        ]
+      );
+      
+      console.log('✅ Pedido procesado manualmente exitosamente');
+      
+      res.json({
+        success: true,
+        message: 'Pago procesado manualmente exitosamente',
+        payment_id: paymentId,
+        status: payment.body.status,
+        amount: payment.body.transaction_amount
+      });
+      
+    } else {
+      console.log(`❌ El pago no está aprobado. Estado: ${payment.body.status}`);
+      res.status(400).json({
+        success: false,
+        message: `El pago no está aprobado. Estado actual: ${payment.body.status}`
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error al forzar procesamiento manual:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al procesar pago manualmente',
+      error: error.message
+    });
+  }
+});
+console.log('✅ Endpoint POST /forzar-pago-manual definido exitosamente');
+
 // Endpoint de test básico
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Capri Store API funcionando', 
-    endpoints: ['/health', '/crear-preferencia', '/webhook', '/numero-pedido/:paymentId'] 
+    endpoints: ['/health', '/crear-preferencia', '/webhook', '/numero-pedido/:paymentId', '/forzar-pago-manual/:paymentId'] 
   });
 });
 

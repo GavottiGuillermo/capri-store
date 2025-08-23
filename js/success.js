@@ -29,11 +29,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Variables globales para control de reintentos
+let intentosRealizados = 0;
+const MAX_INTENTOS = 10; // Máximo 10 intentos (20 segundos)
+
 // Función principal para consultar número de pedido
 function consultarYMostrarNumeroPedido() {
     console.log('🔍 === INICIANDO CONSULTA DE NÚMERO DE PEDIDO ===');
     
     try {
+        // Reiniciar contador de intentos
+        intentosRealizados = 0;
+        
         // Obtener payment_id de la URL
         const urlParams = new URLSearchParams(window.location.search);
         const paymentId = urlParams.get('payment_id') || urlParams.get('paymentId');
@@ -57,6 +64,7 @@ function consultarYMostrarNumeroPedido() {
 function consultarNumeroPedido(paymentId) {
     console.log('🔍 === CONSULTAR NUMERO PEDIDO ===');
     console.log('💳 PaymentId:', paymentId);
+    console.log('🔄 Intento:', intentosRealizados + 1, 'de', MAX_INTENTOS);
     
     const apiUrl = `https://capri-store.onrender.com/numero-pedido/${paymentId}`;
     console.log('🌐 URL de consulta:', apiUrl);
@@ -88,13 +96,29 @@ function consultarNumeroPedido(paymentId) {
             console.log('🔢 Número display:', data.numero_display);
             mostrarNumeroPedido(data.numero_display, data.id_pedido_completo);
         } else {
-            console.log('❌ Pedido no encontrado, reintentando...');
-            setTimeout(() => consultarNumeroPedido(paymentId), 2000);
+            console.log('❌ Pedido no encontrado...');
+            intentosRealizados++;
+            
+            if (intentosRealizados < MAX_INTENTOS) {
+                console.log(`🔄 Reintentando en 2 segundos... (${intentosRealizados}/${MAX_INTENTOS})`);
+                setTimeout(() => consultarNumeroPedido(paymentId), 2000);
+            } else {
+                console.log('❌ Se alcanzó el máximo de intentos. Mostrando error.');
+                mostrarError('No se pudo encontrar la información del pedido. El webhook puede estar procesándose. Por favor recargue la página en unos minutos o contacte soporte si persiste el problema.');
+            }
         }
     })
     .catch(error => {
         console.error('❌ Error en consulta:', error);
-        setTimeout(() => consultarNumeroPedido(paymentId), 3000);
+        intentosRealizados++;
+        
+        if (intentosRealizados < MAX_INTENTOS) {
+            console.log(`🔄 Reintentando en 3 segundos por error... (${intentosRealizados}/${MAX_INTENTOS})`);
+            setTimeout(() => consultarNumeroPedido(paymentId), 3000);
+        } else {
+            console.log('❌ Se alcanzó el máximo de intentos por errores.');
+            mostrarError('Error de conectividad. Por favor recargue la página o contacte soporte.');
+        }
     });
 }
 
