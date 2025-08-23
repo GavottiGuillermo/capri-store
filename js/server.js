@@ -3,6 +3,7 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -377,18 +378,98 @@ app.post('/webhook', async (req, res) => {
         
         // Procesar el pedido con stored procedure
         try {
-          // Extraer IDs de productos del payment info
-          const items = paymentInfo.additional_info?.items || [];
-          const productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
-          
-          console.log('🛍️ Items completos recibidos:', JSON.stringify(items, null, 2));
-          console.log('🏷️ Productos a procesar (IDs):', productIds);
+          // Preferir obtener productIds desde la tabla 'productos' por mp_payment_id
+          let productIds = '';
+          try {
+            const q = `SELECT id_articulo FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2 ORDER BY pedido_fecha DESC`;
+            const vals = [paymentId, paymentId.toString()];
+            const r = await executeQueryWithRetry(pool, q, vals, 2);
 
-          // Si no hay productIds, no llamar al stored procedure (evita raise del SP)
-          if (!productIds || productIds.trim() === '') {
-            console.log('⚠️ No se encontraron productIds en paymentInfo. Ignorando inserción en BD para evitar error en SP.');
-            // Devolver 200 para evitar reintentos por parte de MP
-            return res.status(200).send('OK - No productIds');
+            if (r && r.rows && r.rows.length > 0) {
+              const ids = r.rows.map(row => row.id_articulo).filter(Boolean);
+              productIds = ids.join(',');
+              console.log('✅ productIds obtenidos desde productos.mp_payment_id:', productIds);
+            } else {
+              console.log('⚠️ No se encontraron productos con mp_payment_id =', paymentId);
+
+              // Persistir en un log local para que el equipo pueda re-procesar manualmente
+              try {
+                const failureRecord = {
+                  timestamp: new Date().toISOString(),
+                  paymentId,
+                  note: 'No products with mp_payment_id',
+                  paymentInfoSnippet: {
+                    status: paymentInfo.status,
+                    transaction_amount: paymentInfo.transaction_amount,
+                    payer: paymentInfo.payer
+                  }
+                };
+                const logPath = path.join(__dirname, '..', 'webhook_failed.log');
+                fs.appendFileSync(logPath, JSON.stringify(failureRecord) + '\n');
+                console.log('✅ Evento webhook fallido registrado en', logPath);
+              } catch (fileErr) {
+                console.error('⚠️ Error al escribir webhook_failed.log:', fileErr.message || fileErr);
+              }
+
+              // Intentar notificar a administradores si están configurados
+              try {
+                if (process.env.ADMIN_EMAILS && process.env.SMTP_USER && process.env.SMTP_PASS) {
+                  const transporter = nodemailer.createTransport({
+                    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+                    port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
+                    secure: false,
+                    auth: {
+                      user: process.env.SMTP_USER,
+                      pass: process.env.SMTP_PASS
+                    }
+                  });
+
+                  const mailOptions = {
+                    from: process.env.SMTP_USER,
+                    to: process.env.ADMIN_EMAILS,
+                    subject: `[ALERTA] Webhook MP sin productIds (mp_payment_id missing) - paymentId ${paymentId}`,
+                    text: `Se recibió un webhook aprobado de MercadoPago pero no hay registros en 'productos' con mp_payment_id = ${paymentId}.\n\nSe registró en webhook_failed.log para su revisión.`
+                  };
+
+                  transporter.sendMail(mailOptions).then(info => {
+                    console.log('✅ Notificación enviada a administradores:', info.response || info);
+                  }).catch(mailErr => {
+                    console.error('⚠️ Error al enviar notificación por email:', mailErr.message || mailErr);
+                  });
+                }
+              } catch (notifyErr) {
+                console.error('⚠️ Error en notificación administrativa:', notifyErr.message || notifyErr);
+              }
+
+              return res.status(200).send('OK - No productIds');
+            }
+          } catch (dbErr) {
+            console.error('⚠️ Error al consultar productos por mp_payment_id:', dbErr.message || dbErr);
+            // Fallback: intentar usar IDs embebidos en additional_info.items si existen
+            const items = paymentInfo.additional_info?.items || [];
+            productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
+            if (!productIds) {
+              try {
+                const failureRecord = {
+                  timestamp: new Date().toISOString(),
+                  paymentId,
+                  error: dbErr.message || dbErr,
+                  items,
+                  paymentInfoSnippet: {
+                    status: paymentInfo.status,
+                    transaction_amount: paymentInfo.transaction_amount,
+                    payer: paymentInfo.payer
+                  }
+                };
+                const logPath = path.join(__dirname, '..', 'webhook_failed.log');
+                fs.appendFileSync(logPath, JSON.stringify(failureRecord) + '\n');
+                console.log('✅ Evento webhook fallido registrado en', logPath);
+              } catch (fileErr) {
+                console.error('⚠️ Error al escribir webhook_failed.log:', fileErr.message || fileErr);
+              }
+              return res.status(200).send('OK - No productIds');
+            }
+            console.log('ℹ️ productIds obtenidos desde items embedded (fallback):', productIds);
           }
           console.log('💰 Monto total:', paymentInfo.transaction_amount);
           console.log('👤 Cliente:', customerData.customer_email);
