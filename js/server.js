@@ -685,80 +685,69 @@ app.post('/forzar-pago-manual/:paymentId', async (req, res) => {
   
   console.log(`🔧 === FORZANDO PROCESAMIENTO MANUAL ===`);
   console.log(`💳 Payment ID: ${paymentId}`);
+  console.log(`ℹ️ PROPÓSITO: Este endpoint simula el webhook cuando MercadoPago no lo envía automáticamente`);
   
   try {
-    // Obtener información del pago desde MercadoPago
-    const payment = await mercadopago.payment.findById(paymentId);
-    console.log('💳 Información del pago desde MP:', JSON.stringify(payment.body, null, 2));
+    // Obtener información del pago desde MercadoPago usando la instancia correcta
+    const payment = new Payment(client);
+    const paymentInfo = await payment.get({ id: paymentId });
     
-    if (payment.body.status === 'approved') {
+    console.log('💳 Información del pago desde MP:', JSON.stringify(paymentInfo, null, 2));
+    
+    if (paymentInfo.status === 'approved') {
       console.log('✅ Pago aprobado, procesando manualmente...');
       
-      // Crear datos básicos del pedido
-      const pedidoData = {
-        mp_payment_id: paymentId,
-        email: payment.body.payer.email,
-        monto_total: payment.body.transaction_amount,
-        metodo_pago: payment.body.payment_method_id,
-        estado_pago: payment.body.status,
-        // Datos básicos por defecto
-        nombre_comprador: payment.body.payer.first_name || 'No especificado',
-        apellido_comprador: payment.body.payer.last_name || 'No especificado',
-        telefono_comprador: (payment.body.payer.phone?.area_code || '') + (payment.body.payer.phone?.number || '') || 'No especificado',
-        productos: JSON.stringify([{
-          nombre: 'Producto procesado manualmente',
-          talle: 'N/A',
-          cantidad: 1,
-          precio: payment.body.transaction_amount
-        }]),
-        tipo_entrega: 'envio',
-        calle_numero: 'Dirección no especificada',
-        codigo_postal: '0000',
-        ciudad: 'Ciudad no especificada',
-        provincia: 'Provincia no especificada',
-        referencias: 'Procesamiento manual'
-      };
+      // Simular los datos como lo hace el webhook original
+      let customerData = {};
+      try {
+        if (paymentInfo.external_reference) {
+          customerData = JSON.parse(paymentInfo.external_reference);
+        }
+      } catch (error) {
+        console.log('⚠️ No se pudo parsear external_reference');
+      }
       
-      console.log('📦 Datos del pedido a insertar:', pedidoData);
+      // Extraer IDs de productos del payment info (como en el webhook)
+      const items = paymentInfo.additional_info?.items || [];
+      const productIds = items.length > 0 ? items.map(item => item.id).join(',') : 'MANUAL';
       
-      // Ejecutar el stored procedure
+      console.log('🛍️ Items procesando:', JSON.stringify(items, null, 2));
+      console.log('🏷️ Product IDs:', productIds);
+      
+      // USAR LA MISMA LÓGICA QUE EL WEBHOOK (8 parámetros)
       const result = await executeQueryWithRetry(
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)',
+        pool,
+        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
         [
-          pedidoData.mp_payment_id,
-          pedidoData.email,
-          pedidoData.nombre_comprador,
-          pedidoData.apellido_comprador,
-          pedidoData.telefono_comprador,
-          pedidoData.productos,
-          pedidoData.monto_total,
-          pedidoData.metodo_pago,
-          pedidoData.estado_pago,
-          pedidoData.tipo_entrega,
-          pedidoData.calle_numero,
-          pedidoData.codigo_postal,
-          pedidoData.ciudad,
-          pedidoData.provincia,
-          pedidoData.referencias,
-          0 // costo_envio por defecto
+          productIds, // IDs separados por comas (igual que webhook)
+          paymentInfo.transaction_amount,
+          paymentInfo.payer?.first_name || 'Cliente Web Manual',
+          customerData.customer_email || paymentInfo.payer?.email || 'manual@web.com',
+          customerData.customer_phone || '',
+          'MercadoPago',
+          'Manual', // Indicar que fue procesamiento manual
+          paymentId
         ]
       );
       
-      console.log('✅ Pedido procesado manualmente exitosamente');
+      console.log('✅ Pedido procesado manualmente exitosamente (8 parámetros)');
       
       res.json({
         success: true,
         message: 'Pago procesado manualmente exitosamente',
         payment_id: paymentId,
-        status: payment.body.status,
-        amount: payment.body.transaction_amount
+        status: paymentInfo.status,
+        amount: paymentInfo.transaction_amount,
+        customer_email: customerData.customer_email || paymentInfo.payer?.email,
+        product_ids: productIds
       });
       
     } else {
-      console.log(`❌ El pago no está aprobado. Estado: ${payment.body.status}`);
+      console.log(`❌ El pago no está aprobado. Estado: ${paymentInfo.status}`);
       res.status(400).json({
         success: false,
-        message: `El pago no está aprobado. Estado actual: ${payment.body.status}`
+        message: `El pago no está aprobado. Estado actual: ${paymentInfo.status}`,
+        current_status: paymentInfo.status
       });
     }
     
@@ -767,11 +756,12 @@ app.post('/forzar-pago-manual/:paymentId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error al procesar pago manualmente',
-      error: error.message
+      error: error.message,
+      details: 'Verificar que el payment_id sea válido y el pago esté aprobado'
     });
   }
 });
-console.log('✅ Endpoint POST /forzar-pago-manual definido exitosamente');
+console.log('✅ Endpoint POST /forzar-pago-manual definido exitosamente (corregido)');
 
 // Endpoint de test básico
 app.get('/', (req, res) => {
