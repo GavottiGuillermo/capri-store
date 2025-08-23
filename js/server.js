@@ -553,6 +553,117 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
 console.log('✅ Endpoint GET /numero-pedido/:paymentId definido');
 
 // ===============================
+// ENDPOINT: CONSULTAR ESTADO DE STOCK DE PRODUCTOS
+// ===============================
+console.log('📝 Definiendo endpoint GET /stock-productos...');
+app.get('/stock-productos', async (req, res) => {
+  // Headers CORS explícitos
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  try {
+    console.log(`🔍 === CONSULTA DE STOCK DE PRODUCTOS ===`);
+    console.log(`Headers de la petición:`, req.headers.origin);
+    
+    // Consultar estado de todos los productos
+    const stockResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        id_articulo,
+        estado,
+        (CASE 
+          WHEN estado = 'Disponible' THEN true 
+          ELSE false 
+        END) as disponible
+       FROM productos 
+       WHERE id_articulo IS NOT NULL
+       GROUP BY id_articulo, estado
+       ORDER BY id_articulo`,
+      [],
+      2
+    );
+    
+    console.log(`📊 Stock consultado - ${stockResult.rows.length} productos encontrados`);
+    
+    // Procesar resultados para crear un objeto de fácil consulta
+    const stockMap = {};
+    stockResult.rows.forEach(row => {
+      stockMap[row.id_articulo] = {
+        disponible: row.disponible,
+        estado: row.estado
+      };
+    });
+    
+    console.log(`📤 Enviando información de stock:`, stockMap);
+    
+    res.json({
+      success: true,
+      stock: stockMap,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al consultar stock:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al consultar stock de productos',
+      message: error.message
+    });
+  }
+});
+console.log('✅ Endpoint GET /stock-productos definido exitosamente');
+
+// ===============================
+// ENDPOINT: STOCK AGOTADO (Compatible con frontend existente)
+// ===============================
+console.log('📝 Definiendo endpoint GET /stock-agotado...');
+app.get('/stock-agotado', async (req, res) => {
+  // Headers CORS explícitos
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  try {
+    console.log(`🔍 === CONSULTA DE STOCK AGOTADO ===`);
+    console.log(`Headers de la petición:`, req.headers.origin);
+    
+    // Consultar productos que NO están disponibles
+    const stockResult = await executeQueryWithRetry(
+      pool,
+      `SELECT DISTINCT id_articulo
+       FROM productos 
+       WHERE estado != 'Disponible' 
+       AND id_articulo IS NOT NULL`,
+      [],
+      2
+    );
+    
+    console.log(`📊 Stock agotado consultado - ${stockResult.rows.length} productos sin stock`);
+    
+    // Extraer solo los IDs de productos agotados
+    const idsAgotados = stockResult.rows.map(row => parseInt(row.id_articulo));
+    
+    console.log(`📤 IDs de productos agotados:`, idsAgotados);
+    
+    res.json({
+      success: true,
+      ids: idsAgotados,
+      timestamp: new Date().toISOString(),
+      count: idsAgotados.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al consultar stock agotado:', error);
+    res.status(500).json({
+      success: false,
+      ids: [],
+      error: 'Error al consultar stock agotado',
+      message: error.message
+    });
+  }
+});
+console.log('✅ Endpoint GET /stock-agotado definido exitosamente');
+
+// ===============================
 // ENDPOINT DE SALUD
 // ===============================
 console.log('📝 Definiendo endpoints básicos...');

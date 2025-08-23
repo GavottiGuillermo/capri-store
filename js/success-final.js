@@ -133,6 +133,7 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
                 <div class="text-center">
                     <h6 class="mb-2 capri-color">Tu número de pedido es:</h6>
                     <h2 class="capri-color fw-bold" style="font-size: 2.5rem;">${numeroDisplay}</h2>
+                    <small class="text-muted">ID: ${idCompleto}</small>
                 </div>
             </div>
         `;
@@ -140,24 +141,6 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
         numeroPedidoDiv.innerHTML = htmlContent;
         console.log('✅ Número de pedido insertado en DOM');
         console.log('🔍 HTML insertado:', htmlContent.substring(0, 100) + '...');
-        
-        // LIMPIAR CARRITO DESPUÉS DE MOSTRAR PEDIDO EXITOSO
-        setTimeout(() => {
-            console.log('🧹 Limpiando carrito después de compra exitosa...');
-            if (typeof localStorage !== 'undefined') {
-                localStorage.removeItem('cartItems');
-                localStorage.removeItem('datosCompra');
-                localStorage.removeItem('productosCompra');
-                localStorage.removeItem('totalCompra');
-                localStorage.removeItem('costoEnvio');
-                console.log('✅ Carrito y datos de compra limpiados');
-                
-                // Actualizar contador del carrito si existe la función
-                if (typeof updateCartCounterAnimated === 'function') {
-                    updateCartCounterAnimated(0);
-                }
-            }
-        }, 1000); // Delay para que el usuario vea el número primero
         
         // VERIFICAR VISIBILIDAD DEL ELEMENTO Y SU PADRE
         console.log('🔍 Verificando visibilidad...');
@@ -175,17 +158,6 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
     }
     
     console.log('🎊 === PROCESO COMPLETADO ===');
-    
-    // PASO 4: Limpiar carrito después de compra exitosa
-    try {
-        localStorage.removeItem('productosCompra');
-        localStorage.removeItem('datosCompra');
-        localStorage.removeItem('totalCompra');
-        localStorage.removeItem('costoEnvio');
-        console.log('🛒 Carrito limpiado exitosamente');
-    } catch (error) {
-        console.log('⚠️ Error al limpiar carrito:', error);
-    }
 }
 
 // Función para mostrar errores
