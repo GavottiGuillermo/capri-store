@@ -1,5 +1,23 @@
 @charset "UTF-8";
-
+/* Utilidades de color para Capri Store */
+.bg-vino-tinto {
+  background-color: var(--vino-tinto) !important;
+}
+.text-vino-tinto {
+  color: var(--vino-tinto) !important;
+}
+.bg-rosado {
+  background-color: var(--rosado) !important;
+}
+.text-rosado {
+  color: var(--rosado) !important;
+}
+.border-rosado {
+  border-color: var(--rosado) !important;
+}
+.border-vino-tinto {
+  border-color: var(--vino-tinto) !important;
+}
 /* =====  ANIMACIONES Y TRANSICIONES SUAVES ===== */
 
 /* Transiciones globales optimizadas para performance */
