@@ -240,6 +240,7 @@ app.post('/crear-preferencia', async (req, res) => {
           pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
         },
         auto_return: 'approved',
+        notification_url: 'https://capri-store.onrender.com/webhook',
         external_reference: JSON.stringify({
           customer_email: payer.email,
           customer_phone: payer.phone?.number || '',
@@ -284,12 +285,19 @@ console.log('✅ Endpoint POST /crear-preferencia definido exitosamente');
 // ===============================
 console.log('📝 Definiendo endpoint POST /webhook...');
 app.post('/webhook', async (req, res) => {
+  console.log('🚨 === WEBHOOK RECIBIDO ===');
+  console.log('📅 Timestamp:', new Date().toISOString());
+  console.log('🌐 Headers:', JSON.stringify(req.headers, null, 2));
+  
   try {
+    console.log('🔔 Webhook recibido - datos completos:', JSON.stringify(req.body, null, 2));
+    
     const { type, data } = req.body;
     
     if (type === 'payment') {
       const paymentId = data.id;
       console.log(`💳 Webhook recibido para pago: ${paymentId}`);
+      console.log(`🔍 Tipo de evento: ${type}`);
       
       // Marcar como procesado
       webhookNotifications.set(paymentId, true);
