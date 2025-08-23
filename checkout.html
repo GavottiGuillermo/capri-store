@@ -10,9 +10,8 @@
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
     body { font-family: 'Montserrat', sans-serif; }
-    .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
-    .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
-    <script src="js/checkout.js"></script>
+  .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+  .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
     
     /* Clase específica para mensaje informativo de envío */
     .mensaje-informativo-envio {
@@ -311,156 +310,7 @@
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
   <script src="js/scripts.js"></script>
   
-  <script>
-    // Variables globales para el checkout
-    let costoEnvio = 0;
-
-    // Formatear precio
-    function formatPrice(price) {
-      return '$' + Number(price).toFixed(2) + ' ARS';
-    }
-
-    // Cargar resumen de compra
-    function cargarResumenCompra() {
-      const checkoutItems = document.getElementById('checkout-items');
-      const subtotalElement = document.getElementById('checkout-subtotal');
-      const totalElement = document.getElementById('checkout-total');
-      const cartCount = document.getElementById('cart-count');
-
-      // Obtener carrito del localStorage
-      const cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
-      let subtotal = 0;
-      let cantidadTotal = 0;
-
-      console.log('Carrito en checkout:', cartItems); // Debug
-
-      if (!cartItems || cartItems.length === 0) {
-        checkoutItems.innerHTML = `
-          <div class="text-center py-4 text-rosado">
-            <i class="fas fa-shopping-cart fa-3x mb-3"></i>
-            <h5>Tu carrito está vacío</h5>
-            <p>Agrega productos antes de finalizar la compra.</p>
-            <a href="index.html" class="btn btn-rosado">Ir a comprar</a>
-          </div>
-        `;
-        return;
-      }
-
-    // Event listeners principales
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('Checkout iniciado'); // Debug
-
-      // Inicializar animaciones de secciones
-      setTimeout(() => {
-        const checkoutSections = document.querySelectorAll('.checkout-section');
-        checkoutSections.forEach((section, index) => {
-          setTimeout(() => {
-            section.classList.add('visible');
-          }, index * 200);
-        });
-      }, 500);
-
-      // Event listener para el carrito en navbar
-      const cartLink = document.getElementById('navbar-cart-link');
-      if (cartLink) {
-        cartLink.addEventListener('click', function(e) {
-          e.preventDefault();
-          if (typeof openCartSidenav === 'function') {
-            openCartSidenav();
-          } else {
-            // Fallback: ir al index
-            window.location.href = 'index.html';
-          }
-        });
-      }
-
-      // Configurar event listeners para tipo de entrega
-      const retiroLocal = document.getElementById('retiroLocal');
-      const envioDomicilio = document.getElementById('enviosDomicilio');
-      const iniciarPagoBtn = document.getElementById('iniciarPago');
-      const calcularEnvioBtn = document.getElementById('calcularEnvio');
-
-      // Campos de dirección
-      const calleNumero = document.getElementById('calleNumero');
-      const codigoPostal = document.getElementById('codigoPostal');
-      const ciudad = document.getElementById('ciudad');
-      const provincia = document.getElementById('provincia');
-
-      if (retiroLocal) {
-        retiroLocal.addEventListener('change', manejarTipoEntrega);
-      }
-      
-      if (envioDomicilio) {
-        envioDomicilio.addEventListener('change', manejarTipoEntrega);
-      }
-
-      // Event listeners para verificar campos completos
-      const camposDireccion = [calleNumero, codigoPostal, ciudad, provincia];
-      camposDireccion.forEach(campo => {
-        if (campo) {
-          campo.addEventListener('input', verificarCamposCompletos);
-          campo.addEventListener('change', verificarCamposCompletos);
-        }
-      });
-
-      // Event listener para calcular envío
-      if (calcularEnvioBtn) {
-        calcularEnvioBtn.addEventListener('click', calcularEnvio);
-      }
-
-      // Event listener para iniciar pago
-      if (iniciarPagoBtn) {
-        iniciarPagoBtn.addEventListener('click', iniciarProcesoPago);
-      }      
-      // Cargar resumen al cargar la página
-      cargarResumenCompra();
-      
-      // Inicializar tipo de entrega
-      manejarTipoEntrega();
-      
-      // Activar animaciones de fade-in
-      activarAnimacionesFadeIn();
-    });
-    
-    // Función para activar animaciones cuando los elementos aparecen en pantalla
-    function activarAnimacionesFadeIn() {
-      const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
-      };
-      
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            observer.unobserve(entry.target);
-          }
-        });
-      }, observerOptions);
-      
-      // Observar elementos que deben aparecer with fade-in
-      document.querySelectorAll('.fade-in, .order-item').forEach(el => {
-        observer.observe(el);
-      });
-      
-      // Agregar clase fade-in a secciones principales
-      document.querySelectorAll('section, .checkout-summary').forEach(el => {
-        el.classList.add('fade-in');
-        observer.observe(el);
-      });
-    }
-    
-    // Función para volver al inicio
-    function volverAInicio() {
-      // Cerrar el carrito
-      if (typeof closeCartSidenav === 'function') {
-        closeCartSidenav();
-      }
-      
-      // Redirigir a la página principal
-      window.location.href = 'index.html';
-    }
-  </script>
+  <script src="js/checkout.js"></script>
 </body>
 </html>
 <!--
