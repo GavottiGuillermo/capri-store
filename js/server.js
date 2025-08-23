@@ -325,9 +325,23 @@ app.post('/webhook', async (req, res) => {
           const items = paymentInfo.additional_info?.items || [];
           const productIds = items.map(item => item.id).join(',');
           
-          console.log('🛍️ Productos a procesar:', productIds);
+          console.log('🛍️ Items completos recibidos:', JSON.stringify(items, null, 2));
+          console.log('🏷️ Productos a procesar (IDs):', productIds);
           console.log('💰 Monto total:', paymentInfo.transaction_amount);
           console.log('👤 Cliente:', customerData.customer_email);
+          console.log('📞 Teléfono:', customerData.customer_phone);
+          
+          console.log('🔧 === LLAMANDO AL STORED PROCEDURE ===');
+          console.log('Parámetros:', [
+            productIds,
+            paymentInfo.transaction_amount,
+            paymentInfo.payer?.first_name || 'Cliente Web',
+            customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
+            customerData.customer_phone || '',
+            'MercadoPago',
+            'Retiro',
+            paymentId
+          ]);
           
           await executeQueryWithRetry(
             pool,
@@ -411,18 +425,43 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     console.log(`Payment ID recibido: ${paymentId}`);
     console.log(`Headers de la petición:`, req.headers.origin);
     
+    // Primero, vamos a verificar qué datos tenemos en la BD para este payment_id
+    console.log(`🔍 Verificando datos en BD para payment_id: ${paymentId}`);
+    
+    const debugResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        p.id_articulo,
+        p.mp_payment_id,
+        p.id_pedido,
+        p.estado,
+        p.pedido_fecha,
+        p.pedido_nombre_cliente,
+        p.pedido_monto_total
+       FROM productos p
+       WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2
+       ORDER BY p.pedido_fecha DESC`,
+      [paymentId, paymentId.toString()],
+      2
+    );
+    
+    console.log(`🔍 Resultados debug (${debugResult.rows.length} filas):`, debugResult.rows);
+    
     const pedidoResult = await executeQueryWithRetry(
       pool,
       `SELECT 
         p.id_pedido,
         p.pedido_fecha,
         p.pedido_nombre_cliente,
-        p.pedido_monto_total
+        p.pedido_monto_total,
+        p.mp_payment_id
        FROM productos p
-       WHERE p.mp_payment_id = $1 
+       WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2)
          AND p.id_pedido IS NOT NULL
+         AND p.id_pedido != ''
+       ORDER BY p.pedido_fecha DESC
        LIMIT 1`,
-      [paymentId],
+      [paymentId, paymentId.toString()],
       2
     );
     
@@ -453,6 +492,17 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       
     } else {
       console.log(`❌ Pedido no encontrado para payment ID: ${paymentId}`);
+      
+      // Verificar si hay algún registro para este payment_id (sin importar id_pedido)
+      const checkResult = await executeQueryWithRetry(
+        pool,
+        `SELECT COUNT(*) as count FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2`,
+        [paymentId, paymentId.toString()],
+        1
+      );
+      
+      console.log(`🔍 Registros encontrados con este payment_id: ${checkResult.rows[0]?.count || 0}`);
+      
       const respuestaError = {
         existe: false,
         message: 'Pedido no encontrado',
