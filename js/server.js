@@ -293,11 +293,12 @@ app.post('/webhook', async (req, res) => {
     console.log('🔔 Webhook recibido - datos completos:', JSON.stringify(req.body, null, 2));
     
     const { type, data, action, topic, resource } = req.body;
-    
+
     // Filtrar solo los eventos de pago que necesitamos procesar
     let paymentId = null;
     let shouldProcess = false;
-    
+
+    // Manejar eventos tipo payment/payment.created
     if (type === 'payment' && data?.id) {
       paymentId = data.id;
       shouldProcess = true;
@@ -306,10 +307,40 @@ app.post('/webhook', async (req, res) => {
       paymentId = data.id;
       shouldProcess = true;
       console.log(`💳 Webhook payment.created recibido para pago: ${paymentId}`);
+
+    // Manejar topic 'payment' con resource
     } else if (topic === 'payment' && resource) {
       paymentId = resource;
       shouldProcess = true;
-      console.log(`� Webhook topic payment recibido para pago: ${paymentId}`);
+      console.log(`ℹ️ Webhook topic payment recibido para pago: ${paymentId}`);
+
+    // Manejar merchant_order: intentar resolver payments desde la resource URL
+    } else if (topic === 'merchant_order' && resource) {
+      console.log('ℹ️ Merchant order webhook recibido. Intentando obtener payments desde resource...');
+      try {
+        // resource es la URL completa proporcionada por MP
+        const resourceUrl = resource;
+        // Usar fetch para obtener el merchant_order (agregar access_token)
+        const resp = await fetch(`${resourceUrl}?access_token=${process.env.MERCADOPAGO_ACCESS_TOKEN}`);
+        if (!resp.ok) {
+          console.log('⚠️ No se pudo obtener merchant_order, status:', resp.status);
+          return res.status(200).send('OK - merchant_order ignored');
+        }
+        const mo = await resp.json();
+        const payments = mo.payments || [];
+        if (payments.length > 0 && payments[0].id) {
+          paymentId = payments[0].id; // tomar el primer payment
+          shouldProcess = true;
+          console.log(`ℹ️ merchant_order -> procesando paymentId: ${paymentId}`);
+        } else {
+          console.log('ℹ️ merchant_order sin payments - ignorando');
+          return res.status(200).send('OK - No payments in merchant_order');
+        }
+      } catch (err) {
+        console.error('⚠️ Error al obtener merchant_order:', err.message || err);
+        return res.status(200).send('OK - merchant_order fetch failed');
+      }
+
     } else {
       console.log(`ℹ️ Webhook ignorado - tipo: ${type || topic}, action: ${action}`);
       return res.status(200).send('OK - Ignored');
@@ -348,10 +379,17 @@ app.post('/webhook', async (req, res) => {
         try {
           // Extraer IDs de productos del payment info
           const items = paymentInfo.additional_info?.items || [];
-          const productIds = items.map(item => item.id).join(',');
+          const productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
           
           console.log('🛍️ Items completos recibidos:', JSON.stringify(items, null, 2));
           console.log('🏷️ Productos a procesar (IDs):', productIds);
+
+          // Si no hay productIds, no llamar al stored procedure (evita raise del SP)
+          if (!productIds || productIds.trim() === '') {
+            console.log('⚠️ No se encontraron productIds en paymentInfo. Ignorando inserción en BD para evitar error en SP.');
+            // Devolver 200 para evitar reintentos por parte de MP
+            return res.status(200).send('OK - No productIds');
+          }
           console.log('💰 Monto total:', paymentInfo.transaction_amount);
           console.log('👤 Cliente:', customerData.customer_email);
           console.log('📞 Teléfono:', customerData.customer_phone);
