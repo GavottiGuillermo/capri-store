@@ -763,6 +763,78 @@ app.post('/forzar-pago-manual/:paymentId', async (req, res) => {
 });
 console.log('✅ Endpoint POST /forzar-pago-manual definido exitosamente (corregido)');
 
+// ===============================
+// ENDPOINT TEMPORAL: CONSULTAR DEFINICIÓN DEL STORED PROCEDURE
+// ===============================
+console.log('📝 Definiendo endpoint GET /debug-sp...');
+app.get('/debug-sp', async (req, res) => {
+  console.log('🔍 === CONSULTANDO DEFINICIÓN DEL STORED PROCEDURE ===');
+  
+  try {
+    // Consultar la definición del stored procedure
+    const spResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        p.proname as procedure_name,
+        p.pronargs as num_args,
+        pg_get_function_arguments(p.oid) as arguments,
+        pg_get_functiondef(p.oid) as definition
+       FROM pg_proc p
+       JOIN pg_namespace n ON p.pronamespace = n.oid
+       WHERE p.proname = 'sp_crear_pedido_web'
+         AND n.nspname = 'public'`,
+      [],
+      1
+    );
+    
+    console.log('📦 Resultado consulta SP:', spResult.rows);
+    
+    // También consultar la estructura de la tabla productos para entender los campos
+    const tableResult = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        column_name,
+        data_type,
+        is_nullable,
+        column_default
+       FROM information_schema.columns
+       WHERE table_name = 'productos'
+       ORDER BY ordinal_position`,
+      [],
+      1
+    );
+    
+    console.log('📊 Estructura tabla productos:', tableResult.rows);
+    
+    res.json({
+      stored_procedure: spResult.rows,
+      table_structure: tableResult.rows,
+      webhook_current_call: {
+        parameters: 8,
+        call: "CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)",
+        values: [
+          "productIds (string)",
+          "transaction_amount (number)",
+          "first_name (string)",
+          "customer_email (string)", 
+          "customer_phone (string)",
+          "MercadoPago (string)",
+          "Retiro (string)",
+          "paymentId (string)"
+        ]
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al consultar SP:', error);
+    res.status(500).json({
+      error: 'Error al consultar stored procedure',
+      message: error.message
+    });
+  }
+});
+console.log('✅ Endpoint GET /debug-sp definido exitosamente');
+
 // Endpoint de test básico
 app.get('/', (req, res) => {
   res.json({ 
