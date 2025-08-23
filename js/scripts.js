@@ -84,10 +84,35 @@ function guardarCarrito() {
 function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
   // Validar datos antes de agregar
   if (!nombre || isNaN(Number(precio)) || !img || isNaN(Number(cantidad)) || Number(cantidad) < 1) return;
-  
+
   precio = Number(precio);
   cantidad = Number(cantidad);
-  
+
+  // Obtener id_articulo del producto o extraerlo del path de la imagen
+  let id_articulo = null;
+  if (producto && producto.id_articulo) {
+    id_articulo = producto.id_articulo;
+  } else if (producto && producto.img) {
+    try {
+      const path = decodeURIComponent(producto.img);
+      const m = path.match(/\/(\d+)-[^/]+/);
+      if (m && m[1]) {
+        id_articulo = parseInt(m[1], 10);
+      }
+    } catch {}
+  } else if (img) {
+    try {
+      const path = decodeURIComponent(img);
+      const m = path.match(/\/(\d+)-[^/]+/);
+      if (m && m[1]) {
+        id_articulo = parseInt(m[1], 10);
+      }
+    } catch {}
+  }
+  if (!id_articulo) {
+    console.warn('No se pudo determinar id_articulo para el producto en el carrito:', nombre, img, producto);
+  }
+
   const idx = cartItems.findIndex(item => item.nombre === nombre && item.img === img);
   if (idx !== -1) {
     cartItems[idx].cantidad += cantidad;
@@ -96,7 +121,8 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
       nombre, 
       precio, 
       img, 
-      cantidad 
+      cantidad,
+      id_articulo
     });
   }
   guardarCarrito();

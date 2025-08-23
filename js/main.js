@@ -290,6 +290,18 @@ async function renderizarProductos() {
 
 // Crear HTML de tarjeta de producto
 async function crearTarjetaProducto(prod, tipo) {
+  // Extraer id_articulo del path de la imagen o txt si no está presente
+  if (!prod.id_articulo) {
+    try {
+      const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+      const m = path.match(/\/(\d+)-[^/]+/);
+      if (m && m[1]) {
+        prod.id_articulo = parseInt(m[1], 10);
+      }
+    } catch (e) {
+      console.warn('No se pudo extraer id_articulo para el producto:', prod, e);
+    }
+  }
   let nombre = '', precio = '', textoTarjeta = '';
   try {
     const txtResp = await fetch(prod.txt);
