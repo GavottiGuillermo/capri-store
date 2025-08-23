@@ -494,57 +494,86 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     
     // Primero, vamos a verificar qué datos tenemos en la BD para este payment_id
     console.log(`🔍 Verificando datos en BD para payment_id: ${paymentId}`);
-    
-    const debugResult = await executeQueryWithRetry(
-      pool,
-      `SELECT 
-        p.id_articulo,
-        p.mp_payment_id,
-        p.id_pedido,
-        p.estado,
-        p.pedido_fecha,
-        p.pedido_nombre_cliente,
-        p.pedido_monto_total
-       FROM productos p
-       WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2
-       ORDER BY p.pedido_fecha DESC`,
-      [paymentId, paymentId.toString()],
-      2
-    );
-    
-    console.log(`🔍 Resultados debug (${debugResult.rows.length} filas):`, debugResult.rows);
-    
-    const pedidoResult = await executeQueryWithRetry(
-      pool,
-      `SELECT 
-        p.id_pedido,
-        p.pedido_fecha,
-        p.pedido_nombre_cliente,
-        p.pedido_monto_total,
-        p.mp_payment_id
-       FROM productos p
-       WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2)
-         AND p.id_pedido IS NOT NULL
-         AND p.id_pedido != ''
-       ORDER BY p.pedido_fecha DESC
-       LIMIT 1`,
-      [paymentId, paymentId.toString()],
-      2
-    );
-    
-    if (pedidoResult.rows.length > 0) {
-      const pedido = pedidoResult.rows[0];
+
+    // Intentar hasta MAX_TRIES veces esperando entre intentos (para dar tiempo al webhook)
+    const MAX_TRIES = 3;
+    const RETRY_DELAY_MS = 2000; // 2 segundos
+    let intento = 0;
+    let pedidoEncontrado = null;
+    let debugResult = null;
+
+    while (intento < MAX_TRIES && !pedidoEncontrado) {
+      intento++;
+      console.log(`🔁 Intento ${intento}/${MAX_TRIES} para payment_id: ${paymentId}`);
+
+      // Resultados debug opcionales
+      try {
+        debugResult = await executeQueryWithRetry(
+          pool,
+          `SELECT 
+            p.id_articulo,
+            p.mp_payment_id,
+            p.id_pedido,
+            p.estado,
+            p.pedido_fecha,
+            p.pedido_nombre_cliente,
+            p.pedido_monto_total
+           FROM productos p
+           WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2
+           ORDER BY p.pedido_fecha DESC`,
+          [paymentId, paymentId.toString()],
+          2
+        );
+      } catch (err) {
+        console.error('⚠️ Error en consulta debugResult:', err.message || err);
+      }
+
+      console.log(`🔍 Resultados debug (${(debugResult && debugResult.rows.length) || 0} filas)`);
+
+      try {
+        const pedidoResult = await executeQueryWithRetry(
+          pool,
+          `SELECT 
+            p.id_pedido,
+            p.pedido_fecha,
+            p.pedido_nombre_cliente,
+            p.pedido_monto_total,
+            p.mp_payment_id
+           FROM productos p
+           WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2)
+             AND p.id_pedido IS NOT NULL
+             AND p.id_pedido != ''
+           ORDER BY p.pedido_fecha DESC
+           LIMIT 1`,
+          [paymentId, paymentId.toString()],
+          2
+        );
+
+        if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
+          pedidoEncontrado = pedidoResult.rows[0];
+          break;
+        }
+      } catch (err) {
+        console.error(`⚠️ Intento ${intento} falló al consultar pedido:`, err.message || err);
+      }
+
+      if (!pedidoEncontrado && intento < MAX_TRIES) {
+        console.log(`⏳ Esperando ${RETRY_DELAY_MS}ms antes del siguiente intento...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      }
+    }
+
+    if (pedidoEncontrado) {
+      const pedido = pedidoEncontrado;
       const idPedidoCompleto = pedido.id_pedido;
-      
+
       // Mejorar el cálculo del número display
       let numeroDisplay = idPedidoCompleto;
-      if (idPedidoCompleto.length >= 2) {
+      if (idPedidoCompleto && idPedidoCompleto.length >= 2) {
         numeroDisplay = idPedidoCompleto.slice(-2); // Últimos 2 dígitos/caracteres
       }
-      
+
       console.log(`✅ Pedido encontrado: ${idPedidoCompleto} -> ${numeroDisplay}`);
-      console.log(`🔧 Cálculo: "${idPedidoCompleto}" -> últimos 2: "${numeroDisplay}"`);
-      
       const respuesta = {
         existe: true,
         id_pedido_completo: idPedidoCompleto,
@@ -553,31 +582,38 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         total: pedido.pedido_monto_total,
         fecha_pedido: pedido.pedido_fecha
       };
-      
+
       console.log(`📤 Enviando respuesta al frontend:`, respuesta);
-      res.json(respuesta);
-      
+      return res.json(respuesta);
     } else {
-      console.log(`❌ Pedido no encontrado para payment ID: ${paymentId}`);
-      
+      console.log(`❌ Pedido no encontrado tras ${MAX_TRIES} intentos para payment ID: ${paymentId}`);
+
       // Verificar si hay algún registro para este payment_id (sin importar id_pedido)
-      const checkResult = await executeQueryWithRetry(
-        pool,
-        `SELECT COUNT(*) as count FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2`,
-        [paymentId, paymentId.toString()],
-        1
-      );
-      
-      console.log(`🔍 Registros encontrados con este payment_id: ${checkResult.rows[0]?.count || 0}`);
-      
+      let checkCount = 0;
+      try {
+        const checkResult = await executeQueryWithRetry(
+          pool,
+          `SELECT COUNT(*) as count FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2`,
+          [paymentId, paymentId.toString()],
+          1
+        );
+        checkCount = checkResult.rows[0]?.count || 0;
+      } catch (err) {
+        console.error('⚠️ Error al ejecutar checkResult:', err.message || err);
+      }
+
+      console.log(`🔍 Registros encontrados con este payment_id: ${checkCount}`);
+
       const respuestaError = {
         existe: false,
-        message: 'Pedido no encontrado',
-        payment_id_consultado: paymentId
+        message: 'Pedido no encontrado. Si el pago aparece en MercadoPago y no en este sitio, por favor contacte soporte para completar la entrega.',
+        payment_id_consultado: paymentId,
+        attempts: MAX_TRIES,
+        contact_support: true
       };
-      
+
       console.log(`📤 Enviando respuesta de error:`, respuestaError);
-      res.json(respuestaError);
+      return res.json(respuestaError);
     }
     
   } catch (error) {
