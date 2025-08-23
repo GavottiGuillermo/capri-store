@@ -407,7 +407,9 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
   
   try {
     const { paymentId } = req.params;
-    console.log(`Consultando pedido para payment ID: ${paymentId}`);
+    console.log(`🔍 === ENDPOINT CONSULTA PEDIDO ===`);
+    console.log(`Payment ID recibido: ${paymentId}`);
+    console.log(`Headers de la petición:`, req.headers.origin);
     
     const pedidoResult = await executeQueryWithRetry(
       pool,
@@ -427,26 +429,38 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
     if (pedidoResult.rows.length > 0) {
       const pedido = pedidoResult.rows[0];
       const idPedidoCompleto = pedido.id_pedido;
-      const numeroDisplay = idPedidoCompleto.substring(1).slice(-2);
+      
+      // Mejorar el cálculo del número display
+      let numeroDisplay = idPedidoCompleto;
+      if (idPedidoCompleto.length >= 2) {
+        numeroDisplay = idPedidoCompleto.slice(-2); // Últimos 2 dígitos/caracteres
+      }
       
       console.log(`✅ Pedido encontrado: ${idPedidoCompleto} -> ${numeroDisplay}`);
+      console.log(`🔧 Cálculo: "${idPedidoCompleto}" -> últimos 2: "${numeroDisplay}"`);
       
-      res.json({
+      const respuesta = {
         existe: true,
         id_pedido_completo: idPedidoCompleto,
         numero_display: numeroDisplay,
         nombre_cliente: pedido.pedido_nombre_cliente,
         total: pedido.pedido_monto_total,
         fecha_pedido: pedido.pedido_fecha
-      });
+      };
+      
+      console.log(`📤 Enviando respuesta al frontend:`, respuesta);
+      res.json(respuesta);
       
     } else {
       console.log(`❌ Pedido no encontrado para payment ID: ${paymentId}`);
-      res.json({
+      const respuestaError = {
         existe: false,
         message: 'Pedido no encontrado',
         payment_id_consultado: paymentId
-      });
+      };
+      
+      console.log(`📤 Enviando respuesta de error:`, respuestaError);
+      res.json(respuestaError);
     }
     
   } catch (error) {
