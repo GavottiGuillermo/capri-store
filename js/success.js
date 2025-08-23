@@ -180,10 +180,14 @@ async function consultarYMostrarNumeroPedido() {
     console.log('🔍 === INICIANDO CONSULTA DE NÚMERO DE PEDIDO ===');
     
     const numeroPedidoDiv = document.getElementById('numero-pedido');
+    console.log('🎯 Elemento #numero-pedido encontrado:', numeroPedidoDiv);
+    
     if (!numeroPedidoDiv) {
         console.error('❌ No se encontró el elemento #numero-pedido');
         return;
     }
+    
+    console.log('📍 Elemento #numero-pedido HTML actual:', numeroPedidoDiv.outerHTML);
     
     // Obtener payment ID de la URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -247,11 +251,17 @@ async function consultarNumeroPedidoReal(paymentId, numeroPedidoDiv, intento = 1
         
         if (response.ok) {
             const resultado = await response.json();
-            console.log(`📋 Resultado:`, resultado);
+            console.log(`📋 Resultado completo:`, JSON.stringify(resultado, null, 2));
             
             if (resultado.existe) {
                 console.log(`✅ PEDIDO ENCONTRADO: ${resultado.id_pedido_completo} -> ${resultado.numero_display}`);
+                console.log(`🎯 Llamando a mostrarNumeroPedidoEnPantalla con:`, {
+                    numero_display: resultado.numero_display,
+                    id_pedido_completo: resultado.id_pedido_completo,
+                    elemento: numeroPedidoDiv
+                });
                 mostrarNumeroPedidoEnPantalla(resultado.numero_display, numeroPedidoDiv, resultado.id_pedido_completo);
+                console.log(`🎨 Función mostrarNumeroPedidoEnPantalla ejecutada`);
                 return; // ✅ Encontrado y mostrado
             } else {
                 console.log(`❌ PEDIDO NO EXISTE en BD para payment ID: ${paymentId}`);
@@ -307,7 +317,15 @@ async function consultarNumeroPedidoReal(paymentId, numeroPedidoDiv, intento = 1
 
 // Función para mostrar el número del pedido en pantalla
 function mostrarNumeroPedidoEnPantalla(numeroDisplay, numeroPedidoDiv, numeroCompleto = null) {
-    numeroPedidoDiv.innerHTML = `
+    console.log(`🎨 === MOSTRANDO NÚMERO DE PEDIDO EN PANTALLA ===`);
+    console.log(`Parámetros recibidos:`, { numeroDisplay, numeroCompleto, elemento: numeroPedidoDiv });
+    
+    if (!numeroPedidoDiv) {
+        console.error(`❌ ERROR: numeroPedidoDiv es null o undefined`);
+        return;
+    }
+    
+    const htmlContent = `
         <div class="mt-4 mb-4 p-4 border rounded" style="background-color: #f8f9fa; border-color: #6b0a0a !important;">
             <div class="text-center">
                 <h4 class="mb-3" style="color:#6b0a0a; font-weight:600;">Tu número de Pedido es:</h4>
@@ -321,6 +339,11 @@ function mostrarNumeroPedidoEnPantalla(numeroDisplay, numeroPedidoDiv, numeroCom
                 ${numeroCompleto ? `<small class="text-muted">Número completo: ${numeroCompleto}</small>` : ''}
             </div>
         </div>`;
+    
+    console.log(`🏗️ HTML generado:`, htmlContent);
+    numeroPedidoDiv.innerHTML = htmlContent;
+    console.log(`✅ innerHTML actualizado en el elemento`);
+    console.log(`🔍 Estado del elemento después de actualizar:`, numeroPedidoDiv.outerHTML);
 }
 
 // Funciones para mostrar diferentes tipos de errores
