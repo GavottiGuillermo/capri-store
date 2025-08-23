@@ -321,11 +321,19 @@ app.post('/webhook', async (req, res) => {
         
         // Procesar el pedido con stored procedure
         try {
+          // Extraer IDs de productos del payment info
+          const items = paymentInfo.additional_info?.items || [];
+          const productIds = items.map(item => item.id).join(',');
+          
+          console.log('🛍️ Productos a procesar:', productIds);
+          console.log('💰 Monto total:', paymentInfo.transaction_amount);
+          console.log('👤 Cliente:', customerData.customer_email);
+          
           await executeQueryWithRetry(
             pool,
             'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
             [
-              JSON.stringify(paymentInfo.additional_info?.items || []),
+              productIds, // IDs separados por comas en lugar de JSON
               paymentInfo.transaction_amount,
               paymentInfo.payer?.first_name || 'Cliente Web',
               customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
