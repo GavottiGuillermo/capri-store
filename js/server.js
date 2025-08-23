@@ -365,7 +365,6 @@ app.post('/webhook', async (req, res) => {
       
       if (paymentInfo.status === 'approved') {
         console.log('✅ Pago aprobado, procesando pedido...');
-        
         // Extraer información del external_reference
         let customerData = {};
         try {
@@ -375,106 +374,16 @@ app.post('/webhook', async (req, res) => {
         } catch (error) {
           console.log('⚠️ No se pudo parsear external_reference');
         }
-        
-        // Procesar el pedido con stored procedure
+        // Extraer productIds de items (si existen)
+        let productIds = '';
+        const items = paymentInfo.additional_info?.items || [];
+        if (items.length > 0) {
+          productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
+        }
+        // Si no hay productIds, usar 'MANUAL' o dejar vacío
+        if (!productIds) productIds = 'MANUAL';
         try {
-          // Preferir obtener productIds desde la tabla 'productos' por mp_payment_id
-          let productIds = '';
-          try {
-            const q = `SELECT id_articulo FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2 ORDER BY pedido_fecha DESC`;
-            const vals = [paymentId, paymentId.toString()];
-            const r = await executeQueryWithRetry(pool, q, vals, 2);
-
-            if (r && r.rows && r.rows.length > 0) {
-              const ids = r.rows.map(row => row.id_articulo).filter(Boolean);
-              productIds = ids.join(',');
-              console.log('✅ productIds obtenidos desde productos.mp_payment_id:', productIds);
-            } else {
-              console.log('⚠️ No se encontraron productos con mp_payment_id =', paymentId);
-
-              // Persistir en un log local para que el equipo pueda re-procesar manualmente
-              try {
-                const failureRecord = {
-                  timestamp: new Date().toISOString(),
-                  paymentId,
-                  note: 'No products with mp_payment_id',
-                  paymentInfoSnippet: {
-                    status: paymentInfo.status,
-                    transaction_amount: paymentInfo.transaction_amount,
-                    payer: paymentInfo.payer
-                  }
-                };
-                const logPath = path.join(__dirname, '..', 'webhook_failed.log');
-                fs.appendFileSync(logPath, JSON.stringify(failureRecord) + '\n');
-                console.log('✅ Evento webhook fallido registrado en', logPath);
-              } catch (fileErr) {
-                console.error('⚠️ Error al escribir webhook_failed.log:', fileErr.message || fileErr);
-              }
-
-              // Intentar notificar a administradores si están configurados
-              try {
-                if (process.env.ADMIN_EMAILS && process.env.SMTP_USER && process.env.SMTP_PASS) {
-                  const transporter = nodemailer.createTransport({
-                    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-                    port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-                    secure: false,
-                    auth: {
-                      user: process.env.SMTP_USER,
-                      pass: process.env.SMTP_PASS
-                    }
-                  });
-
-                  const mailOptions = {
-                    from: process.env.SMTP_USER,
-                    to: process.env.ADMIN_EMAILS,
-                    subject: `[ALERTA] Webhook MP sin productIds (mp_payment_id missing) - paymentId ${paymentId}`,
-                    text: `Se recibió un webhook aprobado de MercadoPago pero no hay registros en 'productos' con mp_payment_id = ${paymentId}.\n\nSe registró en webhook_failed.log para su revisión.`
-                  };
-
-                  transporter.sendMail(mailOptions).then(info => {
-                    console.log('✅ Notificación enviada a administradores:', info.response || info);
-                  }).catch(mailErr => {
-                    console.error('⚠️ Error al enviar notificación por email:', mailErr.message || mailErr);
-                  });
-                }
-              } catch (notifyErr) {
-                console.error('⚠️ Error en notificación administrativa:', notifyErr.message || notifyErr);
-              }
-
-              return res.status(200).send('OK - No productIds');
-            }
-          } catch (dbErr) {
-            console.error('⚠️ Error al consultar productos por mp_payment_id:', dbErr.message || dbErr);
-            // Fallback: intentar usar IDs embebidos en additional_info.items si existen
-            const items = paymentInfo.additional_info?.items || [];
-            productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
-            if (!productIds) {
-              try {
-                const failureRecord = {
-                  timestamp: new Date().toISOString(),
-                  paymentId,
-                  error: dbErr.message || dbErr,
-                  items,
-                  paymentInfoSnippet: {
-                    status: paymentInfo.status,
-                    transaction_amount: paymentInfo.transaction_amount,
-                    payer: paymentInfo.payer
-                  }
-                };
-                const logPath = path.join(__dirname, '..', 'webhook_failed.log');
-                fs.appendFileSync(logPath, JSON.stringify(failureRecord) + '\n');
-                console.log('✅ Evento webhook fallido registrado en', logPath);
-              } catch (fileErr) {
-                console.error('⚠️ Error al escribir webhook_failed.log:', fileErr.message || fileErr);
-              }
-              return res.status(200).send('OK - No productIds');
-            }
-            console.log('ℹ️ productIds obtenidos desde items embedded (fallback):', productIds);
-          }
-          console.log('💰 Monto total:', paymentInfo.transaction_amount);
-          console.log('👤 Cliente:', customerData.customer_email);
-          console.log('📞 Teléfono:', customerData.customer_phone);
-          
+          // Ejecutar el stored procedure SIEMPRE
           console.log('🔧 === LLAMANDO AL STORED PROCEDURE ===');
           console.log('Parámetros:', [
             productIds,
@@ -486,12 +395,11 @@ app.post('/webhook', async (req, res) => {
             'Retiro',
             paymentId
           ]);
-          
           await executeQueryWithRetry(
             pool,
             'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
             [
-              productIds, // IDs separados por comas en lugar de JSON
+              productIds,
               paymentInfo.transaction_amount,
               paymentInfo.payer?.first_name || 'Cliente Web',
               customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
@@ -501,10 +409,78 @@ app.post('/webhook', async (req, res) => {
               paymentId
             ]
           );
-          
           console.log('✅ Pedido procesado exitosamente por webhook');
+          // Buscar el id_pedido generado
+          let idPedidoCompleto = null;
+          let numeroDisplay = null;
+          try {
+            const pedidoResult = await executeQueryWithRetry(
+              pool,
+              `SELECT id_pedido FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2 AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
+              [paymentId, paymentId.toString()],
+              2
+            );
+            if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
+              idPedidoCompleto = pedidoResult.rows[0].id_pedido;
+              numeroDisplay = idPedidoCompleto && idPedidoCompleto.length >= 2 ? idPedidoCompleto.slice(-2) : idPedidoCompleto;
+              console.log(`✅ Pedido generado: ${idPedidoCompleto} -> ${numeroDisplay}`);
+            } else {
+              console.log('⚠️ No se encontró id_pedido tras ejecutar el SP');
+            }
+          } catch (err) {
+            console.error('⚠️ Error al buscar id_pedido tras SP:', err.message || err);
+          }
+          // Enviar email a cliente y admin
+          try {
+            if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
+              const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST || 'smtp.gmail.com',
+                port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
+                secure: false,
+                auth: {
+                  user: process.env.SMTP_USER,
+                  pass: process.env.SMTP_PASS
+                }
+              });
+              const toEmails = [customerData.customer_email || paymentInfo.payer?.email];
+              if (process.env.ADMIN_EMAILS) {
+                toEmails.push(...process.env.ADMIN_EMAILS.split(','));
+              }
+              const mailOptions = {
+                from: process.env.SMTP_USER,
+                to: toEmails.join(','),
+                subject: `Confirmación de pedido Capri Store #${numeroDisplay || ''}`,
+                text: `¡Gracias por tu compra!\n\nTu número de pedido es: ${idPedidoCompleto || 'N/A'}\nMonto: $${paymentInfo.transaction_amount}\n\nSi tienes dudas, responde este email.\n\n-- Capri Store` 
+              };
+              transporter.sendMail(mailOptions).then(info => {
+                console.log('✅ Email de confirmación enviado:', info.response || info);
+              }).catch(mailErr => {
+                console.error('⚠️ Error al enviar email de confirmación:', mailErr.message || mailErr);
+              });
+            }
+          } catch (mailError) {
+            console.error('⚠️ Error en envío de email:', mailError.message || mailError);
+          }
         } catch (error) {
+          // Loguear error de ejecución del SP
           console.error('❌ Error al procesar pedido en webhook:', error);
+          try {
+            const failureRecord = {
+              timestamp: new Date().toISOString(),
+              paymentId,
+              error: error.message || error,
+              paymentInfoSnippet: {
+                status: paymentInfo.status,
+                transaction_amount: paymentInfo.transaction_amount,
+                payer: paymentInfo.payer
+              }
+            };
+            const logPath = path.join(__dirname, '..', 'webhook_failed.log');
+            fs.appendFileSync(logPath, JSON.stringify(failureRecord) + '\n');
+            console.log('✅ Error de SP registrado en', logPath);
+          } catch (fileErr) {
+            console.error('⚠️ Error al escribir webhook_failed.log:', fileErr.message || fileErr);
+          }
         }
       } else {
         console.log(`⚠️ Pago ${paymentId} no está aprobado - estado: ${paymentInfo.status}`);
