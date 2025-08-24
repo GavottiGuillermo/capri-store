@@ -189,10 +189,10 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ===============================
 console.log('📝 Definiendo endpoint POST /crear-preferencia...');
 app.post('/crear-preferencia', async (req, res) => {
-  // Headers CORS explícitos para este endpoint
+  // Headers CORS y JSON explícitos para este endpoint
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
-  
+  res.header('Content-Type', 'application/json; charset=utf-8');
   try {
     console.log('--- INICIO /crear-preferencia ---');
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
@@ -206,6 +206,7 @@ app.post('/crear-preferencia', async (req, res) => {
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       console.log('❌ Error: Items requeridos no presentes o vacíos');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(400).json({
         error: 'Items requeridos',
         message: 'Se requiere al menos un item',
@@ -213,9 +214,9 @@ app.post('/crear-preferencia', async (req, res) => {
       });
     }
 
-
     if (!datosComprador || !datosComprador.email) {
       console.log('❌ Error: Datos del comprador incompletos:', datosComprador);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(400).json({
         error: 'Datos del comprador incompletos',
         message: 'Email del comprador es requerido',
@@ -249,6 +250,7 @@ app.post('/crear-preferencia', async (req, res) => {
     for (const [idx, item] of itemsMP.entries()) {
       if (!item.id || !item.title || !item.unit_price || !item.quantity) {
         console.log(`❌ Error: El item en posición ${idx} no tiene todos los campos requeridos`, item);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         return res.status(400).json({
           error: 'Item inválido',
           message: `El item en posición ${idx} no tiene todos los campos requeridos`,
@@ -313,6 +315,7 @@ app.post('/crear-preferencia', async (req, res) => {
     } catch (err) {
       // Error específico de MercadoPago
       console.error('❌ Error MercadoPago:', err.message, err);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(500).json({
         error: 'Error al crear preferencia en MercadoPago',
         message: err.message,
@@ -323,6 +326,7 @@ app.post('/crear-preferencia', async (req, res) => {
 
     if (!result || !result.id || !result.init_point) {
       console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(500).json({
         error: 'Preferencia no generada',
         message: 'No se recibió un init_point válido de MercadoPago',
@@ -331,6 +335,7 @@ app.post('/crear-preferencia', async (req, res) => {
     }
 
     console.log('✅ Preferencia creada exitosamente');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.json({
       preference_id: result.id,
       init_point: result.init_point
@@ -341,6 +346,7 @@ app.post('/crear-preferencia', async (req, res) => {
     console.error('❌ Error inesperado al crear preferencia:');
     console.error('📋 Detalles completos del error:', error && error.stack ? error.stack : error);
     try {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.status(500).json({
         error: 'Error inesperado al crear preferencia',
         message: error.message || String(error),
