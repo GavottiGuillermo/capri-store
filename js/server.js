@@ -194,13 +194,18 @@ app.post('/crear-preferencia', async (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   
   try {
+    console.log('--- INICIO /crear-preferencia ---');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body recibido:', JSON.stringify(req.body, null, 2));
     console.log('Creando preferencia de pago...');
     console.log('📦 Datos recibidos:', JSON.stringify(req.body, null, 2));
 
     const { items, datosComprador } = req.body;
 
     // Validar datos requeridos
+
     if (!items || !Array.isArray(items) || items.length === 0) {
+      console.log('❌ Error: Items requeridos no presentes o vacíos');
       return res.status(400).json({
         error: 'Items requeridos',
         message: 'Se requiere al menos un item',
@@ -208,8 +213,9 @@ app.post('/crear-preferencia', async (req, res) => {
       });
     }
 
+
     if (!datosComprador || !datosComprador.email) {
-      console.log('❌ Datos comprador recibidos:', datosComprador);
+      console.log('❌ Error: Datos del comprador incompletos:', datosComprador);
       return res.status(400).json({
         error: 'Datos del comprador incompletos',
         message: 'Email del comprador es requerido',
@@ -218,25 +224,31 @@ app.post('/crear-preferencia', async (req, res) => {
     }
 
     // Validar que cada item tenga los campos requeridos por MercadoPago
+
     const itemsMP = items.map((item, idx) => {
       // Si ya tiene formato MP, usarlo directo
       if (item.id && item.title && item.unit_price && item.quantity) return item;
       // Si viene en formato propio, mapear
       if (!item.id_articulo && !item.id) {
+        console.log(`❌ Error: El item en posición ${idx} no tiene id_articulo ni id`, item);
         throw new Error(`El item en posición ${idx} no tiene id_articulo ni id`);
       }
-      return {
+      const mapped = {
         id: item.id_articulo ? String(item.id_articulo) : String(item.id),
         title: item.nombre || item.title || 'Producto Capri',
         quantity: item.cantidad || item.quantity || 1,
         currency_id: 'ARS',
         unit_price: item.precio || item.unit_price || 0
       };
+      console.log(`Item mapeado para MP [${idx}]:`, mapped);
+      return mapped;
     });
 
     // Validar que todos los items tengan los campos requeridos
+
     for (const [idx, item] of itemsMP.entries()) {
       if (!item.id || !item.title || !item.unit_price || !item.quantity) {
+        console.log(`❌ Error: El item en posición ${idx} no tiene todos los campos requeridos`, item);
         return res.status(400).json({
           error: 'Item inválido',
           message: `El item en posición ${idx} no tiene todos los campos requeridos`,
@@ -259,9 +271,26 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     };
 
+
     const preference = new Preference(client);
     let result;
     try {
+      console.log('Enviando preferencia a MercadoPago:', JSON.stringify({
+        items: itemsMP,
+        payer,
+        back_urls: {
+          success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
+          failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
+          pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
+        },
+        auto_return: 'approved',
+        notification_url: 'https://capri-store.onrender.com/webhook',
+        external_reference: JSON.stringify({
+          customer_email: payer.email,
+          customer_phone: payer.phone?.number || '',
+          timestamp: Date.now()
+        })
+      }, null, 2));
       result = await preference.create({
         body: {
           items: itemsMP,
@@ -280,6 +309,7 @@ app.post('/crear-preferencia', async (req, res) => {
           })
         }
       });
+      console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));
     } catch (err) {
       // Error específico de MercadoPago
       console.error('❌ Error MercadoPago:', err.message, err);
@@ -290,7 +320,9 @@ app.post('/crear-preferencia', async (req, res) => {
       });
     }
 
+
     if (!result || !result.id || !result.init_point) {
+      console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
       return res.status(500).json({
         error: 'Preferencia no generada',
         message: 'No se recibió un init_point válido de MercadoPago',
@@ -308,11 +340,16 @@ app.post('/crear-preferencia', async (req, res) => {
     // Loguear error inesperado y devolver JSON siempre
     console.error('❌ Error inesperado al crear preferencia:');
     console.error('📋 Detalles completos del error:', error && error.stack ? error.stack : error);
-    return res.status(500).json({
-      error: 'Error inesperado al crear preferencia',
-      message: error.message || String(error),
-      stack: error.stack || null
-    });
+    try {
+      res.status(500).json({
+        error: 'Error inesperado al crear preferencia',
+        message: error.message || String(error),
+        stack: error.stack || null
+      });
+    } catch (err2) {
+      console.error('❌ Error al intentar enviar respuesta de error:', err2);
+      res.end();
+    }
   }
 });
 console.log('✅ Endpoint POST /crear-preferencia definido exitosamente');
