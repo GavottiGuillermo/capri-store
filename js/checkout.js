@@ -149,6 +149,8 @@ function calcularEnvio() {
 // ... (puedes agregar aquí helpers de envío, tabla de precios, etc. si lo necesitas)
 
 async function iniciarProcesoPago() {
+  // LOG: Confirmar que la función fue llamada por el botón
+  console.log('[checkout] iniciarProcesoPago() fue llamada');
   const form = document.getElementById('checkout-form');
   if (!form.checkValidity()) {
     form.classList.add('was-validated');
@@ -281,7 +283,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   if (calcularEnvioBtn) calcularEnvioBtn.addEventListener('click', calcularEnvio);
-  if (iniciarPagoBtn) iniciarPagoBtn.addEventListener('click', iniciarProcesoPago);
+  if (iniciarPagoBtn) {
+    iniciarPagoBtn.addEventListener('click', function(e) {
+      console.log('[checkout] Click en #iniciarPago, llamando iniciarProcesoPago');
+      iniciarProcesoPago();
+    });
+  } else {
+    console.warn('[checkout] No se encontró el botón #iniciarPago');
+  }
   cargarResumenCompra();
   manejarTipoEntrega();
   // Puedes agregar aquí la función de animaciones fade-in si la necesitas
