@@ -7,97 +7,29 @@
   <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
-  <!-- <link href="css/styles.css" rel="stylesheet" /> -->
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
+    :root {
+      --vino-tinto: #6b0a0a;
+      --rosado: #e29ca3;
+      --color-primario: var(--vino-tinto);
+      --color-acento: #fbeee6;
+    }
     body { font-family: 'Montserrat', sans-serif; }
     .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
     .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
-    .bg-vino-tinto { background-color: #6b0a0a !important; }
-    .text-vino-tinto { color: #6b0a0a !important; }
-    .text-rosado { color: #e29ca3 !important; }
-    .bg-rosado { background-color: #e29ca3 !important; }
-    .border-rosado { border-color: #e29ca3 !important; }
-    .shadow-lg { box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important; }
-    .rounded-lg { border-radius: 1rem !important; }
-    
-    /* Estilos de botones limpios y sin conflictos */
-    .btn-rosado { 
-      background-color: #e29ca3 !important; 
-      color: #fff !important; 
-      border-color: #e29ca3 !important;
-      border: 1px solid #e29ca3 !important;
-      padding: 0.375rem 0.75rem !important;
-      font-size: 1rem !important;
-      line-height: 1.5 !important;
-      border-radius: 0.25rem !important;
-      cursor: pointer !important;
-      text-decoration: none !important;
-      display: inline-block !important;
-      font-weight: 400 !important;
-      text-align: center !important;
-      vertical-align: middle !important;
-      transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out !important;
-    }
-    .btn-rosado:hover { 
-      background-color: #d1848d !important; 
-      color: #fff !important; 
-      border-color: #d1848d !important;
-    }
-    .btn-rosado:focus, .btn-rosado:active {
-      background-color: #d1848d !important; 
-      color: #fff !important; 
-      border-color: #d1848d !important;
-      box-shadow: 0 0 0 0.2rem rgba(226, 156, 163, 0.5) !important;
-    }
-    
-    .btn-vino-tinto { 
-      background-color: #6b0a0a !important; 
-      color: #fff !important; 
-      border-color: #6b0a0a !important;
-      border: 1px solid #6b0a0a !important;
-      padding: 0.375rem 0.75rem !important;
-      font-size: 1rem !important;
-      line-height: 1.5 !important;
-      border-radius: 0.25rem !important;
-      cursor: pointer !important;
-      text-decoration: none !important;
-      display: inline-block !important;
-      font-weight: 400 !important;
-      text-align: center !important;
-      vertical-align: middle !important;
-      transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out !important;
-    }
-    .btn-vino-tinto:hover { 
-      background-color: #4a0707 !important; 
-      color: #fff !important; 
-      border-color: #4a0707 !important;
-    }
-    .btn-vino-tinto:focus, .btn-vino-tinto:active {
-      background-color: #4a0707 !important; 
-      color: #fff !important; 
-      border-color: #4a0707 !important;
-      box-shadow: 0 0 0 0.2rem rgba(107, 10, 10, 0.5) !important;
-    }
-    
-    .btn-outline-vino-tinto { border: 2px solid #6b0a0a; color: #6b0a0a; background: transparent; }
-    .btn-outline-vino-tinto:hover { background-color: #6b0a0a; color: #fff; }
-    
-    /* Eliminar cualquier pseudo-elemento problemático */
-    .btn::before, .btn::after,
-    .btn-rosado::before, .btn-rosado::after,
-    .btn-vino-tinto::before, .btn-vino-tinto::after {
-      display: none !important;
-      content: none !important;
-    }
-    
-    /* Asegurar que todos los botones tengan estilos limpios */
-    .btn {
-      position: relative !important;
-      overflow: visible !important;
-    }
-    
-    /* Estilos para botón de contacto deshabilitado */
+    .bg-vino-tinto { background-color: var(--vino-tinto) !important; }
+    .text-vino-tinto { color: var(--vino-tinto) !important; }
+    .bg-rosado { background-color: var(--rosado) !important; }
+    .text-rosado { color: var(--rosado) !important; }
+    .border-rosado { border-color: var(--rosado) !important; }
+    .border-vino-tinto { border-color: var(--vino-tinto) !important; }
+    .btn-rosado { background-color: var(--rosado); color: #fff; }
+    .btn-rosado:hover { background-color: #d1848d; color: #fff; }
+    .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; }
+    .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    .btn-outline-vino-tinto { border: 2px solid var(--vino-tinto); color: var(--vino-tinto); background: transparent; }
+    .btn-outline-vino-tinto:hover { background-color: var(--vino-tinto); color: #fff; }
     .btn-contacto-disabled {
       background-color: #cccccc !important;
       color: #666666 !important;
@@ -105,73 +37,52 @@
       cursor: not-allowed !important;
       opacity: 0.7 !important;
     }
-    
     .btn-contacto-disabled:hover {
       background-color: #cccccc !important;
       color: #666666 !important;
       border-color: #cccccc !important;
       cursor: not-allowed !important;
     }
-    
-    /* Transición suave para el cambio de estado */
     .btn-contacto-transition {
       transition: all 0.3s ease !important;
     }
-    
-    /* Efecto sutil para campos del formulario de contacto */
     .form-control.campo-valido {
       border-color: #28a745 !important;
       box-shadow: 0 0 0 0.1rem rgba(40, 167, 69, 0.25) !important;
     }
-    
     .form-control.campo-invalido {
       border-color: #dc3545 !important;
       box-shadow: 0 0 0 0.1rem rgba(220, 53, 69, 0.25) !important;
     }
-    
-  .card-product img { height: 250px; object-fit: cover; }
-  .card-product { min-height: 100%; border-radius: 1rem; overflow: hidden; }
-  /* Forzar borde sólido y color uniforme en tarjetas */
-  .card.card-product { border-width: 2px !important; border-style: solid !important; }
-  .border-rosado { border-color: #e29ca3 !important; }
-  .border-vino-tinto { border-color: #6b0a0a !important; }
-  /* Redondear esquinas de la imagen superior para evitar "cuadrados" */
-  .card-product .card-img-top { border-top-left-radius: 1rem; border-top-right-radius: 1rem; }
-    
-    /* Estilos para dropdown de productos */
+    .card-product img { height: 250px; object-fit: cover; }
+    .card-product { min-height: 100%; border-radius: 1rem; overflow: hidden; }
+    .card.card-product { border-width: 2px !important; border-style: solid !important; }
+    .card-product .card-img-top { border-top-left-radius: 1rem; border-top-right-radius: 1rem; }
     .dropdown-menu {
       border-radius: 0.5rem;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    
     .dropdown-item:hover {
-      background-color: #e29ca3 !important;
+      background-color: var(--rosado) !important;
       color: #fff !important;
     }
-    
     .dropdown-item.active {
-      background-color: #e29ca3 !important;
+      background-color: var(--rosado) !important;
       color: #fff !important;
       font-weight: bold;
     }
-    
     .dropdown-divider {
       margin: 0.25rem 0;
     }
-    
-    /* Estilo para título de categoría activa */
     .categoria-titulo {
-      border-bottom: 3px solid #e29ca3;
+      border-bottom: 3px solid var(--rosado);
       padding-bottom: 0.5rem;
       margin-bottom: 2rem;
     }
-    
-    /* Estilos adicionales necesarios para el funcionamiento */
     .fade-in { animation: fadeIn 0.6s ease-out; }
     .section-title { margin-bottom: 2rem; }
     .progressive-reveal { opacity: 1; }
     .animate-delay-1 { animation-delay: 0.1s; }
-    
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }

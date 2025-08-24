@@ -7,26 +7,48 @@
   </title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&amp;display=swap" rel="stylesheet"/>
-  <link href="css/styles.css" rel="stylesheet" />
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
+    :root {
+      --vino-tinto: #6b0a0a;
+      --rosado: #e29ca3;
+      --color-primario: var(--vino-tinto);
+      --color-acento: #fbeee6;
+    }
     body { font-family: 'Montserrat', sans-serif; }
     .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
     .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
-    .bg-vino-tinto { background-color: #6b0a0a !important; }
-    .text-vino-tinto { color: #6b0a0a !important; }
-    .text-rosado { color: #e29ca3 !important; }
-    .bg-rosado { background-color: #e29ca3 !important; }
-    .border-rosado { border-color: #e29ca3 !important; }
-    .shadow-lg { box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important; }
-    .rounded-lg { border-radius: 1rem !important; }
-    .btn-rosado { background-color: #e29ca3; color: #fff; }
+    .bg-vino-tinto { background-color: var(--vino-tinto) !important; }
+    .text-vino-tinto { color: var(--vino-tinto) !important; }
+    .bg-rosado { background-color: var(--rosado) !important; }
+    .text-rosado { color: var(--rosado) !important; }
+    .border-rosado { border-color: var(--rosado) !important; }
+    .border-vino-tinto { border-color: var(--vino-tinto) !important; }
+    .btn-rosado { background-color: var(--rosado); color: #fff; }
     .btn-rosado:hover { background-color: #d1848d; color: #fff; }
-    .btn-vino-tinto { background-color: #6b0a0a; color: #fff; }
+    .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; }
     .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
     .card-product img { height: 250px; object-fit: cover; }
-    .card-product { min-height: 100%; }
-   </style>
+    .card-product { min-height: 100%; border-radius: 1rem; overflow: hidden; }
+    .card.card-product { border-width: 2px !important; border-style: solid !important; }
+    .card-product .card-img-top { border-top-left-radius: 1rem; border-top-right-radius: 1rem; }
+    .fade-in { animation: fadeIn 0.6s ease-out; }
+    .fade-in-left { animation: fadeInLeft 0.6s ease-out; }
+    .fade-in-right { animation: fadeInRight 0.6s ease-out; }
+    .section-title { margin-bottom: 2rem; }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes fadeInLeft {
+      from { opacity: 0; transform: translateX(-30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeInRight {
+      from { opacity: 0; transform: translateX(30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+  </style>
  </head>
  <body class="bg-white text-vino">
   <!-- Navbar -->

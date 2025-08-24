@@ -7,13 +7,35 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="css/styles.css" rel="stylesheet" />
   <style>
+    :root {
+      --vino-tinto: #6b0a0a;
+      --rosado: #e29ca3;
+      --color-primario: var(--vino-tinto);
+      --color-acento: #fbeee6;
+    }
     body { font-family: 'Montserrat', sans-serif; }
     .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
     .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
-
-    /* Clase específica para mensaje informativo de envío */
+    .bg-vino-tinto { background-color: var(--vino-tinto) !important; }
+    .text-vino-tinto { color: var(--vino-tinto) !important; }
+    .bg-rosado { background-color: var(--rosado) !important; }
+    .text-rosado { color: var(--rosado) !important; }
+    .border-rosado { border-color: var(--rosado) !important; }
+    .border-vino-tinto { border-color: var(--vino-tinto) !important; }
+    .btn-rosado { background-color: var(--rosado); color: #fff; }
+    .btn-rosado:hover { background-color: #d1848d; color: #fff; }
+    .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; }
+    .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    .checkout-summary {
+      background-color: rgba(226, 156, 163, 0.1);
+      border: 1.5px solid var(--rosado);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      max-height: 700px;
+      overflow-y: auto;
+      width: 100%;
+    }
     .mensaje-informativo-envio {
       background: linear-gradient(45deg, #d1ecf1, #e8f5f8) !important;
       border: 2px solid #bee5eb !important;
@@ -25,24 +47,114 @@
       text-align: center;
       box-shadow: 0 4px 12px rgba(12, 84, 96, 0.15) !important;
     }
-
-    /* Campos deshabilitados */
     .form-control:disabled {
       background-color: #f8f9fa;
       opacity: 0.7;
       border-color: #dee2e6;
     }
-
-    /* Radio buttons de envío */
     .form-check-input:checked {
       background-color: #6b0a0a;
       border-color: #6b0a0a;
     }
-
     .form-check-label {
       color: #6b0a0a;
       font-weight: 500;
     }
+    .micro-bounce:hover {
+      animation: microBounce 0.3s ease;
+    }
+    @keyframes microBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    .glow-on-hover {
+      transition: box-shadow 0.3s ease;
+    }
+    .glow-on-hover:hover {
+      box-shadow: 0 0 20px rgba(226, 156, 163, 0.5);
+    }
+    .fade-in {
+      opacity: 0;
+      transform: translateY(50px) scale(0.95);
+      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: opacity, transform;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .fade-in-left {
+      opacity: 0;
+      transform: translateX(-50px);
+      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .fade-in-left.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .fade-in-right {
+      opacity: 0;
+      transform: translateX(50px);
+      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .fade-in-right.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .section-title {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .section-title.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .checkout-section {
+      transition: all 0.4s ease;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    .checkout-section.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .subtle-pulse {
+      animation: subtlePulse 3s ease-in-out infinite;
+    }
+    @keyframes subtlePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+    .navbar-cart-badge {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-origin: center;
+    }
+    .navbar-cart-badge.bounce {
+      animation: cartBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+    @keyframes cartBounce {
+      0% { transform: scale(1); }
+      25% { transform: scale(1.3) rotate(5deg); }
+      50% { transform: scale(0.9) rotate(-3deg); }
+      75% { transform: scale(1.1) rotate(2deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+    .navbar-cart-icon {
+      transition: transform 0.3s ease;
+    }
+    .navbar-cart-link:hover .navbar-cart-icon {
+      transform: scale(1.1) rotate(5deg);
+    }
+    .shake {
+      animation: shake 0.5s ease-in-out;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    /* ...otros estilos clave pueden agregarse aquí según necesidad... */
   </style>
 </head>
 <body class="bg-white text-vino">

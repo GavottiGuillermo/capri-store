@@ -199,16 +199,27 @@ async function iniciarProcesoPago() {
   const pagarBtn = document.getElementById('iniciarPago');
   pagarBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
   pagarBtn.disabled = true;
+  // LOG: Mostrar datos que se enviarán al backend
+  console.log('[checkout] Enviando a /crear-preferencia:', {
+    items,
+    datosComprador: checkoutData
+  });
   try {
     const response = await fetch('/crear-preferencia', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, datosComprador: checkoutData })
     });
+    // LOG: Mostrar status y headers de la respuesta
+    console.log('[checkout] Respuesta de /crear-preferencia:', response.status, response.statusText, response.headers);
     const contentType = response.headers.get('content-type');
+    // LOG: Mostrar content-type recibido
+    console.log('[checkout] Content-Type recibido:', contentType);
     if (!response.ok) throw new Error('Error al crear preferencia');
     if (!contentType || !contentType.includes('application/json')) throw new Error('Respuesta inesperada del servidor');
     const data = await response.json();
+    // LOG: Mostrar el JSON recibido
+    console.log('[checkout] JSON recibido:', data);
     if (data && data.init_point) {
       // Guardar datos para success.html
       localStorage.setItem('datosCompra', JSON.stringify(checkoutData));

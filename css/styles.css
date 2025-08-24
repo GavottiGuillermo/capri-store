@@ -1,3 +1,4 @@
+@charset "UTF-8";
 /* Resumen de compra área rosada */
 .checkout-summary {
   background-color: rgba(226, 156, 163, 0.1);
@@ -8,7 +9,6 @@
   overflow-y: auto;
   width: 100%;
 }
-@charset "UTF-8";
 /* Utilidades de color para Capri Store */
 .bg-vino-tinto {
   background-color: var(--vino-tinto) !important;
