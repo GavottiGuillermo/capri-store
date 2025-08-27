@@ -207,7 +207,9 @@ async function iniciarProcesoPago() {
     datosComprador: checkoutData
   });
   try {
-    const response = await fetch('/crear-preferencia', {
+    // Usar la URL absoluta del backend en Render
+    const API_URL = 'https://capri-store.onrender.com/crear-preferencia';
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, datosComprador: checkoutData })
