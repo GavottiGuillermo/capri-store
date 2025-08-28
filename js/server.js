@@ -427,21 +427,36 @@ app.post('/webhook', async (req, res) => {
     }
     
     if (shouldProcess && paymentId) {
-      // VERIFICACIÓN CRÍTICA: Solo procesar si NO ha sido procesado antes
-      if (webhookNotifications.has(paymentId)) {
-        console.log(`⚠️ Pago ${paymentId} ya fue procesado anteriormente - IGNORANDO WEBHOOK`);
-        return res.status(200).send('OK - Already processed');
+      // NUEVA VERIFICACIÓN: Consultar en la base si ya existe un pedido para este paymentId
+      try {
+        const pedidoExistente = await executeQueryWithRetry(
+          pool,
+          `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' LIMIT 1`,
+          [paymentId, paymentId.toString()],
+          2
+        );
+        if (pedidoExistente && pedidoExistente.rows && pedidoExistente.rows.length > 0) {
+          console.log(`⚠️ Pago ${paymentId} ya tiene pedido en BD (${pedidoExistente.rows[0].id_pedido}) - IGNORANDO WEBHOOK`);
+          return res.status(200).send('OK - Already processed in DB');
+        }
+      } catch (err) {
+        console.error('⚠️ Error al consultar pedido existente en BD:', err.message || err);
+        // Si hay error en la consulta, por seguridad NO procesar el pedido
+        return res.status(200).send('OK - DB check error');
       }
-      
+
+      // VERIFICACIÓN CRÍTICA: Solo procesar si NO ha sido procesado antes en memoria
+      if (webhookNotifications.has(paymentId)) {
+        console.log(`⚠️ Pago ${paymentId} ya fue procesado anteriormente (memoria) - IGNORANDO WEBHOOK`);
+        return res.status(200).send('OK - Already processed (memory)');
+      }
       // MARCAR INMEDIATAMENTE como procesado para evitar race conditions
       webhookNotifications.set(paymentId, true);
       console.log(`🔒 Pago ${paymentId} marcado como procesado - procediendo...`);
       console.log(`🔍 Procesando pago: ${paymentId}`);
-      
       // Obtener información del pago
       const payment = new Payment(client);
       const paymentInfo = await payment.get({ id: paymentId });
-      
       if (paymentInfo.status === 'approved') {
         console.log('✅ Pago aprobado, procesando pedido...');
         // Extraer información del external_reference
@@ -567,7 +582,6 @@ app.post('/webhook', async (req, res) => {
     } else {
       console.log(`ℹ️ No se encontró paymentId válido en el webhook`);
     }
-    
     res.status(200).send('OK');
   } catch (error) {
     console.error('❌ Error en webhook:', error);
