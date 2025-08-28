@@ -353,7 +353,7 @@ app.post('/webhook', async (req, res) => {
     
     const { type, data, action, topic, resource } = req.body;
 
-    // Lógica robusta: solo procesar el primer webhook que traiga paymentId, ignorar los demás
+    // Solo procesar webhooks de tipo payment
     let paymentId = null;
     let shouldProcess = false;
 
@@ -369,35 +369,12 @@ app.post('/webhook', async (req, res) => {
       paymentId = resource;
       shouldProcess = true;
       console.log(`ℹ️ Webhook topic payment recibido para pago: ${paymentId}`);
-    } else if (topic === 'merchant_order' && resource) {
-      // Solo intentar obtener paymentId desde merchant_order si NO se obtuvo antes
-      console.log('ℹ️ Merchant order webhook recibido. Intentando obtener payments desde resource...');
-      try {
-        const resourceUrl = resource;
-        const resp = await fetch(`${resourceUrl}?access_token=${process.env.MERCADOPAGO_ACCESS_TOKEN}`);
-        if (!resp.ok) {
-          console.log('⚠️ No se pudo obtener merchant_order, status:', resp.status);
-          return res.status(200).send('OK - merchant_order ignored');
-        }
-        const mo = await resp.json();
-        const payments = mo.payments || [];
-        if (payments.length > 0 && payments[0].id) {
-          paymentId = payments[0].id;
-          shouldProcess = true;
-          console.log(`ℹ️ merchant_order -> procesando paymentId: ${paymentId}`);
-        } else {
-          console.log('ℹ️ merchant_order sin payments - ignorando');
-          return res.status(200).send('OK - No payments in merchant_order');
-        }
-      } catch (err) {
-        console.error('⚠️ Error al obtener merchant_order:', err.message || err);
-        return res.status(200).send('OK - merchant_order fetch failed');
-      }
     } else {
-      console.log(`ℹ️ Webhook ignorado - tipo: ${type || topic}, action: ${action}`);
-      return res.status(200).send('OK - Ignored');
+      // Ignorar cualquier otro tipo de webhook (merchant_order, etc.)
+      console.log(`ℹ️ Webhook ignorado - solo se procesan webhooks de tipo payment.`);
+      return res.status(200).send('OK - Ignored (not payment)');
     }
-    
+
     if (shouldProcess && paymentId) {
       // NUEVA VERIFICACIÓN: Consultar en la base si ya existe un pedido para este paymentId (antes de procesar)
       let pedidoExistenteAntes = null;
