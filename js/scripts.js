@@ -255,9 +255,42 @@ function actualizarCartSidenav() {
   }
 }
 
-// Finalizar compra - redirigir a checkout
-function finalizarCompraSidebar() {
-  window.location.href = 'checkout.html';
+// Finalizar compra - validar stock y redirigir a checkout
+async function finalizarCompraSidebar() {
+  // Obtener productos del carrito
+  const cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  if (!cartItems.length) {
+    mostrarPopup('El carrito está vacío.');
+    return;
+  }
+  // Extraer IDs únicos de productos
+  const ids = cartItems.map(item => item.id_articulo || item.id).filter(Boolean);
+  if (!ids.length) {
+    mostrarPopup('No se pudieron obtener los IDs de los productos.');
+    return;
+  }
+  try {
+    // Validar stock en backend
+    const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      mostrarPopup('Error al validar stock. Intenta nuevamente.');
+      return;
+    }
+    if (data.faltantes && data.faltantes.length > 0) {
+      mostrarPopup('Algunos productos ya no tienen stock. Actualiza tu carrito.');
+      // Opcional: podrías eliminar los productos sin stock del carrito aquí
+      return;
+    }
+    // Si todo ok, redirigir a checkout
+    window.location.href = 'checkout.html';
+  } catch (e) {
+    mostrarPopup('Error de conexión al validar stock.');
+  }
 }
 
 // === VALIDACIÓN DE BOTÓN AGREGAR AL CARRITO EN DETALLE ===

@@ -168,17 +168,21 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
         // LIMPIAR CARRITO DESPUÉS DE MOSTRAR PEDIDO EXITOSO
         setTimeout(() => {
             console.log('🧹 Limpiando carrito después de compra exitosa...');
-            if (typeof localStorage !== 'undefined') {
-                localStorage.removeItem('cartItems');
-                localStorage.removeItem('datosCompra');
-                localStorage.removeItem('productosCompra');
-                localStorage.removeItem('totalCompra');
-                localStorage.removeItem('costoEnvio');
-                console.log('✅ Carrito y datos de compra limpiados');
-                
-                // Actualizar contador del carrito si existe la función
-                if (typeof updateCartCounterAnimated === 'function') {
-                    updateCartCounterAnimated(0);
+            if (typeof limpiarCarritoDespuesDeCompra === 'function') {
+                limpiarCarritoDespuesDeCompra();
+                console.log('✅ Carrito limpiado usando limpiarCarritoDespuesDeCompra()');
+            } else {
+                // Fallback manual si la función no existe
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.removeItem('cartItems');
+                    localStorage.removeItem('datosCompra');
+                    localStorage.removeItem('productosCompra');
+                    localStorage.removeItem('totalCompra');
+                    localStorage.removeItem('costoEnvio');
+                    console.log('✅ Carrito y datos de compra limpiados (fallback)');
+                    if (typeof updateCartCounterAnimated === 'function') {
+                        updateCartCounterAnimated(0);
+                    }
                 }
             }
         }, 1000); // Delay para que el usuario vea el número primero
@@ -200,16 +204,7 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
     
     console.log('🎊 === PROCESO COMPLETADO ===');
     
-    // PASO 4: Limpiar carrito después de compra exitosa
-    try {
-        localStorage.removeItem('productosCompra');
-        localStorage.removeItem('datosCompra');
-        localStorage.removeItem('totalCompra');
-        localStorage.removeItem('costoEnvio');
-        console.log('🛒 Carrito limpiado exitosamente');
-    } catch (error) {
-        console.log('⚠️ Error al limpiar carrito:', error);
-    }
+    // PASO 4: (Ya se limpia el carrito arriba con la función estándar)
 }
 
 // Función para mostrar errores
