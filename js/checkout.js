@@ -1,3 +1,20 @@
+// === PREPARAR ITEMS PARA MERCADO PAGO ===
+function prepararItemsParaMP(cartItems) {
+  return cartItems.map(item => {
+    // Usar id_articulo si está presente, si no, intentar extraerlo del path de la imagen
+    let id = item.id_articulo || item.id;
+    if (!id && item.img) {
+      id = obtenerIdProductoDesdeCarpeta(item.img);
+    }
+    return {
+      id: id || undefined,
+      title: item.nombre,
+      quantity: item.cantidad,
+      currency_id: 'ARS',
+      unit_price: Number(item.precio)
+    };
+  });
+}
 // === MANEJAR TIPO DE ENTREGA ===
 function manejarTipoEntrega() {
   const retiroLocal = document.getElementById('retiroLocal');
