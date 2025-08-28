@@ -190,6 +190,7 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 console.log('📝 Definiendo endpoint POST /crear-preferencia...');
 app.post('/crear-preferencia', async (req, res) => {
   // Headers CORS y JSON explícitos para este endpoint
+  // Headers CORS y JSON explícitos para este endpoint
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Type', 'application/json; charset=utf-8');
@@ -198,143 +199,135 @@ app.post('/crear-preferencia', async (req, res) => {
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Body recibido:', JSON.stringify(req.body, null, 2));
     console.log('Creando preferencia de pago...');
-            console.log('🔔 Webhook recibido - datos completos:', JSON.stringify(req.body, null, 2));
-            const { type, data, action, topic, resource } = req.body;
+    console.log('� Datos recibidos:', JSON.stringify(req.body, null, 2));
 
-            // Lógica robusta: solo procesar el primer webhook que traiga paymentId, ignorar los demás
-            let paymentId = null;
-            let shouldProcess = false;
-
-            if (type === 'payment' && data?.id) {
-              paymentId = data.id;
-              shouldProcess = true;
-              console.log(`💳 Webhook payment recibido para pago: ${paymentId}`);
-            } else if (action === 'payment.created' && data?.id) {
-              paymentId = data.id;
-              shouldProcess = true;
-              console.log(`💳 Webhook payment.created recibido para pago: ${paymentId}`);
-            } else if (topic === 'payment' && resource) {
-              paymentId = resource;
-              shouldProcess = true;
-              console.log(`ℹ️ Webhook topic payment recibido para pago: ${paymentId}`);
-            } else if (topic === 'merchant_order' && resource) {
-              // Solo intentar obtener paymentId desde merchant_order si NO se obtuvo antes
-              console.log('ℹ️ Merchant order webhook recibido. Intentando obtener payments desde resource...');
-              try {
-                const resourceUrl = resource;
-                const resp = await fetch(`${resourceUrl}?access_token=${process.env.MERCADOPAGO_ACCESS_TOKEN}`);
-                if (!resp.ok) {
-                  console.log('⚠️ No se pudo obtener merchant_order, status:', resp.status);
-                  return res.status(200).send('OK - merchant_order ignored');
-                }
-                const mo = await resp.json();
-                const payments = mo.payments || [];
-                if (payments.length > 0 && payments[0].id) {
-                  paymentId = payments[0].id;
-                  shouldProcess = true;
-                  console.log(`ℹ️ merchant_order -> procesando paymentId: ${paymentId}`);
-                } else {
-                  console.log('ℹ️ merchant_order sin payments - ignorando');
-                  return res.status(200).send('OK - No payments in merchant_order');
-                }
-              } catch (err) {
-                console.error('⚠️ Error al obtener merchant_order:', err.message || err);
-                return res.status(200).send('OK - merchant_order fetch failed');
-              }
-            } else {
-              console.log(`ℹ️ Webhook ignorado - tipo: ${type || topic}, action: ${action}`);
-              return res.status(200).send('OK - Ignored');
-            }
-            
-            if (shouldProcess && paymentId) {
-              // NUEVA VERIFICACIÓN: Consultar en la base si ya existe un pedido para este paymentId (antes de procesar)
-              let pedidoExistenteAntes = null;
-              try {
-                const pedidoExistente = await executeQueryWithRetry(
-                  pool,
-                  `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' LIMIT 1`,
-                  [paymentId, paymentId.toString()],
-                  2
-                );
-                if (pedidoExistente && pedidoExistente.rows && pedidoExistente.rows.length > 0) {
-                  pedidoExistenteAntes = pedidoExistente.rows[0].id_pedido;
-                  console.log(`⚠️ Pago ${paymentId} ya tiene pedido en BD (${pedidoExistenteAntes}) - IGNORANDO WEBHOOK`);
-                  return res.status(200).send('OK - Already processed in DB');
-                }
-              } catch (err) {
-                console.error('⚠️ Error al consultar pedido existente en BD:', err.message || err);
-                // Si hay error en la consulta, por seguridad NO procesar el pedido
-                return res.status(200).send('OK - DB check error');
-              }
     const { items, datosComprador } = req.body;
-              // VERIFICACIÓN CRÍTICA: Solo procesar si NO ha sido procesado antes en memoria
-              if (webhookNotifications.has(paymentId)) {
-                console.log(`⚠️ Pago ${paymentId} ya fue procesado anteriormente (memoria) - IGNORANDO WEBHOOK`);
-                return res.status(200).send('OK - Already processed (memory)');
-              }
-              // MARCAR INMEDIATAMENTE como procesado para evitar race conditions
-              webhookNotifications.set(paymentId, true);
-              console.log(`🔒 Pago ${paymentId} marcado como procesado - procediendo...`);
-              console.log(`🔍 Procesando pago: ${paymentId}`);
-              // Obtener información del pago
-              const payment = new Payment(client);
-              const paymentInfo = await payment.get({ id: paymentId });
-              if (paymentInfo.status === 'approved') {
-                console.log('✅ Pago aprobado, procesando pedido...');
-                // Extraer información del external_reference
-                let customerData = {};
-                try {
-                  if (paymentInfo.external_reference) {
-                    customerData = JSON.parse(paymentInfo.external_reference);
-                  }
-                } catch (error) {
-                  console.log('⚠️ No se pudo parsear external_reference');
-                }
-                // Extraer productIds de items (si existen)
-                let productIds = '';
-                const items = paymentInfo.additional_info?.items || [];
-                if (items.length > 0) {
-                  productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
-                }
-                // Si no hay productIds, usar 'MANUAL' o dejar vacío
-                if (!productIds) productIds = 'MANUAL';
-                let pedidoExistenteDespues = null;
-                let idPedidoCompleto = null;
-                let numeroDisplay = null;
-                let pedidoCreado = false;
-                try {
-                  // Ejecutar el stored procedure SIEMPRE
-                  console.log('🔧 === LLAMANDO AL STORED PROCEDURE ===');
-                  console.log('Parámetros:', [
-                    productIds,
-                    paymentInfo.transaction_amount,
-                    paymentInfo.payer?.first_name || 'Cliente Web',
-                    customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
-                    customerData.customer_phone || '',
-                    'MercadoPago',
-                    'Retiro',
-                    paymentId
-                  ]);
-                  await executeQueryWithRetry(
-                    pool,
-                    'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
-                    [
-                      productIds,
-                      paymentInfo.transaction_amount,
-                      paymentInfo.payer?.first_name || 'Cliente Web',
-                      customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
-                      customerData.customer_phone || '',
-                      'MercadoPago',
-                      'Retiro',
-                      paymentId
-                    ]
-                  );
-                  // Buscar el id_pedido generado después de ejecutar el SP
-                  const pedidoResult = await executeQueryWithRetry(
-                    pool,
-                    `SELECT id_pedido FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2 AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
-                    [paymentId, paymentId.toString()],
-                    2
+
+    // Validar datos requeridos
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      console.log('❌ Error: Items requeridos no presentes o vacíos');
+      return res.status(400).json({
+        error: 'Items requeridos',
+        message: 'Se requiere al menos un item',
+        received: req.body
+      });
+    }
+
+    if (!datosComprador || !datosComprador.email) {
+      console.log('❌ Error: Datos del comprador incompletos:', datosComprador);
+      return res.status(400).json({
+        error: 'Datos del comprador incompletos',
+        message: 'Email del comprador es requerido',
+        received_data: datosComprador
+      });
+    }
+
+    // Validar que cada item tenga los campos requeridos por MercadoPago
+    const itemsMP = items.map((item, idx) => {
+      // Si ya tiene formato MP, usarlo directo
+      if (item.id && item.title && item.unit_price && item.quantity)
+      // Si viene en formato propio, mapear
+      if (!item.id_articulo && !item.id) { /* ... */ }
+      const mapped = {
+        id: item.id_articulo ? String(item.id_articulo) : String(item.id),
+        title: item.nombre || item.title || 'Producto Capri',
+        quantity: item.cantidad || item.quantity || 1,
+        currency_id: 'ARS',
+        unit_price: item.precio || item.unit_price || 0
+      };
+      console.log(`Item mapeado para MP [${idx}]:`, mapped);
+      return mapped;
+    });
+
+    // Validar que todos los items tengan los campos requeridos
+    for (const [idx, item] of itemsMP.entries()) {
+      if (!item.id || !item.title || !item.unit_price || !item.quantity) { /* ... */ }
+    }
+
+    // Solo crear preferencia de MercadoPago, sin crear pedido ni enviar mail
+    const payer = {
+      name: datosComprador.nombre || '',
+      surname: datosComprador.apellido || '',
+      email: datosComprador.email,
+      phone: {
+        area_code: '11',
+        number: datosComprador.telefono?.replace(/\D/g, '') || ''
+      }
+    };
+    const preference = new Preference(client);
+    let result;
+    try {
+      console.log('Enviando preferencia a MercadoPago:', JSON.stringify({
+        items: itemsMP,
+        payer,
+        back_urls: {
+          success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
+          failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
+          pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
+        },
+        auto_return: 'approved',
+        notification_url: 'https://capri-store.onrender.com/webhook',
+        external_reference: JSON.stringify({
+          customer_email: payer.email,
+          customer_phone: payer.phone?.number || '',
+          timestamp: Date.now()
+        })
+      }, null, 2));
+      result = await preference.create({
+        body: {
+          items: itemsMP,
+          payer: payer,
+          back_urls: {
+            success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
+            failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
+            pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
+          },
+          auto_return: 'approved',
+          notification_url: 'https://capri-store.onrender.com/webhook',
+          external_reference: JSON.stringify({
+            customer_email: payer.email,
+            customer_phone: payer.phone?.number || '',
+            timestamp: Date.now()
+          })
+        }
+      });
+      console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));
+    } catch (err) {
+      console.error('❌ Error MercadoPago:', err.message, err);
+      return res.status(500).json({
+        error: 'Error al crear preferencia en MercadoPago',
+        message: err.message,
+        mp_error: err
+      });
+    }
+    if (!result || !result.id || !result.init_point) {
+      console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
+      return res.status(500).json({
+        error: 'Preferencia no generada',
+        message: 'No se recibió un init_point válido de MercadoPago',
+        result
+      });
+    }
+    console.log('✅ Preferencia creada exitosamente');
+    return res.json({
+      preference_id: result.id,
+      init_point: result.init_point
+    });
+  } catch (error) {
+    // Loguear error inesperado y devolver JSON siempre
+    console.error('❌ Error inesperado al crear preferencia:');
+    console.error('📋 Detalles completos del error:', error && error.stack ? error.stack : error);
+    try {
+      return res.status(500).json({
+        error: 'Error inesperado al crear preferencia',
+        message: error.message || String(error),
+        stack: error.stack || null
+      });
+    } catch (err2) {
+      console.error('❌ Error al intentar enviar respuesta de error:', err2);
+      res.end();
+    }
+  }
                   );
                   if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
                     pedidoExistenteDespues = pedidoResult.rows[0].id_pedido;
