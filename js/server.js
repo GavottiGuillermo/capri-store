@@ -225,7 +225,6 @@ app.post('/crear-preferencia', async (req, res) => {
     }
 
     // Validar que cada item tenga los campos requeridos por MercadoPago
-
     const itemsMP = items.map((item, idx) => {
       // Si ya tiene formato MP, usarlo directo
       if (item.id && item.title && item.unit_price && item.quantity) return item;
@@ -246,7 +245,6 @@ app.post('/crear-preferencia', async (req, res) => {
     });
 
     // Validar que todos los items tengan los campos requeridos
-
     for (const [idx, item] of itemsMP.entries()) {
       if (!item.id || !item.title || !item.unit_price || !item.quantity) {
         console.log(`❌ Error: El item en posición ${idx} no tiene todos los campos requeridos`, item);
@@ -259,21 +257,16 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     }
 
-    console.log('📧 Email del comprador:', datosComprador.email);
-    console.log('🛍️ Items:', itemsMP.length, 'productos');
-
-    // Construir objeto payer para MercadoPago
+    // Solo crear preferencia de MercadoPago, sin crear pedido ni enviar mail
     const payer = {
       name: datosComprador.nombre || '',
       surname: datosComprador.apellido || '',
       email: datosComprador.email,
       phone: {
-        area_code: '11', // Código de área por defecto para Argentina
+        area_code: '11',
         number: datosComprador.telefono?.replace(/\D/g, '') || ''
       }
     };
-
-
     const preference = new Preference(client);
     let result;
     try {
@@ -313,7 +306,6 @@ app.post('/crear-preferencia', async (req, res) => {
       });
       console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));
     } catch (err) {
-      // Error específico de MercadoPago
       console.error('❌ Error MercadoPago:', err.message, err);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(500).json({
@@ -322,8 +314,6 @@ app.post('/crear-preferencia', async (req, res) => {
         mp_error: err
       });
     }
-
-
     if (!result || !result.id || !result.init_point) {
       console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -333,14 +323,12 @@ app.post('/crear-preferencia', async (req, res) => {
         result
       });
     }
-
     console.log('✅ Preferencia creada exitosamente');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.json({
       preference_id: result.id,
       init_point: result.init_point
     });
-
   } catch (error) {
     // Loguear error inesperado y devolver JSON siempre
     console.error('❌ Error inesperado al crear preferencia:');
