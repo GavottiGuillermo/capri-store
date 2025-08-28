@@ -502,41 +502,37 @@ app.post('/webhook', async (req, res) => {
           console.error('⚠️ Error al buscar id_pedido tras SP:', err.message || err);
         }
         // Enviar email a cliente y admin SOLO si el pedido fue creado en esta ejecución
-        if (pedidoCreado) {
-          if (emailSentForPayment.has(paymentId)) {
-            console.log(`⚠️ Email ya fue enviado para paymentId: ${paymentId} - NO reenviando.`);
-          } else {
-            try {
-              if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
-                const transporter = nodemailer.createTransport({
-                  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-                  port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-                  secure: false,
-                  auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS
-                  }
-                });
-                const toEmails = [customerData.customer_email || paymentInfo.payer?.email];
-                if (process.env.ADMIN_EMAILS) {
-                  toEmails.push(...process.env.ADMIN_EMAILS.split(','));
+        // Solo enviar email si el pedido NO existía antes (es decir, si pedidoExistenteAntes es null)
+        if (pedidoCreado && !pedidoExistenteAntes) {
+          try {
+            if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
+              const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST || 'smtp.gmail.com',
+                port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
+                secure: false,
+                auth: {
+                  user: process.env.SMTP_USER,
+                  pass: process.env.SMTP_PASS
                 }
-                const mailOptions = {
-                  from: process.env.SMTP_USER,
-                  to: toEmails.join(','),
-                  subject: `Confirmación de pedido Capri Store #${numeroDisplay || ''}`,
-                  text: `¡Gracias por tu compra!\n\nTu número de pedido es: ${idPedidoCompleto || 'N/A'}\nMonto: $${paymentInfo.transaction_amount}\n\nSi tienes dudas, responde este email.\n\n-- Capri Store` 
-                };
-                transporter.sendMail(mailOptions).then(info => {
-                  console.log('✅ Email de confirmación enviado:', info.response || info);
-                  emailSentForPayment.add(paymentId);
-                }).catch(mailErr => {
-                  console.error('⚠️ Error al enviar email de confirmación:', mailErr.message || mailErr);
-                });
+              });
+              const toEmails = [customerData.customer_email || paymentInfo.payer?.email];
+              if (process.env.ADMIN_EMAILS) {
+                toEmails.push(...process.env.ADMIN_EMAILS.split(','));
               }
-            } catch (mailError) {
-              console.error('⚠️ Error en envío de email:', mailError.message || mailError);
+              const mailOptions = {
+                from: process.env.SMTP_USER,
+                to: toEmails.join(','),
+                subject: `Confirmación de pedido Capri Store #${numeroDisplay || ''}`,
+                text: `¡Gracias por tu compra!\n\nTu número de pedido es: ${idPedidoCompleto || 'N/A'}\nMonto: $${paymentInfo.transaction_amount}\n\nSi tienes dudas, responde este email.\n\n-- Capri Store` 
+              };
+              transporter.sendMail(mailOptions).then(info => {
+                console.log('✅ Email de confirmación enviado:', info.response || info);
+              }).catch(mailErr => {
+                console.error('⚠️ Error al enviar email de confirmación:', mailErr.message || mailErr);
+              });
             }
+          } catch (mailError) {
+            console.error('⚠️ Error en envío de email:', mailError.message || mailError);
           }
         } else {
           console.log('ℹ️ No se envía mail porque el pedido ya existía antes de este webhook.');
