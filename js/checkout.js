@@ -1,10 +1,43 @@
+// === MANEJAR TIPO DE ENTREGA ===
+function manejarTipoEntrega() {
+  const retiroLocal = document.getElementById('retiroLocal');
+  const envioDomicilio = document.getElementById('enviosDomicilio');
+  const seccionDatosEnvio = document.getElementById('seccionDatosEnvio');
+  const camposDireccion = [
+    document.getElementById('calleNumero'),
+    document.getElementById('codigoPostal'),
+    document.getElementById('ciudad'),
+    document.getElementById('provincia'),
+    document.getElementById('referencias'),
+    document.getElementById('calcularEnvio')
+  ];
+  if (retiroLocal && retiroLocal.checked) {
+    if (seccionDatosEnvio) seccionDatosEnvio.style.display = 'none';
+    camposDireccion.forEach(campo => { if (campo) campo.disabled = true; });
+    costoEnvio = 0;
+    cargarResumenCompra();
+  } else if (envioDomicilio && envioDomicilio.checked) {
+    if (seccionDatosEnvio) seccionDatosEnvio.style.display = 'block';
+    camposDireccion.forEach(campo => { if (campo) campo.disabled = false; });
+    // El costo de envío se calcula aparte
+    cargarResumenCompra();
+  }
+}
 // === RESUMEN DE COMPRA ===
 function cargarResumenCompra() {
   const checkoutItems = document.getElementById('checkout-items');
   const subtotalElement = document.getElementById('checkout-subtotal');
   const totalElement = document.getElementById('checkout-total');
   const cartCount = document.getElementById('cart-count');
-  const cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  // Fallback: si carrito está vacío, intentar con productosCompra
+  if ((!cartItems || cartItems.length === 0) && localStorage.getItem("productosCompra")) {
+    try {
+      cartItems = JSON.parse(localStorage.getItem("productosCompra")) || [];
+    } catch (e) {
+      cartItems = [];
+    }
+  }
   let subtotal = 0;
   let cantidadTotal = 0;
   if (!cartItems || cartItems.length === 0) {
