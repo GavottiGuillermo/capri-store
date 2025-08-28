@@ -408,7 +408,8 @@ app.post('/webhook', async (req, res) => {
     }
     
     if (shouldProcess && paymentId) {
-      // NUEVA VERIFICACIÓN: Consultar en la base si ya existe un pedido para este paymentId
+      // NUEVA VERIFICACIÓN: Consultar en la base si ya existe un pedido para este paymentId (antes de procesar)
+      let pedidoExistenteAntes = null;
       try {
         const pedidoExistente = await executeQueryWithRetry(
           pool,
@@ -417,7 +418,8 @@ app.post('/webhook', async (req, res) => {
           2
         );
         if (pedidoExistente && pedidoExistente.rows && pedidoExistente.rows.length > 0) {
-          console.log(`⚠️ Pago ${paymentId} ya tiene pedido en BD (${pedidoExistente.rows[0].id_pedido}) - IGNORANDO WEBHOOK`);
+          pedidoExistenteAntes = pedidoExistente.rows[0].id_pedido;
+          console.log(`⚠️ Pago ${paymentId} ya tiene pedido en BD (${pedidoExistenteAntes}) - IGNORANDO WEBHOOK`);
           return res.status(200).send('OK - Already processed in DB');
         }
       } catch (err) {
@@ -457,6 +459,10 @@ app.post('/webhook', async (req, res) => {
         }
         // Si no hay productIds, usar 'MANUAL' o dejar vacío
         if (!productIds) productIds = 'MANUAL';
+        let pedidoExistenteDespues = null;
+        let idPedidoCompleto = null;
+        let numeroDisplay = null;
+        let pedidoCreado = false;
         try {
           // Ejecutar el stored procedure SIEMPRE
           console.log('🔧 === LLAMANDO AL STORED PROCEDURE ===');
@@ -484,28 +490,28 @@ app.post('/webhook', async (req, res) => {
               paymentId
             ]
           );
-          console.log('✅ Pedido procesado exitosamente por webhook');
-          // Buscar el id_pedido generado
-          let idPedidoCompleto = null;
-          let numeroDisplay = null;
-          try {
-            const pedidoResult = await executeQueryWithRetry(
-              pool,
-              `SELECT id_pedido FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2 AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
-              [paymentId, paymentId.toString()],
-              2
-            );
-            if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
-              idPedidoCompleto = pedidoResult.rows[0].id_pedido;
-              numeroDisplay = idPedidoCompleto && idPedidoCompleto.length >= 2 ? idPedidoCompleto.slice(-2) : idPedidoCompleto;
-              console.log(`✅ Pedido generado: ${idPedidoCompleto} -> ${numeroDisplay}`);
-            } else {
-              console.log('⚠️ No se encontró id_pedido tras ejecutar el SP');
-            }
-          } catch (err) {
-            console.error('⚠️ Error al buscar id_pedido tras SP:', err.message || err);
+          // Buscar el id_pedido generado después de ejecutar el SP
+          const pedidoResult = await executeQueryWithRetry(
+            pool,
+            `SELECT id_pedido FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2 AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
+            [paymentId, paymentId.toString()],
+            2
+          );
+          if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
+            pedidoExistenteDespues = pedidoResult.rows[0].id_pedido;
+            idPedidoCompleto = pedidoExistenteDespues;
+            numeroDisplay = idPedidoCompleto && idPedidoCompleto.length >= 2 ? idPedidoCompleto.slice(-2) : idPedidoCompleto;
+            // Solo enviar mail si el pedido no existía antes y existe después
+            pedidoCreado = !pedidoExistenteAntes && !!pedidoExistenteDespues;
+            console.log(`✅ Pedido generado: ${idPedidoCompleto} -> ${numeroDisplay}`);
+          } else {
+            console.log('⚠️ No se encontró id_pedido tras ejecutar el SP');
           }
-          // Enviar email a cliente y admin
+        } catch (err) {
+          console.error('⚠️ Error al buscar id_pedido tras SP:', err.message || err);
+        }
+        // Enviar email a cliente y admin SOLO si el pedido fue creado en esta ejecución
+        if (pedidoCreado) {
           try {
             if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
               const transporter = nodemailer.createTransport({
@@ -536,26 +542,8 @@ app.post('/webhook', async (req, res) => {
           } catch (mailError) {
             console.error('⚠️ Error en envío de email:', mailError.message || mailError);
           }
-        } catch (error) {
-          // Loguear error de ejecución del SP
-          console.error('❌ Error al procesar pedido en webhook:', error);
-          try {
-            const failureRecord = {
-              timestamp: new Date().toISOString(),
-              paymentId,
-              error: error.message || error,
-              paymentInfoSnippet: {
-                status: paymentInfo.status,
-                transaction_amount: paymentInfo.transaction_amount,
-                payer: paymentInfo.payer
-              }
-            };
-            const logPath = path.join(__dirname, '..', 'webhook_failed.log');
-            fs.appendFileSync(logPath, JSON.stringify(failureRecord) + '\n');
-            console.log('✅ Error de SP registrado en', logPath);
-          } catch (fileErr) {
-            console.error('⚠️ Error al escribir webhook_failed.log:', fileErr.message || fileErr);
-          }
+        } else {
+          console.log('ℹ️ No se envía mail porque el pedido ya existía antes de este webhook.');
         }
       } else {
         console.log(`⚠️ Pago ${paymentId} no está aprobado - estado: ${paymentInfo.status}`);
