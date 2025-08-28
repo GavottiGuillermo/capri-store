@@ -1,3 +1,56 @@
+// === RESUMEN DE COMPRA ===
+function cargarResumenCompra() {
+  const checkoutItems = document.getElementById('checkout-items');
+  const subtotalElement = document.getElementById('checkout-subtotal');
+  const totalElement = document.getElementById('checkout-total');
+  const cartCount = document.getElementById('cart-count');
+  const cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  let subtotal = 0;
+  let cantidadTotal = 0;
+  if (!cartItems || cartItems.length === 0) {
+    if (checkoutItems) checkoutItems.innerHTML = '';
+    if (subtotalElement) subtotalElement.textContent = formatPrice(0);
+    if (totalElement) totalElement.textContent = formatPrice(0);
+    if (cartCount) cartCount.textContent = "0";
+    return;
+  }
+  if (checkoutItems) checkoutItems.innerHTML = '';
+  cartItems.forEach((item, index) => {
+    const precioNum = Number(item.precio);
+    const cantidadNum = Number(item.cantidad);
+    const itemTotal = precioNum * cantidadNum;
+    subtotal += itemTotal;
+    cantidadTotal += cantidadNum;
+    // Renderizar cada item del carrito
+    if (checkoutItems) {
+      checkoutItems.innerHTML += `
+        <div class="d-flex align-items-center mb-3 border-bottom pb-2">
+          <img src="${item.img}" alt="${item.nombre}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-right:12px;">
+          <div class="flex-grow-1">
+            <div class="fw-bold">${item.nombre}</div>
+            <div class="text-muted small">${formatPrice(item.precio)} x ${item.cantidad}</div>
+          </div>
+          <div class="fw-bold ms-2">${formatPrice(itemTotal)}</div>
+        </div>
+      `;
+    }
+  });
+  const total = subtotal + costoEnvio;
+  if (subtotalElement) subtotalElement.textContent = formatPrice(subtotal);
+  if (totalElement) totalElement.textContent = formatPrice(total);
+  if (cartCount) cartCount.textContent = cantidadTotal;
+  // Mostrar/ocultar sección de envío
+  const envioSection = document.getElementById('envio-section');
+  const checkoutEnvio = document.getElementById('checkout-envio');
+  if (envioSection && checkoutEnvio) {
+    if (costoEnvio > 0) {
+      envioSection.style.display = 'flex';
+      checkoutEnvio.textContent = formatPrice(costoEnvio);
+    } else {
+      envioSection.style.display = 'none';
+    }
+  }
+}
 
 // === VARIABLES Y HELPERS ===
 let costoEnvio = 0;
