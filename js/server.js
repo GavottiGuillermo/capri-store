@@ -189,8 +189,6 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ===============================
 console.log('📝 Definiendo endpoint POST /crear-preferencia...');
 app.post('/crear-preferencia', async (req, res) => {
-  // Headers CORS y JSON explícitos para este endpoint
-  // Headers CORS y JSON explícitos para este endpoint
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Type', 'application/json; charset=utf-8');
@@ -199,7 +197,7 @@ app.post('/crear-preferencia', async (req, res) => {
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Body recibido:', JSON.stringify(req.body, null, 2));
     console.log('Creando preferencia de pago...');
-    console.log('� Datos recibidos:', JSON.stringify(req.body, null, 2));
+    console.log('📦 Datos recibidos:', JSON.stringify(req.body, null, 2));
 
     const { items, datosComprador } = req.body;
 
@@ -224,194 +222,6 @@ app.post('/crear-preferencia', async (req, res) => {
 
     // Validar que cada item tenga los campos requeridos por MercadoPago
     const itemsMP = items.map((item, idx) => {
-      // Si ya tiene formato MP, usarlo directo
-      if (item.id && item.title && item.unit_price && item.quantity)
-      // Si viene en formato propio, mapear
-      if (!item.id_articulo && !item.id) { /* ... */ }
-      const mapped = {
-        id: item.id_articulo ? String(item.id_articulo) : String(item.id),
-        title: item.nombre || item.title || 'Producto Capri',
-        quantity: item.cantidad || item.quantity || 1,
-        currency_id: 'ARS',
-        unit_price: item.precio || item.unit_price || 0
-      };
-      console.log(`Item mapeado para MP [${idx}]:`, mapped);
-      return mapped;
-    });
-
-    // Validar que todos los items tengan los campos requeridos
-    for (const [idx, item] of itemsMP.entries()) {
-      if (!item.id || !item.title || !item.unit_price || !item.quantity) { /* ... */ }
-    }
-
-    // Solo crear preferencia de MercadoPago, sin crear pedido ni enviar mail
-    const payer = {
-      name: datosComprador.nombre || '',
-      surname: datosComprador.apellido || '',
-      email: datosComprador.email,
-      phone: {
-        area_code: '11',
-        number: datosComprador.telefono?.replace(/\D/g, '') || ''
-      }
-    };
-    const preference = new Preference(client);
-    let result;
-    try {
-      console.log('Enviando preferencia a MercadoPago:', JSON.stringify({
-        items: itemsMP,
-        payer,
-        back_urls: {
-          success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
-          failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
-          pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
-        },
-        auto_return: 'approved',
-        notification_url: 'https://capri-store.onrender.com/webhook',
-        external_reference: JSON.stringify({
-          customer_email: payer.email,
-          customer_phone: payer.phone?.number || '',
-          timestamp: Date.now()
-        })
-      }, null, 2));
-      result = await preference.create({
-        body: {
-          items: itemsMP,
-          payer: payer,
-          back_urls: {
-            success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
-            failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
-            pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
-          },
-          auto_return: 'approved',
-          notification_url: 'https://capri-store.onrender.com/webhook',
-          external_reference: JSON.stringify({
-            customer_email: payer.email,
-            customer_phone: payer.phone?.number || '',
-            timestamp: Date.now()
-          })
-        }
-      });
-      console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));
-    } catch (err) {
-      console.error('❌ Error MercadoPago:', err.message, err);
-      return res.status(500).json({
-        error: 'Error al crear preferencia en MercadoPago',
-        message: err.message,
-        mp_error: err
-      });
-    }
-    if (!result || !result.id || !result.init_point) {
-      console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
-      return res.status(500).json({
-        error: 'Preferencia no generada',
-        message: 'No se recibió un init_point válido de MercadoPago',
-        result
-      });
-    }
-    console.log('✅ Preferencia creada exitosamente');
-    return res.json({
-      preference_id: result.id,
-      init_point: result.init_point
-    });
-  } catch (error) {
-    // Loguear error inesperado y devolver JSON siempre
-    console.error('❌ Error inesperado al crear preferencia:');
-    console.error('📋 Detalles completos del error:', error && error.stack ? error.stack : error);
-    try {
-      return res.status(500).json({
-        error: 'Error inesperado al crear preferencia',
-        message: error.message || String(error),
-        stack: error.stack || null
-      });
-    } catch (err2) {
-      console.error('❌ Error al intentar enviar respuesta de error:', err2);
-      res.end();
-    }
-  }
-                  );
-                  if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
-                    pedidoExistenteDespues = pedidoResult.rows[0].id_pedido;
-                    idPedidoCompleto = pedidoExistenteDespues;
-                    numeroDisplay = idPedidoCompleto && idPedidoCompleto.length >= 2 ? idPedidoCompleto.slice(-2) : idPedidoCompleto;
-                    // Solo enviar mail si el pedido no existía antes y existe después
-                    pedidoCreado = !pedidoExistenteAntes && !!pedidoExistenteDespues;
-                    console.log(`✅ Pedido generado: ${idPedidoCompleto} -> ${numeroDisplay}`);
-                  } else {
-                    console.log('⚠️ No se encontró id_pedido tras ejecutar el SP');
-                  }
-                } catch (err) {
-                  console.error('⚠️ Error al buscar id_pedido tras SP:', err.message || err);
-                }
-                // Enviar email a cliente y admin SOLO si el pedido fue creado en esta ejecución
-                if (pedidoCreado) {
-                  try {
-                    if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
-                      const transporter = nodemailer.createTransport({
-                        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-                        port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-                        secure: false,
-                        auth: {
-                          user: process.env.SMTP_USER,
-                          pass: process.env.SMTP_PASS
-                        }
-                      });
-                      const toEmails = [customerData.customer_email || paymentInfo.payer?.email];
-                      if (process.env.ADMIN_EMAILS) {
-                        toEmails.push(...process.env.ADMIN_EMAILS.split(','));
-                      }
-                      const mailOptions = {
-                        from: process.env.SMTP_USER,
-                        to: toEmails.join(','),
-                        subject: `Confirmación de pedido Capri Store #${numeroDisplay || ''}`,
-                        text: `¡Gracias por tu compra!\n\nTu número de pedido es: ${idPedidoCompleto || 'N/A'}\nMonto: $${paymentInfo.transaction_amount}\n\nSi tienes dudas, responde este email.\n\n-- Capri Store` 
-                      };
-                      transporter.sendMail(mailOptions).then(info => {
-                        console.log('✅ Email de confirmación enviado:', info.response || info);
-                      }).catch(mailErr => {
-                        console.error('⚠️ Error al enviar email de confirmación:', mailErr.message || mailErr);
-                      });
-                    }
-                  } catch (mailError) {
-                    console.error('⚠️ Error en envío de email:', mailError.message || mailError);
-                  }
-                } else {
-                  console.log('ℹ️ No se envía mail porque el pedido ya existía antes de este webhook.');
-                }
-              } else {
-                console.log(`⚠️ Pago ${paymentId} no está aprobado - estado: ${paymentInfo.status}`);
-              }
-            } else {
-              console.log(`ℹ️ No se encontró paymentId válido en el webhook`);
-            }
-            res.status(200).send('OK');
-
-    // Validar datos requeridos
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      console.log('❌ Error: Items requeridos no presentes o vacíos');
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return res.status(400).json({
-        error: 'Items requeridos',
-        message: 'Se requiere al menos un item',
-        received: req.body
-      });
-    }
-
-    if (!datosComprador || !datosComprador.email) {
-      console.log('❌ Error: Datos del comprador incompletos:', datosComprador);
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return res.status(400).json({
-        error: 'Datos del comprador incompletos',
-        message: 'Email del comprador es requerido',
-        received_data: datosComprador
-      });
-    }
-
-    // Validar que cada item tenga los campos requeridos por MercadoPago
-    const itemsMP = items.map((item, idx) => {
-      // Si ya tiene formato MP, usarlo directo
-      if (item.id && item.title && item.unit_price && item.quantity) return item;
-      // Si viene en formato propio, mapear
       if (!item.id_articulo && !item.id) {
         console.log(`❌ Error: El item en posición ${idx} no tiene id_articulo ni id`, item);
         throw new Error(`El item en posición ${idx} no tiene id_articulo ni id`);
@@ -427,11 +237,9 @@ app.post('/crear-preferencia', async (req, res) => {
       return mapped;
     });
 
-    // Validar que todos los items tengan los campos requeridos
     for (const [idx, item] of itemsMP.entries()) {
       if (!item.id || !item.title || !item.unit_price || !item.quantity) {
         console.log(`❌ Error: El item en posición ${idx} no tiene todos los campos requeridos`, item);
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         return res.status(400).json({
           error: 'Item inválido',
           message: `El item en posición ${idx} no tiene todos los campos requeridos`,
@@ -440,7 +248,6 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     }
 
-    // Solo crear preferencia de MercadoPago, sin crear pedido ni enviar mail
     const payer = {
       name: datosComprador.nombre || '',
       surname: datosComprador.apellido || '',
@@ -490,7 +297,6 @@ app.post('/crear-preferencia', async (req, res) => {
       console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));
     } catch (err) {
       console.error('❌ Error MercadoPago:', err.message, err);
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(500).json({
         error: 'Error al crear preferencia en MercadoPago',
         message: err.message,
@@ -498,14 +304,13 @@ app.post('/crear-preferencia', async (req, res) => {
       });
     }
     if (!result || !result.id || !result.init_point) {
-      console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return res.status(500).json({
-        error: 'Preferencia no generada',
-        message: 'No se recibió un init_point válido de MercadoPago',
-        result
-      });
-    }
+    console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
+    return res.status(500).json({
+      error: 'Preferencia no generada',
+      message: 'No se recibió un init_point válido de MercadoPago',
+      result
+    });
+  }
     console.log('✅ Preferencia creada exitosamente');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.json({
@@ -527,6 +332,7 @@ app.post('/crear-preferencia', async (req, res) => {
       console.error('❌ Error al intentar enviar respuesta de error:', err2);
       res.end();
     }
+
   }
 });
 console.log('✅ Endpoint POST /crear-preferencia definido exitosamente');
@@ -1044,6 +850,7 @@ console.log('✅ Endpoint GET /stock-agotado definido exitosamente');
 // ===============================
 console.log('📝 Definiendo endpoints básicos...');
 app.get('/health', (req, res) => {
+
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
@@ -1051,93 +858,7 @@ app.get('/health', (req, res) => {
     service: 'capri-store-api'
   });
 });
-
-// ===============================
-// ENDPOINT TEMPORAL: FORZAR PROCESAMIENTO DE PAGO MANUAL
-// ===============================
-console.log('📝 Definiendo endpoint POST /forzar-pago-manual...');
-app.post('/forzar-pago-manual/:paymentId', async (req, res) => {
-  const { paymentId } = req.params;
-  
-  console.log(`🔧 === FORZANDO PROCESAMIENTO MANUAL ===`);
-  console.log(`💳 Payment ID: ${paymentId}`);
-  console.log(`ℹ️ PROPÓSITO: Este endpoint simula el webhook cuando MercadoPago no lo envía automáticamente`);
-  
-  try {
-    // Obtener información del pago desde MercadoPago usando la instancia correcta
-    const payment = new Payment(client);
-    const paymentInfo = await payment.get({ id: paymentId });
-    
-    console.log('💳 Información del pago desde MP:', JSON.stringify(paymentInfo, null, 2));
-    
-    if (paymentInfo.status === 'approved') {
-      console.log('✅ Pago aprobado, procesando manualmente...');
-      
-      // Simular los datos como lo hace el webhook original
-      let customerData = {};
-      try {
-        if (paymentInfo.external_reference) {
-          customerData = JSON.parse(paymentInfo.external_reference);
-        }
-      } catch (error) {
-        console.log('⚠️ No se pudo parsear external_reference');
-      }
-      
-      // Extraer IDs de productos del payment info (como en el webhook)
-      const items = paymentInfo.additional_info?.items || [];
-      const productIds = items.length > 0 ? items.map(item => item.id).join(',') : 'MANUAL';
-      
-      console.log('🛍️ Items procesando:', JSON.stringify(items, null, 2));
-      console.log('🏷️ Product IDs:', productIds);
-      
-      // USAR LA MISMA LÓGICA QUE EL WEBHOOK (8 parámetros)
-      const result = await executeQueryWithRetry(
-        pool,
-        'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
-        [
-          productIds, // IDs separados por comas (igual que webhook)
-          paymentInfo.transaction_amount,
-          paymentInfo.payer?.first_name || 'Cliente Web Manual',
-          customerData.customer_email || paymentInfo.payer?.email || 'manual@web.com',
-          customerData.customer_phone || '',
-          'MercadoPago',
-          'Manual', // Indicar que fue procesamiento manual
-          paymentId
-        ]
-      );
-      
-      console.log('✅ Pedido procesado manualmente exitosamente (8 parámetros)');
-      
-      res.json({
-        success: true,
-        message: 'Pago procesado manualmente exitosamente',
-        payment_id: paymentId,
-        status: paymentInfo.status,
-        amount: paymentInfo.transaction_amount,
-        customer_email: customerData.customer_email || paymentInfo.payer?.email,
-        product_ids: productIds
-      });
-      
-    } else {
-      console.log(`❌ El pago no está aprobado. Estado: ${paymentInfo.status}`);
-      res.status(400).json({
-        success: false,
-        message: `El pago no está aprobado. Estado actual: ${paymentInfo.status}`,
-        current_status: paymentInfo.status
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Error al forzar procesamiento manual:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al procesar pago manualmente',
-      error: error.message,
-      details: 'Verificar que el payment_id sea válido y el pago esté aprobado'
-    });
-  }
-});
-console.log('✅ Endpoint POST /forzar-pago-manual definido exitosamente (corregido)');
+console.log('✅ Endpoint GET /health definido exitosamente');
 
 // ===============================
 // ENDPOINT TEMPORAL: CONSULTAR DEFINICIÓN DEL STORED PROCEDURE
