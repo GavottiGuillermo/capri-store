@@ -61,10 +61,9 @@ app.post('/validar-stock-carrito', async (req, res) => {
       2
     );
 
-    // Devolver los IDs y nombres de los productos faltantes
-    const faltantes = result.rows.map(row => ({ id: row.id_articulo, nombre: row.nombre, estado: row.estado }));
-
-    res.json({ ok: true, faltantes });
+  // Devolver solo los IDs de los productos faltantes
+  const faltantes = result.rows.map(row => Number(row.id_articulo));
+  res.json({ ok: true, faltantes });
   } catch (error) {
     console.error('❌ Error en /validar-stock-carrito:', error);
     res.status(500).json({ ok: false, faltantes: [], error: error.message });

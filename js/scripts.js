@@ -343,6 +343,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const m = decodeURIComponent(producto.img).match(/\/(\d+)-[^/]+/);
         if (m && m[1]) id = parseInt(m[1], 10);
       }
+      console.log('[Depuración] ID enviado a validar-stock-carrito:', id);
+      const bodyStock = JSON.stringify({ ids: [id] });
+      console.log('[Depuración] Body enviado:', bodyStock);
       if (!id) {
         mostrarPopup('No se pudo determinar el ID del producto.');
         return;
@@ -351,7 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: [id] })
+          body: bodyStock
         });
         const data = await resp.json();
         if (!resp.ok || !data.ok) {
