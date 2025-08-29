@@ -1,3 +1,36 @@
+// ===============================
+// ENDPOINT: VALIDAR STOCK DE CARRITO
+// ===============================
+console.log('📝 Definiendo endpoint POST /validar-stock-carrito...');
+app.post('/validar-stock-carrito', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Content-Type', 'application/json; charset=utf-8');
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ ok: false, faltantes: [], error: 'No se recibieron IDs para validar.' });
+    }
+
+    // Consultar los productos que NO están disponibles
+    const query = `SELECT id_articulo, nombre, estado FROM productos WHERE id_articulo = ANY($1) AND estado != 'Disponible'`;
+    const result = await executeQueryWithRetry(
+      pool,
+      query,
+      [ids.map(Number)],
+      2
+    );
+
+    // Devolver los IDs y nombres de los productos faltantes
+    const faltantes = result.rows.map(row => ({ id: row.id_articulo, nombre: row.nombre, estado: row.estado }));
+
+    res.json({ ok: true, faltantes });
+  } catch (error) {
+    console.error('❌ Error en /validar-stock-carrito:', error);
+    res.status(500).json({ ok: false, faltantes: [], error: error.message });
+  }
+});
+console.log('✅ Endpoint POST /validar-stock-carrito definido exitosamente');
 const express = require('express');
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
