@@ -34,55 +34,7 @@ console.log('✅ Creando instancia de Express...');
 const app = express();
 console.log('✅ Express app creada exitosamente');
 
-// ===============================
-// ENDPOINT: VALIDAR STOCK DE CARRITO
-// ===============================
-console.log('📝 Definiendo endpoint POST /validar-stock-carrito...');
-app.post('/validar-stock-carrito', async (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Content-Type', 'application/json; charset=utf-8');
-  try {
-    // Validación robusta del body
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ ok: false, faltantes: [], error: 'Body vacío o malformado. Enviar JSON con { ids: [...] }' });
-    }
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      // Si el array está vacío o malformado, devolver 200 pero con todos como faltantes
-      return res.json({ ok: true, faltantes: [], advertencia: 'No se recibieron IDs para validar. Enviar JSON como { "ids": [1,2,3] }' });
-    }
 
-    // Consultar los productos que NO están disponibles
-    const query = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1) AND estado != 'Disponible'`;
-    const result = await executeQueryWithRetry(
-      pool,
-      query,
-      [ids.map(Number)],
-      2
-    );
-
-    // IDs que no están disponibles
-    const faltantes = result.rows.map(row => Number(row.id_articulo));
-    // Si algún id enviado no existe en la tabla, también se considera faltante
-    // Consultar todos los ids existentes
-    const queryExist = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1)`;
-    const resultExist = await executeQueryWithRetry(
-      pool,
-      queryExist,
-      [ids.map(Number)],
-      2
-    );
-    const existentes = resultExist.rows.map(row => Number(row.id_articulo));
-    const idsNoExisten = ids.map(Number).filter(id => !existentes.includes(id));
-    const faltantesFinal = [...new Set([...faltantes, ...idsNoExisten])];
-    res.json({ ok: true, faltantes: faltantesFinal });
-  } catch (error) {
-    console.error('❌ Error en /validar-stock-carrito:', error);
-    res.status(500).json({ ok: false, faltantes: [], error: error.message });
-  }
-});
-console.log('✅ Endpoint POST /validar-stock-carrito definido exitosamente');
 // Almacén en memoria para notificaciones de webhook
 const webhookNotifications = new Map();
 // Bandera para evitar envío duplicado de email por paymentId
@@ -234,6 +186,56 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
   
   throw lastError;
 }
+
+// ===============================
+// ENDPOINT: VALIDAR STOCK DE CARRITO
+// ===============================
+console.log('📝 Definiendo endpoint POST /validar-stock-carrito...');
+app.post('/validar-stock-carrito', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Content-Type', 'application/json; charset=utf-8');
+  try {
+    // Validación robusta del body.
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ ok: false, faltantes: [], error: 'Body vacío o malformado. Enviar JSON con { ids: [...] }' });
+    }
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      // Si el array está vacío o malformado, devolver 200 pero con todos como faltantes
+      return res.json({ ok: true, faltantes: [], advertencia: 'No se recibieron IDs para validar. Enviar JSON como { "ids": [1,2,3] }' });
+    }
+
+    // Consultar los productos que NO están disponibles
+    const query = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1) AND estado != 'Disponible'`;
+    const result = await executeQueryWithRetry(
+      pool,
+      query,
+      [ids.map(Number)],
+      2
+    );
+
+    // IDs que no están disponibles
+    const faltantes = result.rows.map(row => Number(row.id_articulo));
+    // Si algún id enviado no existe en la tabla, también se considera faltante
+    // Consultar todos los ids existentes
+    const queryExist = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1)`;
+    const resultExist = await executeQueryWithRetry(
+      pool,
+      queryExist,
+      [ids.map(Number)],
+      2
+    );
+    const existentes = resultExist.rows.map(row => Number(row.id_articulo));
+    const idsNoExisten = ids.map(Number).filter(id => !existentes.includes(id));
+    const faltantesFinal = [...new Set([...faltantes, ...idsNoExisten])];
+    res.json({ ok: true, faltantes: faltantesFinal });
+  } catch (error) {
+    console.error('❌ Error en /validar-stock-carrito:', error);
+    res.status(500).json({ ok: false, faltantes: [], error: error.message });
+  }
+});
+console.log('✅ Endpoint POST /validar-stock-carrito definido exitosamente');
 
 // ===============================
 // ENDPOINT: CREAR PREFERENCIA DE MERCADO PAGO
