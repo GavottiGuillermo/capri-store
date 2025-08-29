@@ -49,11 +49,12 @@ app.post('/validar-stock-carrito', async (req, res) => {
     }
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ ok: false, faltantes: [], error: 'No se recibieron IDs para validar. Enviar JSON como { "ids": [1,2,3] }' });
+      // Si el array está vacío o malformado, devolver 200 pero con todos como faltantes
+      return res.json({ ok: true, faltantes: [], advertencia: 'No se recibieron IDs para validar. Enviar JSON como { "ids": [1,2,3] }' });
     }
 
     // Consultar los productos que NO están disponibles
-    const query = `SELECT id_articulo, nombre, estado FROM productos WHERE id_articulo = ANY($1) AND estado != 'Disponible'`;
+    const query = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1) AND estado != 'Disponible'`;
     const result = await executeQueryWithRetry(
       pool,
       query,
@@ -61,9 +62,21 @@ app.post('/validar-stock-carrito', async (req, res) => {
       2
     );
 
-  // Devolver solo los IDs de los productos faltantes
-  const faltantes = result.rows.map(row => Number(row.id_articulo));
-  res.json({ ok: true, faltantes });
+    // IDs que no están disponibles
+    const faltantes = result.rows.map(row => Number(row.id_articulo));
+    // Si algún id enviado no existe en la tabla, también se considera faltante
+    // Consultar todos los ids existentes
+    const queryExist = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1)`;
+    const resultExist = await executeQueryWithRetry(
+      pool,
+      queryExist,
+      [ids.map(Number)],
+      2
+    );
+    const existentes = resultExist.rows.map(row => Number(row.id_articulo));
+    const idsNoExisten = ids.map(Number).filter(id => !existentes.includes(id));
+    const faltantesFinal = [...new Set([...faltantes, ...idsNoExisten])];
+    res.json({ ok: true, faltantes: faltantesFinal });
   } catch (error) {
     console.error('❌ Error en /validar-stock-carrito:', error);
     res.status(500).json({ ok: false, faltantes: [], error: error.message });
