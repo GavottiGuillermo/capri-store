@@ -258,7 +258,7 @@ function actualizarCartSidenav() {
 // Finalizar compra - validar stock y redirigir a checkout
 async function finalizarCompraSidebar() {
   // Obtener productos del carrito
-  const cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
   if (!cartItems.length) {
     mostrarPopup('El carrito está vacío.');
     return;
@@ -282,8 +282,15 @@ async function finalizarCompraSidebar() {
       return;
     }
     if (data.faltantes && data.faltantes.length > 0) {
-      mostrarPopup('Algunos productos ya no tienen stock. Actualiza tu carrito.');
-      // Opcional: podrías eliminar los productos sin stock del carrito aquí
+      // Mostrar alerta personalizada por cada producto sin stock
+      let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
+      if (nombres.length > 0) {
+        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.');
+      }
+      // Quitar productos sin stock del carrito
+      cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
+      localStorage.setItem("carrito", JSON.stringify(cartItems));
+      actualizarCartSidenav();
       return;
     }
     // Si todo ok, redirigir a checkout
@@ -323,13 +330,42 @@ document.addEventListener('DOMContentLoaded', function() {
     selectTalle.addEventListener('change', validarFormulario);
     inputCantidad.addEventListener('input', validarFormulario);
     validarFormulario();
-    // Agregar producto al carrito desde detalle
-    productForm.addEventListener("submit", function(e) {
+    // Agregar producto al carrito desde detalle con validación de stock
+    productForm.addEventListener("submit", async function(e) {
       e.preventDefault();
       const producto = JSON.parse(localStorage.getItem('productoDetalle'));
       const size = selectTalle.value;
       const quantity = parseInt(inputCantidad.value);
       if (!producto || !size || !quantity || quantity < 1) return;
+      // Validar stock antes de agregar
+      let id = producto.id_articulo;
+      if (!id && producto.img) {
+        const m = decodeURIComponent(producto.img).match(/\/(\d+)-[^/]+/);
+        if (m && m[1]) id = parseInt(m[1], 10);
+      }
+      if (!id) {
+        mostrarPopup('No se pudo determinar el ID del producto.');
+        return;
+      }
+      try {
+        const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: [id] })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          mostrarPopup('Error al validar stock. Intenta nuevamente.');
+          return;
+        }
+        if (data.faltantes && data.faltantes.includes(id)) {
+          alert('El producto ' + producto.nombre + ' ya no se encuentra en stock.');
+          return;
+        }
+      } catch (err) {
+        mostrarPopup('Error de conexión al validar stock.');
+        return;
+      }
       agregarAlCarrito(
         `${producto.nombre} (Talle: ${size})`,
         Number(producto.precio),

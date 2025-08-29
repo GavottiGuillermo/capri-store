@@ -55,6 +55,30 @@ function cargarResumenCompra() {
       cartItems = [];
     }
   }
+  // Validar stock al cargar el resumen
+  (async function validarStockResumen() {
+    if (!cartItems || cartItems.length === 0) return;
+    const ids = cartItems.map(item => item.id_articulo || item.id).filter(Boolean);
+    try {
+      const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.ok && data.faltantes && data.faltantes.length > 0) {
+        let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
+        if (nombres.length > 0) {
+          alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.');
+        }
+        cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
+        localStorage.setItem("carrito", JSON.stringify(cartItems));
+      }
+    } catch (err) {
+      // No bloquear el resumen si falla la validación, solo loguear
+      console.warn('No se pudo validar stock al cargar resumen:', err);
+    }
+  })();
   let subtotal = 0;
   let cantidadTotal = 0;
   if (!cartItems || cartItems.length === 0) {
@@ -171,9 +195,38 @@ async function iniciarProcesoPago() {
     alert('Por favor completa todos los campos requeridos');
     return;
   }
-  const cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
   if (!cartItems || cartItems.length === 0) {
     alert('Tu carrito está vacío');
+    return;
+  }
+  // Validar stock antes de iniciar pago
+  const ids = cartItems.map(item => item.id_articulo || item.id).filter(Boolean);
+  try {
+    const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      alert('Error al validar stock. Intenta nuevamente.');
+      return;
+    }
+    if (data.faltantes && data.faltantes.length > 0) {
+      // Mostrar alerta personalizada por cada producto sin stock
+      let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
+      if (nombres.length > 0) {
+        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.');
+      }
+      // Quitar productos sin stock del carrito
+      cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
+      localStorage.setItem("carrito", JSON.stringify(cartItems));
+      cargarResumenCompra();
+      return;
+    }
+  } catch (err) {
+    alert('Error de conexión al validar stock.');
     return;
   }
   const formData = new FormData(form);
