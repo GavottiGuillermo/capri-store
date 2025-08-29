@@ -1,7 +1,3 @@
-
-// ...existing code...
-// ...existing code...
-
 const express = require('express');
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
@@ -47,9 +43,13 @@ app.post('/validar-stock-carrito', async (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Type', 'application/json; charset=utf-8');
   try {
+    // Validación robusta del body
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ ok: false, faltantes: [], error: 'Body vacío o malformado. Enviar JSON con { ids: [...] }' });
+    }
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ ok: false, faltantes: [], error: 'No se recibieron IDs para validar.' });
+      return res.status(400).json({ ok: false, faltantes: [], error: 'No se recibieron IDs para validar. Enviar JSON como { "ids": [1,2,3] }' });
     }
 
     // Consultar los productos que NO están disponibles
