@@ -9,10 +9,32 @@ console.log('📋 Parámetros URL:', window.location.search);
 // Test inmediato (sin esperar DOM)
 console.log('🧪 TEST INMEDIATO - Archivo success.js cargado');
 
+
 // Test de parámetros URL
 const urlParams = new URLSearchParams(window.location.search);
 const paymentId = urlParams.get('payment_id') || urlParams.get('paymentId');
 console.log('💳 Payment ID detectado en URL:', paymentId);
+
+// --- LIMPIEZA DE CARRITO INMEDIATA AL ENTRAR A SUCCESS ---
+if (paymentId) {
+    if (typeof limpiarCarritoDespuesDeCompra === 'function') {
+        limpiarCarritoDespuesDeCompra();
+        console.log('✅ Carrito limpiado usando limpiarCarritoDespuesDeCompra() (inicio success)');
+    } else {
+        // Fallback manual si la función no existe
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('cartItems');
+            localStorage.removeItem('datosCompra');
+            localStorage.removeItem('productosCompra');
+            localStorage.removeItem('totalCompra');
+            localStorage.removeItem('costoEnvio');
+            console.log('✅ Carrito y datos de compra limpiados (fallback, inicio success)');
+            if (typeof updateCartCounterAnimated === 'function') {
+                updateCartCounterAnimated(0);
+            }
+        }
+    }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎉 Success.js cargado - Página de éxito iniciada');
@@ -166,24 +188,10 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
         console.log('🔍 HTML insertado:', htmlContent.substring(0, 100) + '...');
         
         // LIMPIAR CARRITO DESPUÉS DE MOSTRAR PEDIDO EXITOSO
+        // Ya se limpió el carrito al inicio de success.js
         setTimeout(() => {
-            console.log('🧹 Limpiando carrito después de compra exitosa...');
-            if (typeof limpiarCarritoDespuesDeCompra === 'function') {
-                limpiarCarritoDespuesDeCompra();
-                console.log('✅ Carrito limpiado usando limpiarCarritoDespuesDeCompra()');
-            } else {
-                // Fallback manual si la función no existe
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.removeItem('cartItems');
-                    localStorage.removeItem('datosCompra');
-                    localStorage.removeItem('productosCompra');
-                    localStorage.removeItem('totalCompra');
-                    localStorage.removeItem('costoEnvio');
-                    console.log('✅ Carrito y datos de compra limpiados (fallback)');
-                    if (typeof updateCartCounterAnimated === 'function') {
-                        updateCartCounterAnimated(0);
-                    }
-                }
+            if (typeof updateCartCounterAnimated === 'function') {
+                updateCartCounterAnimated(0);
             }
         }, 1000); // Delay para que el usuario vea el número primero
         
@@ -210,12 +218,10 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
 // Función para mostrar errores
 function mostrarError(mensaje) {
     console.log('❌ Mostrando error:', mensaje);
-    
     const procesandoDiv = document.getElementById('procesando-pedido');
     if (procesandoDiv) {
         procesandoDiv.classList.add('d-none');
     }
-    
     const confirmadoDiv = document.getElementById('pedido-confirmado');
     if (confirmadoDiv) {
         confirmadoDiv.className = 'alert alert-warning';
@@ -227,5 +233,21 @@ function mostrarError(mensaje) {
         `;
         confirmadoDiv.classList.remove('d-none');
         confirmadoDiv.style.display = 'block';
+    }
+}
+
+// --- DEFINICIÓN GLOBAL DE LIMPIEZA DE CARRITO SI NO EXISTE ---
+if (typeof limpiarCarritoDespuesDeCompra !== 'function') {
+    function limpiarCarritoDespuesDeCompra() {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('cartItems');
+            localStorage.removeItem('datosCompra');
+            localStorage.removeItem('productosCompra');
+            localStorage.removeItem('totalCompra');
+            localStorage.removeItem('costoEnvio');
+            if (typeof updateCartCounterAnimated === 'function') {
+                updateCartCounterAnimated(0);
+            }
+        }
     }
 }

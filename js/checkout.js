@@ -217,7 +217,7 @@ async function iniciarProcesoPago() {
       // Mostrar alerta personalizada por cada producto sin stock
       let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
       if (nombres.length > 0) {
-        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.');
+        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock.');
       }
       // Quitar productos sin stock del carrito
       cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
