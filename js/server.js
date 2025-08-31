@@ -344,7 +344,8 @@ app.post('/crear-preferencia', async (req, res) => {
             customer_email: payer.email,
             customer_phone: payer.phone?.number || '',
             timestamp: Date.now()
-          })
+          }),
+          statement_descriptor: 'Capri Store'
         }
       });
       console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));

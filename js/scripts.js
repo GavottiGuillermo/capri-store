@@ -146,7 +146,7 @@ function quitarDelCarrito(idx) {
 
 // Vaciar el carrito
 function vaciarCarrito() {
-  cartItems = [];
+  window.cartItems = [];
   guardarCarrito();
   actualizarCartSidenav();
 }

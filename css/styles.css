@@ -291,6 +291,8 @@ html {
   transform: translateZ(0);
   position: relative;
   overflow: hidden;
+  border: 0.125rem solid var(--rosado) !important;
+  cursor: pointer;
 }
 
 .card::after, .card-product::after {
@@ -312,6 +314,7 @@ html {
 .card:hover, .card-product:hover {
   transform: translateY(-10px) scale(1.02);
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1), 0 5px 15px rgba(0, 0, 0, 0.07);
+  cursor: pointer;
 }
 
 .card-img-top {
