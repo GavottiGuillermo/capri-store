@@ -77,7 +77,7 @@ let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
 
 // Guardar el carrito en localStorage
 function guardarCarrito() {
-  localStorage.setItem("carrito", JSON.stringify(cartItems));
+  localStorage.setItem("carrito", JSON.stringify(window.cartItems));
 }
 
 // Agregar un producto al carrito (permite repetidos con cantidad)

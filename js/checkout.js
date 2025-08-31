@@ -69,7 +69,7 @@ function cargarResumenCompra() {
       if (resp.ok && data.ok && data.faltantes && data.faltantes.length > 0) {
         let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
         if (nombres.length > 0) {
-          alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.');
+          mostrarPopup('😔 El producto ' + nombres.join(', ') + ' ya no se encuentra en stock!');
         }
         cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
         localStorage.setItem("carrito", JSON.stringify(cartItems));

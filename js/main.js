@@ -360,19 +360,20 @@ async function crearTarjetaProducto(prod, tipo) {
   const colClass = tipo === 'novedad' ? 'col-md-4' : 'col-md-3';
   const borderClass = tipo === 'novedad' ? 'border-rosado' : 'border-vino-tinto';
   const btnClass = 'btn-vino-tinto';
-
+  // Hacer toda la card clickeable con un <a> overlay
+  const detalleUrl = `detalle.html?id=${prod.id_articulo || ''}`;
   return `
     <div class="${colClass} mb-4">
-      <div class="card card-product ${borderClass} rounded-lg shadow h-100 progressive-reveal visible animate-delay-1 border-2">
+      <div class="card card-product ${borderClass} rounded-lg shadow h-100 progressive-reveal visible animate-delay-1 border-2" style="border: 0.125rem solid var(--rosado) !important; cursor: pointer; position: relative;">
+        <a href="${detalleUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;" aria-label="Ver detalle del producto"></a>
         <img src="${prod.imagen}" class="card-img-top" alt="${nombre || ''}" style="height: 250px; object-fit: cover;">
-        <div class="card-body d-flex flex-column">
+        <div class="card-body d-flex flex-column" style="z-index:11; position:relative;">
           <h5 class="card-title text-vino-tinto font-weight-bold">${nombre || ''}</h5>
           <p class="card-text text-muted mb-2">${textoTarjeta || ''}</p>
           <span class="text-rosado font-weight-bold h5 mb-3">${precio ? '$' + precio + ' ARS' : ''}</span>
         </div>
-        <div class="card-footer bg-white border-0">
-          <button class="btn ${btnClass} btn-block ver-detalle-btn" 
-                  data-producto='${JSON.stringify(prod)}'>Ver detalle</button>
+        <div class="card-footer bg-white border-0" style="z-index:11; position:relative;">
+          <button class="btn ${btnClass} btn-block ver-detalle-btn" data-producto='${JSON.stringify(prod)}'>Ver detalle</button>
         </div>
       </div>
     </div>
