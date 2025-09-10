@@ -3,81 +3,23 @@
     * Copyright 2013-2020 Start Bootstrap
     * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-freelancer/blob/master/LICENSE)
     */
-    (function($) {
-    "use strict"; // Start of use strict
-  
-    // Smooth scrolling using jQuery easing
-    $('a.js-scroll-trigger[href*="#"]:not([href="#"])').click(function() {
-      if (location.pathname.replace(/^\//, '') == this.pathname.replace(/^\//, '') && location.hostname == this.hostname) {
-        var target = $(this.hash);
-        target = target.length ? target : $('[name=' + this.hash.slice(1) + ']');
-        if (target.length) {
-          $('html, body').animate({
-            scrollTop: (target.offset().top - 71)
-          }, 1000, "easeInOutExpo");
-          return false;
-        }
-      }
-    });
-  
-    // Scroll to top button appear
-    $(document).scroll(function() {
-      var scrollDistance = $(this).scrollTop();
-      if (scrollDistance > 100) {
-        $('.scroll-to-top').fadeIn();
-      } else {
-        $('.scroll-to-top').fadeOut();
-      }
-    });
-  
-    // Closes responsive menu when a scroll trigger link is clicked
-    $('.js-scroll-trigger').click(function() {
-      $('.navbar-collapse').collapse('hide');
-    });
-  
-    // Activate scrollspy to add active class to navbar items on scroll
-    $('body').scrollspy({
-      target: '#mainNav',
-      offset: 80
-    });
-  
-    // Collapse Navbar
-    var navbarCollapse = function() {
-      var nav = $("#mainNav");
-      if (nav.length && nav.offset()) {
-        if (nav.offset().top > 100) {
-          nav.addClass("navbar-shrink");
-        } else {
-          nav.removeClass("navbar-shrink");
-        }
-      }
-    };
-    // Collapse now if page is not at top
-    navbarCollapse();
-    // Collapse the navbar when page is scrolled
-    $(window).scroll(navbarCollapse);
-  
-    // Floating label headings for the contact form
-    $(function() {
-      $("body").on("input propertychange", ".floating-label-form-group", function(e) {
-        $(this).toggleClass("floating-label-form-group-with-value", !!$(e.target).val());
-      }).on("focus", ".floating-label-form-group", function() {
-        $(this).addClass("floating-label-form-group-with-focus");
-      }).on("blur", ".floating-label-form-group", function() {
-        $(this).removeClass("floating-label-form-group-with-focus");
-      });
-    });
-  
-  })(jQuery); // End of use strict
+    // ...existing code...
   
   // ==== CARRITO DE COMPRAS UNIFICADO (SIDEBAR) ====
 
 // Cargar carrito desde localStorage o iniciar vacío
-let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+let cartRaw = localStorage.getItem("carrito");
+let cartItems;
+try {
+  cartItems = cartRaw ? JSON.parse(cartRaw) : [];
+  if (!Array.isArray(cartItems)) cartItems = [];
+} catch {
+  cartItems = [];
+}
 
 // Guardar el carrito en localStorage
 function guardarCarrito() {
-  localStorage.setItem("carrito", JSON.stringify(window.cartItems));
+  localStorage.setItem("carrito", JSON.stringify(cartItems));
 }
 
 // Agregar un producto al carrito (permite repetidos con cantidad)
@@ -304,111 +246,7 @@ async function finalizarCompraSidebar() {
 // ...existing code...
 
 // Función para agregar efecto parallax suave
-function parallaxEffect() {
-  const scrolled = window.pageYOffset;
-  const parallaxElements = document.querySelectorAll('.parallax-element');
-  
-  parallaxElements.forEach(element => {
-    const rate = scrolled * -0.5;
-    element.style.transform = `translateY(${rate}px)`;
-  });
-}
-
-// Throttle function para optimizar el rendimiento
-function throttle(func, limit) {
-  let inThrottle;
-  return function() {
-    const args = arguments;
-    const context = this;
-    if (!inThrottle) {
-      func.apply(context, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  }
-}
-
-// Event listeners optimizados
-const throttledAnimateOnScroll = throttle(animateOnScroll, 100);
-const throttledParallaxEffect = throttle(parallaxEffect, 16);
-
-// Inicializar animaciones cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', function() {
-  // Ejecutar animaciones iniciales
-  animateOnScroll();
-  
-  // Agregar clases de animación a elementos específicos
-  setupAnimationClasses();
-  
-  // Configurar Intersection Observer para mejor rendimiento
-  setupIntersectionObserver();
-});
-
-// Función para configurar clases de animación automáticamente
-function setupAnimationClasses() {
-  // Agregar clase fade-in a todas las cards de productos
-  const productCards = document.querySelectorAll('.card-product');
-  productCards.forEach((card, index) => {
-    card.classList.add('progressive-reveal');
-    if (index % 2 === 0) {
-      card.classList.add('fade-in-left');
-    } else {
-      card.classList.add('fade-in-right');
-    }
-  });
-
-  // Agregar clase a títulos de sección
-  const sectionTitles = document.querySelectorAll('h1, h2.display-4, h2.display-5');
-  sectionTitles.forEach(title => {
-    title.classList.add('section-title');
-  });
-
-  // Agregar animación al hero content
-  const heroContent = document.querySelector('.position-absolute.w-100.h-100');
-  if (heroContent) {
-    heroContent.classList.add('hero-content');
-  }
-
-  // Agregar micro-bounces a botones importantes
-  const importantButtons = document.querySelectorAll('.btn-rosado, .btn-vino-tinto');
-  importantButtons.forEach(btn => {
-    btn.classList.add('micro-bounce');
-  });
-}
-
-// Configurar Intersection Observer para mejor rendimiento
-function setupIntersectionObserver() {
-  if ('IntersectionObserver' in window) {
-    const observerOptions = {
-      root: null,
-      rootMargin: '-10% 0px -10% 0px',
-      threshold: 0.1
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-          // Dejar de observar el elemento una vez que sea visible
-          observer.unobserve(entry.target);
-        }
-      });
-    }, observerOptions);
-
-    // Observar todos los elementos animables
-    const animatableElements = document.querySelectorAll(
-      '.fade-in, .fade-in-left, .fade-in-right, .section-title, .progressive-reveal, .card-animate, .checkout-section'
-    );
-    
-    animatableElements.forEach(el => {
-      observer.observe(el);
-    });
-  } else {
-    // Fallback para navegadores sin soporte de Intersection Observer
-    window.addEventListener('scroll', throttledAnimateOnScroll);
-    window.addEventListener('scroll', throttledParallaxEffect);
-  }
-}
+// ...existing code...
 
 // Función para animar la aparición del popup con más suavidad
 function mostrarPopupAnimado(mensaje) {
@@ -480,32 +318,7 @@ function updateCartCounterAnimated(newCount) {
 }
 
 // Smooth scroll mejorado para navegación
-function smoothScrollTo(target, duration = 1000) {
-  const targetElement = document.querySelector(target);
-  if (!targetElement) return;
-  
-  const targetPosition = targetElement.offsetTop - 80; // Offset para navbar
-  const startPosition = window.pageYOffset;
-  const distance = targetPosition - startPosition;
-  let startTime = null;
-  
-  function animation(currentTime) {
-    if (startTime === null) startTime = currentTime;
-    const timeElapsed = currentTime - startTime;
-    const run = easeInOutQuart(timeElapsed, startPosition, distance, duration);
-    window.scrollTo(0, run);
-    if (timeElapsed < duration) requestAnimationFrame(animation);
-  }
-  
-  function easeInOutQuart(t, b, c, d) {
-    t /= d/2;
-    if (t < 1) return c/2*t*t*t*t + b;
-    t -= 2;
-    return -c/2 * (t*t*t*t - 2) + b;
-  }
-  
-  requestAnimationFrame(animation);
-}
+// ...existing code...
 
 // Función para limpiar carrito después de compra exitosa (usada por success.js)
 function limpiarCarritoDespuesDeCompra() {

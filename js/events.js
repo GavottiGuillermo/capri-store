@@ -1,4 +1,136 @@
 // Event listeners y inicialización de componentes
+// Animaciones globales y helpers UI
+function parallaxEffect() {
+  const scrolled = window.pageYOffset;
+  const parallaxElements = document.querySelectorAll('.parallax-element');
+  parallaxElements.forEach(element => {
+    const rate = scrolled * -0.5;
+    element.style.transform = `translateY(${rate}px)`;
+  });
+}
+
+function throttle(func, limit) {
+  let inThrottle;
+  return function() {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  }
+}
+
+function setupAnimationClasses() {
+  const productCards = document.querySelectorAll('.card-product');
+  productCards.forEach((card, index) => {
+    card.classList.add('progressive-reveal');
+    if (index % 2 === 0) {
+      card.classList.add('fade-in-left');
+    } else {
+      card.classList.add('fade-in-right');
+    }
+  });
+  const sectionTitles = document.querySelectorAll('h1, h2.display-4, h2.display-5');
+  sectionTitles.forEach(title => {
+    title.classList.add('section-title');
+  });
+  const heroContent = document.querySelector('.position-absolute.w-100.h-100');
+  if (heroContent) {
+    heroContent.classList.add('hero-content');
+  }
+  const importantButtons = document.querySelectorAll('.btn-rosado, .btn-vino-tinto');
+  importantButtons.forEach(btn => {
+    btn.classList.add('micro-bounce');
+  });
+}
+
+function setupIntersectionObserver() {
+  if ('IntersectionObserver' in window) {
+    const observerOptions = {
+      root: null,
+      rootMargin: '-10% 0px -10% 0px',
+      threshold: 0.1
+    };
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+    const animatableElements = document.querySelectorAll(
+      '.fade-in, .fade-in-left, .fade-in-right, .section-title, .progressive-reveal, .card-animate, .checkout-section'
+    );
+    animatableElements.forEach(el => {
+      observer.observe(el);
+    });
+  } else {
+    window.addEventListener('scroll', throttle(animateOnScroll, 100));
+    window.addEventListener('scroll', throttle(parallaxEffect, 16));
+  }
+}
+
+function animateOnScroll() {
+  const fadeElements = document.querySelectorAll('.fade-in, .section-title, .progressive-reveal, .card-animate, .checkout-section');
+  fadeElements.forEach(element => {
+    if (isElementInViewport(element, 0.15)) {
+      element.classList.add('visible');
+    }
+  });
+  const fadeLeftElements = document.querySelectorAll('.fade-in-left');
+  fadeLeftElements.forEach(element => {
+    if (isElementInViewport(element, 0.15)) {
+      element.classList.add('visible');
+    }
+  });
+  const fadeRightElements = document.querySelectorAll('.fade-in-right');
+  fadeRightElements.forEach(element => {
+    if (isElementInViewport(element, 0.15)) {
+      element.classList.add('visible');
+    }
+  });
+}
+
+function isElementInViewport(el, threshold = 0.1) {
+  const rect = el.getBoundingClientRect();
+  const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+  return (
+    rect.top <= windowHeight * (1 - threshold) &&
+    rect.bottom >= windowHeight * threshold
+  );
+}
+
+function smoothScrollTo(target, duration = 1000) {
+  const targetElement = document.querySelector(target);
+  if (!targetElement) return;
+  const targetPosition = targetElement.offsetTop - 80;
+  const startPosition = window.pageYOffset;
+  const distance = targetPosition - startPosition;
+  let startTime = null;
+  function animation(currentTime) {
+    if (startTime === null) startTime = currentTime;
+    const timeElapsed = currentTime - startTime;
+    const run = easeInOutQuart(timeElapsed, startPosition, distance, duration);
+    window.scrollTo(0, run);
+    if (timeElapsed < duration) requestAnimationFrame(animation);
+  }
+  function easeInOutQuart(t, b, c, d) {
+    t /= d/2;
+    if (t < 1) return c/2*t*t*t*t + b;
+    t -= 2;
+    return -c/2 * (t*t*t*t - 2) + b;
+  }
+  requestAnimationFrame(animation);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  animateOnScroll();
+  setupAnimationClasses();
+  setupIntersectionObserver();
+});
 document.addEventListener('DOMContentLoaded', function() {
   // Manejar carrito sidebar
   var cartLink = document.getElementById('navbar-cart-link');
