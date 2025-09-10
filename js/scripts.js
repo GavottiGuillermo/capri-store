@@ -332,11 +332,12 @@ document.addEventListener('DOMContentLoaded', function() {
     validarFormulario();
     // Agregar producto al carrito desde detalle con validación de stock
     productForm.addEventListener("submit", async function(e) {
-      e.preventDefault();
-      const producto = JSON.parse(localStorage.getItem('productoDetalle'));
-      const size = selectTalle.value;
-      const quantity = parseInt(inputCantidad.value);
-      if (!producto || !size || !quantity || quantity < 1) return;
+  e.preventDefault();
+  const productoStr = localStorage.getItem('productoDetalle');
+  const producto = productoStr ? JSON.parse(productoStr) : null;
+  const size = selectTalle.value;
+  const quantity = parseInt(inputCantidad.value);
+  if (!producto || !size || !quantity || quantity < 1) return;
       // Validar stock antes de agregar
       let id = producto.id_articulo;
       if (!id && producto.img) {

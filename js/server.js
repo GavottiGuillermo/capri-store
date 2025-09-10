@@ -10,24 +10,23 @@ const crypto = require('crypto');
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-console.log('🔧 === INICIANDO SERVIDOR ===');
-console.log('📂 Directorio de trabajo:', __dirname);
-console.log('🌐 NODE_ENV:', process.env.NODE_ENV || 'development');
+console.log('🔧 Capri Store API iniciando...');
+console.log(`🌐 Modo: ${process.env.NODE_ENV || 'development'} | Directorio: ${__dirname}`);
 
 // ===============================
 // VALIDACIÓN DE VARIABLES DE ENTORNO
 // ===============================
-console.log('🔧 Validando configuración...');
+console.log('🔧 Validando configuración de entorno...');
 
 if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-  console.log('⚠️ Configuración de email incompleta');
+  console.warn('⚠️ Configuración de email incompleta');
 }
 
 if (process.env.ADMIN_EMAILS) {
   const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
-  console.log('✅ Emails administrativos configurados:', adminEmails.length, 'emails');
+  console.log('✅ Emails administrativos configurados:', adminEmails.length);
 } else {
-  console.log('⚠️ ADMIN_EMAILS no configurado');
+  console.warn('⚠️ ADMIN_EMAILS no configurado');
 }
 
 console.log('✅ Creando instancia de Express...');
@@ -119,10 +118,9 @@ async function initializeDatabase() {
     client2.release();
 
     if (checkColumn.rows.length > 0) {
-      console.log('✅ Columna mp_payment_id existe en tabla productos');
+  console.log('✅ Columna mp_payment_id existe');
     } else {
-      console.log('⚠️ ATENCIÓN: Columna mp_payment_id NO existe en tabla productos');
-      console.log('💡 Ejecuta: ALTER TABLE productos ADD COLUMN mp_payment_id TEXT;');
+  console.warn('⚠️ Columna mp_payment_id NO existe en tabla productos');
     }
 
   } catch (error) {
@@ -138,7 +136,7 @@ console.log('🔧 Configurando MercadoPago...');
 
 // Validar token de acceso
 if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
-  console.error('❌ ERROR CRÍTICO: MERCADOPAGO_ACCESS_TOKEN no está configurado en las variables de entorno');
+  console.error('❌ MERCADOPAGO_ACCESS_TOKEN no configurado');
   process.exit(1);
 }
 
@@ -147,11 +145,11 @@ const tokenStart = process.env.MERCADOPAGO_ACCESS_TOKEN.substring(0, 20);
 console.log('🔑 Token MercadoPago configurado:', tokenStart + '...');
 
 if (process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('TEST-')) {
-  console.log('🧪 Usando token de PRUEBA de MercadoPago');
+  console.log('🧪 Usando token de PRUEBA');
 } else if (process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('APP_USR-')) {
-  console.log('🚀 Usando token de PRODUCCIÓN de MercadoPago');
+  console.log('🚀 Usando token de PRODUCCIÓN');
 } else {
-  console.warn('⚠️ Formato de token no reconocido - verificar configuración');
+  console.warn('⚠️ Formato de token no reconocido');
 }
 
 const client = new MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN });
@@ -997,8 +995,7 @@ async function startServer() {
     await initializeDatabase();
     
     server = app.listen(PORT, () => {
-      console.log(`🚀 Servidor iniciado en puerto ${PORT}`);
-      console.log(`🌐 Accesible en: http://localhost:${PORT}`);
+      console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
     });
     
   } catch (error) {
