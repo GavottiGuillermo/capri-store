@@ -188,7 +188,6 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ===============================
 // ENDPOINT: VALIDAR STOCK DE CARRITO
 // ===============================
-console.log('📝 Definiendo endpoint POST /validar-stock-carrito...');
 app.post('/validar-stock-carrito', async (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -233,12 +232,10 @@ app.post('/validar-stock-carrito', async (req, res) => {
     res.status(500).json({ ok: false, faltantes: [], error: error.message });
   }
 });
-console.log('✅ Endpoint POST /validar-stock-carrito definido exitosamente');
 
 // ===============================
 // ENDPOINT: CREAR PREFERENCIA DE MERCADO PAGO
 // ===============================
-console.log('📝 Definiendo endpoint POST /crear-preferencia...');
 app.post('/crear-preferencia', async (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -299,70 +296,32 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     }
 
-    const payer = {
-      name: datosComprador.nombre || '',
-      surname: datosComprador.apellido || '',
-      email: datosComprador.email,
-      phone: {
-        area_code: '11',
-        number: datosComprador.telefono?.replace(/\D/g, '') || ''
+    // Crear la preferencia en MercadoPago
+    const preference = new Preference(client);
+    const preferenceData = {
+      items: itemsMP,
+      payer: {
+        name: datosComprador.nombre || '',
+        surname: datosComprador.apellido || '',
+        email: datosComprador.email,
+        phone: {
+          area_code: '',
+          number: datosComprador.telefono || ''
+        }
+      },
+      external_reference: JSON.stringify(datosComprador),
+      statement_descriptor: 'CAPRI STORE',
+      auto_return: 'approved',
+      back_urls: {
+        success: `${req.protocol}://${req.get('host')}/success.html`,
+        failure: `${req.protocol}://${req.get('host')}/failure.html`,
+        pending: `${req.protocol}://${req.get('host')}/pending.html`
       }
     };
-    const preference = new Preference(client);
-    let result;
-    try {
-      console.log('Enviando preferencia a MercadoPago:', JSON.stringify({
-        items: itemsMP,
-        payer,
-        back_urls: {
-          success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
-          failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
-          pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
-        },
-        auto_return: 'approved',
-        notification_url: 'https://capri-store.onrender.com/webhook',
-        external_reference: JSON.stringify({
-          customer_email: payer.email,
-          customer_phone: payer.phone?.number || '',
-          timestamp: Date.now()
-        })
-      }, null, 2));
-      result = await preference.create({
-        body: {
-          items: itemsMP,
-          payer: payer,
-          back_urls: {
-            success: `${req.headers.origin || 'https://capristorezte.com.ar'}/success.html`,
-            failure: `${req.headers.origin || 'https://capristorezte.com.ar'}/failure.html`,
-            pending: `${req.headers.origin || 'https://capristorezte.com.ar'}/pending.html`
-          },
-          auto_return: 'approved',
-          notification_url: 'https://capri-store.onrender.com/webhook',
-          external_reference: JSON.stringify({
-            customer_email: payer.email,
-            customer_phone: payer.phone?.number || '',
-            timestamp: Date.now()
-          }),
-          statement_descriptor: 'Capri Store'
-        }
-      });
-      console.log('Respuesta MercadoPago:', JSON.stringify(result, null, 2));
-    } catch (err) {
-      console.error('❌ Error MercadoPago:', err.message, err);
-      return res.status(500).json({
-        error: 'Error al crear preferencia en MercadoPago',
-        message: err.message,
-        mp_error: err
-      });
-    }
-    if (!result || !result.id || !result.init_point) {
-    console.log('❌ Error: Preferencia no generada, respuesta incompleta de MercadoPago:', result);
-    return res.status(500).json({
-      error: 'Preferencia no generada',
-      message: 'No se recibió un init_point válido de MercadoPago',
-      result
-    });
-  }
+
+    console.log('🔄 Creando preferencia con datos:', JSON.stringify(preferenceData, null, 2));
+    const result = await preference.create({ body: preferenceData });
+    
     console.log('✅ Preferencia creada exitosamente');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.json({
@@ -384,15 +343,12 @@ app.post('/crear-preferencia', async (req, res) => {
       console.error('❌ Error al intentar enviar respuesta de error:', err2);
       res.end();
     }
-
   }
 });
-console.log('✅ Endpoint POST /crear-preferencia definido exitosamente');
 
 // ===============================
 // ENDPOINT: WEBHOOK DE MERCADO PAGO  
 // ===============================
-console.log('📝 Definiendo endpoint POST /webhook...');
 app.post('/webhook', async (req, res) => {
   const timestamp = new Date().toISOString();
   let paymentId = null;
@@ -453,7 +409,7 @@ app.post('/webhook', async (req, res) => {
         }
         if (!productIds) productIds = 'MANUAL';
 
-        // NUEVO: Verificar disponibilidad de los artículos antes de crear el pedido
+        // NUEVO: Chequeo en BD si el paymentId ya existe
         let idsArray = [];
         if (productIds !== 'MANUAL') {
           idsArray = productIds.split(',').map(id => id.trim()).filter(Boolean);
@@ -471,6 +427,21 @@ app.post('/webhook', async (req, res) => {
             faltantes = result.rows.map(row => row.id_articulo);
           } catch (error) {
             // Si hay error en la consulta, por seguridad, considerar como faltantes todos
+            try {
+              const result = await executeQueryWithRetry(
+                pool,
+                `SELECT COUNT(*) AS count FROM productos WHERE mp_payment_id = $1`,
+                [paymentId],
+                2
+              );
+              if (result.rows[0].count && Number(result.rows[0].count) > 0) {
+                console.log(`[${timestamp}] Webhook ignorado: paymentId ${paymentId} ya existe en BD (productos.mp_payment_id)`);
+                return res.status(200).send('OK');
+              }
+            } catch (err) {
+              console.error(`[${timestamp}] Error al consultar BD para paymentId ${paymentId}:`, err);
+              // Si hay error en la consulta, sigue con la lógica normal para no perder el webhook
+            }
             faltantes = idsArray;
           }
         }
@@ -573,28 +544,14 @@ app.post('/webhook', async (req, res) => {
     }
     res.status(200).send('OK');
   } catch (error) {
-    console.log(`[${timestamp}] Error en webhook para pago ${paymentId || 'N/A'}`);
-    res.status(500).send('Error');
+    console.error(`[${timestamp}] Error en webhook:`, error);
+    res.status(500).send('Error interno del servidor');
   }
 });
-console.log('✅ Endpoint POST /webhook definido exitosamente');
 
 // ===============================
-// ENDPOINT: STATUS DEL WEBHOOK - SIMPLIFICADO TEMPORALMENTE
+// ENDPOINT: STATUS DEL WEBHOOK
 // ===============================
-console.log('📝 Definiendo endpoints de webhook status...');
-app.get('/webhook-status-test', (req, res) => {
-  // Headers CORS explícitos
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  const paymentId = req.query.paymentId;
-  const processed = webhookNotifications.has(paymentId);
-  
-  res.json({ processed, payment_id: paymentId, status: 'test-ok' });
-});
-
-console.log('📝 Definiendo endpoint GET /webhook-status/:paymentId...');
 app.get('/webhook-status/:paymentId', (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -605,381 +562,133 @@ app.get('/webhook-status/:paymentId', (req, res) => {
   
   res.json({ processed, payment_id: paymentId });
 });
-console.log('✅ Endpoint GET /webhook-status/:paymentId definido');
 
 // ===============================
 // ENDPOINT PRINCIPAL: CONSULTAR PEDIDO POR MP_PAYMENT_ID
 // ===============================
-console.log('📝 Definiendo endpoints de número de pedido...');
-// Versión de test sin parámetros de ruta
-app.get('/numero-pedido-test', async (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  res.json({ status: 'endpoint-test-ok', message: 'Endpoint funcionando' });
-});
-
-console.log('📝 Definiendo endpoint GET /numero-pedido/:paymentId...');
 app.get('/numero-pedido/:paymentId', async (req, res) => {
   // Headers CORS explícitos
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
   
+  const { paymentId } = req.params;
+  console.log('🔍 === ENDPOINT CONSULTA PEDIDO ===');
+  console.log('Payment ID recibido:', paymentId);
+  console.log('Headers de la petición:', req.headers.origin);
+  
+  // Primero, vamos a verificar qué datos tenemos en la BD para este payment_id
+  console.log('🔍 Verificando datos en BD para payment_id:', paymentId);
+  
+  // Intentar hasta MAX_TRIES veces esperando entre intentos (para dar tiempo al webhook)
+  const MAX_TRIES = 3;
+  const RETRY_DELAY_MS = 2000; // 2 segundos
+  let intento = 0;
+  let pedidoEncontrado = null;
+  let debugResult = null;
+  
   try {
-    const { paymentId } = req.params;
-    console.log(`🔍 === ENDPOINT CONSULTA PEDIDO ===`);
-    console.log(`Payment ID recibido: ${paymentId}`);
-    console.log(`Headers de la petición:`, req.headers.origin);
-    
-    // Primero, vamos a verificar qué datos tenemos en la BD para este payment_id
-    console.log(`🔍 Verificando datos en BD para payment_id: ${paymentId}`);
-
-    // Intentar hasta MAX_TRIES veces esperando entre intentos (para dar tiempo al webhook)
-    const MAX_TRIES = 3;
-    const RETRY_DELAY_MS = 2000; // 2 segundos
-    let intento = 0;
-    let pedidoEncontrado = null;
-    let debugResult = null;
-
     while (intento < MAX_TRIES && !pedidoEncontrado) {
       intento++;
-      console.log(`🔁 Intento ${intento}/${MAX_TRIES} para payment_id: ${paymentId}`);
-
+      console.log('🔁 Intento', intento, '/', MAX_TRIES, 'para payment_id:', paymentId);
+      
       // Resultados debug opcionales
       try {
         debugResult = await executeQueryWithRetry(
           pool,
-          `SELECT 
-            p.id_articulo,
-            p.mp_payment_id,
-            p.id_pedido,
-            p.estado,
-            p.pedido_fecha,
-            p.pedido_nombre_cliente,
-            p.pedido_monto_total
-           FROM productos p
-           WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2
-           ORDER BY p.pedido_fecha DESC`,
+          'SELECT p.id_articulo, p.mp_payment_id, p.id_pedido, p.estado, p.pedido_fecha, p.pedido_nombre_cliente, p.pedido_monto_total FROM productos p WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2 ORDER BY p.pedido_fecha DESC',
           [paymentId, paymentId.toString()],
           2
         );
       } catch (err) {
         console.error('⚠️ Error en consulta debugResult:', err.message || err);
       }
-
-      console.log(`🔍 Resultados debug (${(debugResult && debugResult.rows.length) || 0} filas)`);
-
+      
+      console.log('🔍 Resultados debug (', (debugResult && debugResult.rows.length) || 0, 'filas)');
+      
       try {
         const pedidoResult = await executeQueryWithRetry(
           pool,
-          `SELECT 
-            p.id_pedido,
-            p.pedido_fecha,
-            p.pedido_nombre_cliente,
-            p.pedido_monto_total,
-            p.mp_payment_id
-           FROM productos p
-           WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2)
-             AND p.id_pedido IS NOT NULL
-             AND p.id_pedido != ''
-           ORDER BY p.pedido_fecha DESC
-           LIMIT 1`,
+          'SELECT p.id_pedido, p.pedido_fecha, p.pedido_nombre_cliente, p.pedido_monto_total, p.mp_payment_id FROM productos p WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2) AND p.id_pedido IS NOT NULL AND p.id_pedido != \'\' ORDER BY p.pedido_fecha DESC LIMIT 1',
           [paymentId, paymentId.toString()],
           2
         );
-
+        
         if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
           pedidoEncontrado = pedidoResult.rows[0];
           break;
         }
       } catch (err) {
-        console.error(`⚠️ Intento ${intento} falló al consultar pedido:`, err.message || err);
+        console.error('⚠️ Intento', intento, 'falló al consultar pedido:', err.message || err);
       }
-
+      
       if (!pedidoEncontrado && intento < MAX_TRIES) {
-        console.log(`⏳ Esperando ${RETRY_DELAY_MS}ms antes del siguiente intento...`);
+        console.log('⏳ Esperando', RETRY_DELAY_MS / 1000, 'segundos antes del siguiente intento...');
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
       }
     }
-
+    
     if (pedidoEncontrado) {
-      const pedido = pedidoEncontrado;
-      const idPedidoCompleto = pedido.id_pedido;
-
-      // Mejorar el cálculo del número display
-      let numeroDisplay = idPedidoCompleto;
-      if (idPedidoCompleto && idPedidoCompleto.length >= 2) {
-        numeroDisplay = idPedidoCompleto.slice(-2); // Últimos 2 dígitos/caracteres
-      }
-
-      console.log(`✅ Pedido encontrado: ${idPedidoCompleto} -> ${numeroDisplay}`);
-      const respuesta = {
-        existe: true,
-        id_pedido_completo: idPedidoCompleto,
+      const numeroDisplay = pedidoEncontrado.id_pedido && pedidoEncontrado.id_pedido.length >= 2 ? 
+        pedidoEncontrado.id_pedido.slice(-2) : pedidoEncontrado.id_pedido;
+      
+      console.log('✅ Pedido encontrado:', pedidoEncontrado.id_pedido);
+      
+      res.json({
+        success: true,
+        pedido_encontrado: true,
+        numero_pedido: pedidoEncontrado.id_pedido,
         numero_display: numeroDisplay,
-        nombre_cliente: pedido.pedido_nombre_cliente,
-        total: pedido.pedido_monto_total,
-        fecha_pedido: pedido.pedido_fecha
-      };
-
-      console.log(`📤 Enviando respuesta al frontend:`, respuesta);
-      return res.json(respuesta);
+        fecha: pedidoEncontrado.pedido_fecha,
+        cliente: pedidoEncontrado.pedido_nombre_cliente,
+        monto: pedidoEncontrado.pedido_monto_total,
+        payment_id: paymentId
+      });
     } else {
-      console.log(`❌ Pedido no encontrado tras ${MAX_TRIES} intentos para payment ID: ${paymentId}`);
-
-      // Verificar si hay algún registro para este payment_id (sin importar id_pedido)
-      let checkCount = 0;
-      try {
-        const checkResult = await executeQueryWithRetry(
-          pool,
-          `SELECT COUNT(*) as count FROM productos WHERE mp_payment_id = $1 OR mp_payment_id = $2`,
-          [paymentId, paymentId.toString()],
-          1
-        );
-        checkCount = checkResult.rows[0]?.count || 0;
-      } catch (err) {
-        console.error('⚠️ Error al ejecutar checkResult:', err.message || err);
-      }
-
-      console.log(`🔍 Registros encontrados con este payment_id: ${checkCount}`);
-
-      const respuestaError = {
-        existe: false,
-        message: 'Pedido no encontrado. Si el pago aparece en MercadoPago y no en este sitio, por favor contacte soporte para completar la entrega.',
-        payment_id_consultado: paymentId,
-        attempts: MAX_TRIES,
-        contact_support: true
-      };
-
-      console.log(`📤 Enviando respuesta de error:`, respuestaError);
-      return res.json(respuestaError);
+      console.log('❌ Pedido no encontrado después de', MAX_TRIES, 'intentos');
+      
+      res.json({
+        success: false,
+        pedido_encontrado: false,
+        numero_pedido: null,
+        message: 'Pedido no encontrado. Es posible que aún se esté procesando.',
+        payment_id: paymentId,
+        intentos_realizados: MAX_TRIES
+      });
     }
-    
   } catch (error) {
-    console.error('❌ Error al consultar pedido:', error);
+    console.error('❌ Error en endpoint /numero-pedido/:paymentId:', error);
     res.status(500).json({
+      success: false,
       error: 'Error interno del servidor',
-      message: error.message
+      message: error.message,
+      payment_id: paymentId
     });
   }
 });
-console.log('✅ Endpoint GET /numero-pedido/:paymentId definido');
 
 // ===============================
-// ENDPOINT: CONSULTAR ESTADO DE STOCK DE PRODUCTOS
+// ENDPOINTS BÁSICOS
 // ===============================
-console.log('📝 Definiendo endpoint GET /stock-productos...');
-app.get('/stock-productos', async (req, res) => {
-  // Headers CORS explícitos
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  try {
-    console.log(`🔍 === CONSULTA DE STOCK DE PRODUCTOS ===`);
-    console.log(`Headers de la petición:`, req.headers.origin);
-    
-    // Consultar estado de todos los productos
-    const stockResult = await executeQueryWithRetry(
-      pool,
-      `SELECT 
-        id_articulo,
-        estado,
-        (CASE 
-          WHEN estado = 'Disponible' THEN true 
-          ELSE false 
-        END) as disponible
-       FROM productos 
-       WHERE id_articulo IS NOT NULL
-       GROUP BY id_articulo, estado
-       ORDER BY id_articulo`,
-      [],
-      2
-    );
-    
-    console.log(`📊 Stock consultado - ${stockResult.rows.length} productos encontrados`);
-    
-    // Procesar resultados para crear un objeto de fácil consulta
-    const stockMap = {};
-    stockResult.rows.forEach(row => {
-      stockMap[row.id_articulo] = {
-        disponible: row.disponible,
-        estado: row.estado
-      };
-    });
-    
-    console.log(`📤 Enviando información de stock:`, stockMap);
-    
-    res.json({
-      success: true,
-      stock: stockMap,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error al consultar stock:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al consultar stock de productos',
-      message: error.message
-    });
-  }
-});
-console.log('✅ Endpoint GET /stock-productos definido exitosamente');
 
-// ===============================
-// ENDPOINT: STOCK AGOTADO (Compatible con frontend existente)
-// ===============================
-console.log('📝 Definiendo endpoint GET /stock-agotado...');
-app.get('/stock-agotado', async (req, res) => {
-  // Headers CORS explícitos
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  try {
-    console.log(`🔍 === CONSULTA DE STOCK AGOTADO ===`);
-    console.log(`Headers de la petición:`, req.headers.origin);
-    
-    // Consultar productos que NO están disponibles
-    const stockResult = await executeQueryWithRetry(
-      pool,
-      `SELECT DISTINCT id_articulo
-       FROM productos 
-       WHERE estado != 'Disponible' 
-       AND id_articulo IS NOT NULL`,
-      [],
-      2
-    );
-    
-    console.log(`📊 Stock agotado consultado - ${stockResult.rows.length} productos sin stock`);
-    
-    // Extraer solo los IDs de productos agotados
-    const idsAgotados = stockResult.rows.map(row => parseInt(row.id_articulo));
-    
-    console.log(`📤 IDs de productos agotados:`, idsAgotados);
-    
-    res.json({
-      success: true,
-      ids: idsAgotados,
-      timestamp: new Date().toISOString(),
-      count: idsAgotados.length
-    });
-    
-  } catch (error) {
-    console.error('❌ Error al consultar stock agotado:', error);
-    res.status(500).json({
-      success: false,
-      ids: [],
-      error: 'Error al consultar stock agotado',
-      message: error.message
-    });
-  }
-});
-console.log('✅ Endpoint GET /stock-agotado definido exitosamente');
-
-// ===============================
-// ENDPOINT DE SALUD
-// ===============================
-console.log('📝 Definiendo endpoints básicos...');
+// Endpoint de salud
 app.get('/health', (req, res) => {
-
   res.json({ 
-    status: 'ok', 
+    status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    service: 'capri-store-api'
-  });
-});
-console.log('✅ Endpoint GET /health definido exitosamente');
-
-// ===============================
-// ENDPOINT TEMPORAL: CONSULTAR DEFINICIÓN DEL STORED PROCEDURE
-// ===============================
-console.log('📝 Definiendo endpoint GET /debug-sp...');
-app.get('/debug-sp', async (req, res) => {
-  console.log('🔍 === CONSULTANDO DEFINICIÓN DEL STORED PROCEDURE ===');
-  
-  try {
-    // Consultar la definición del stored procedure
-    const spResult = await executeQueryWithRetry(
-      pool,
-      `SELECT 
-        p.proname as procedure_name,
-        p.pronargs as num_args,
-        pg_get_function_arguments(p.oid) as arguments,
-        pg_get_functiondef(p.oid) as definition
-       FROM pg_proc p
-       JOIN pg_namespace n ON p.pronamespace = n.oid
-       WHERE p.proname = 'sp_crear_pedido_web'
-         AND n.nspname = 'public'`,
-      [],
-      1
-    );
-    
-    console.log('📦 Resultado consulta SP:', spResult.rows);
-    
-    // También consultar la estructura de la tabla productos para entender los campos
-    const tableResult = await executeQueryWithRetry(
-      pool,
-      `SELECT 
-        column_name,
-        data_type,
-        is_nullable,
-        column_default
-       FROM information_schema.columns
-       WHERE table_name = 'productos'
-       ORDER BY ordinal_position`,
-      [],
-      1
-    );
-    
-    console.log('📊 Estructura tabla productos:', tableResult.rows);
-    
-    res.json({
-      stored_procedure: spResult.rows,
-      table_structure: tableResult.rows,
-      webhook_current_call: {
-        parameters: 8,
-        call: "CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)",
-        values: [
-          "productIds (string)",
-          "transaction_amount (number)",
-          "first_name (string)",
-          "customer_email (string)", 
-          "customer_phone (string)",
-          "MercadoPago (string)",
-          "Retiro (string)",
-          "paymentId (string)"
-        ]
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Error al consultar SP:', error);
-    res.status(500).json({
-      error: 'Error al consultar stored procedure',
-      message: error.message
-    });
-  }
-});
-console.log('✅ Endpoint GET /debug-sp definido exitosamente');
-
-// Endpoint de test básico
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Capri Store API funcionando', 
-    endpoints: ['/health', '/crear-preferencia', '/webhook', '/numero-pedido/:paymentId', '/forzar-pago-manual/:paymentId'] 
+    uptime: process.uptime() 
   });
 });
 
 // Manejo de errores global
 app.use((error, req, res, next) => {
-  console.error('💥 Error global capturado:', error);
+  console.error('� Error global capturado:', error);
   res.status(500).json({ 
     error: 'Error interno del servidor', 
     message: error.message,
     timestamp: new Date().toISOString() 
   });
 });
+
 console.log('✅ Todos los endpoints definidos exitosamente');
 
 // ===============================
@@ -993,11 +702,9 @@ let server;
 async function startServer() {
   try {
     await initializeDatabase();
-    
     server = app.listen(PORT, () => {
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
     });
-    
   } catch (error) {
     console.error('❌ Error al iniciar servidor:', error);
     process.exit(1);
