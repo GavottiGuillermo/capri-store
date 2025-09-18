@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
     sectionTitles.forEach((title, index) => {
       setTimeout(() => {
         title.classList.add('visible');
-      }, index * 100);
+      }, index * 50);
     });
     
     // Activar secciones del checkout
@@ -370,7 +370,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkoutSections.forEach((section, index) => {
       setTimeout(() => {
         section.classList.add('visible');
-      }, index * 200);
+      }, index * 100);
     });
     
     // Activar animaciones laterales
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fadeInRight.forEach(el => el.classList.add('visible'));
     fadeIn.forEach(el => el.classList.add('visible'));
     
-  }, 100);
+  }, 50);
   
   // Configurar event listeners para tipo de entrega
   const retiroLocal = document.getElementById('retiroLocal');
