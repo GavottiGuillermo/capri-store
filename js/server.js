@@ -161,44 +161,124 @@ app.post('/validar-stock-carrito', async (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Type', 'application/json; charset=utf-8');
+  
   try {
-    // Validación robusta del body.
     if (!req.body || typeof req.body !== 'object') {
       return res.status(400).json({ ok: false, faltantes: [], error: 'Body vacío o malformado. Enviar JSON con { ids: [...] }' });
     }
+    
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      // Si el array está vacío o malformado, devolver 200 pero con todos como faltantes
       return res.json({ ok: true, faltantes: [], advertencia: 'No se recibieron IDs para validar. Enviar JSON como { "ids": [1,2,3] }' });
     }
 
-    // Consultar los productos que NO están disponibles
-    const query = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1) AND estado != 'Disponible'`;
-    const result = await executeQueryWithRetry(
-      pool,
-      query,
-      [ids.map(Number)],
-      2
-    );
+    const faltantes = [];
+    
+    // Para cada ID, verificar stock usando la nueva lógica
+    for (const id of ids) {
+      try {
+        // Obtener datos del producto
+        const productQuery = `
+          SELECT prenda, color, talle 
+          FROM productos 
+          WHERE id_articulo = $1 
+          LIMIT 1
+        `;
+        
+        const productResult = await executeQueryWithRetry(pool, productQuery, [parseInt(id)], 2);
+        
+        if (!productResult.rows || productResult.rows.length === 0) {
+          // Producto no existe
+          faltantes.push(parseInt(id));
+          continue;
+        }
 
-    // IDs que no están disponibles
-    const faltantes = result.rows.map(row => Number(row.id_articulo));
-    // Si algún id enviado no existe en la tabla, también se considera faltante
-    // Consultar todos los ids existentes
-    const queryExist = `SELECT id_articulo FROM productos WHERE id_articulo = ANY($1)`;
-    const resultExist = await executeQueryWithRetry(
-      pool,
-      queryExist,
-      [ids.map(Number)],
-      2
-    );
-    const existentes = resultExist.rows.map(row => Number(row.id_articulo));
-    const idsNoExisten = ids.map(Number).filter(id => !existentes.includes(id));
-    const faltantesFinal = [...new Set([...faltantes, ...idsNoExisten])];
-    res.json({ ok: true, faltantes: faltantesFinal });
+        const { prenda, color, talle } = productResult.rows[0];
+
+        // Contar stock disponible para esta combinación
+        const stockQuery = `
+          SELECT COUNT(*) as stock_total
+          FROM productos 
+          WHERE prenda = $1 
+            AND color = $2 
+            AND talle = $3 
+            AND estado = 'Disponible'
+        `;
+        
+        const stockResult = await executeQueryWithRetry(
+          pool, 
+          stockQuery, 
+          [prenda, color, talle], 
+          2
+        );
+
+        const stockTotal = parseInt(stockResult.rows[0]?.stock_total || 0);
+        
+        if (stockTotal === 0) {
+          faltantes.push(parseInt(id));
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error validando stock para ID ${id}:`, error);
+        // En caso de error, por seguridad lo marcamos como faltante
+        faltantes.push(parseInt(id));
+      }
+    }
+
+    res.json({ ok: true, faltantes });
+    
   } catch (error) {
     console.error('❌ Error en /validar-stock-carrito:', error);
     res.status(500).json({ ok: false, faltantes: [], error: error.message });
+  }
+});
+
+// ===============================
+// ENDPOINT: OBTENER IDS DE PRODUCTOS SIN STOCK
+// ===============================
+app.get('/stock-agotado', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Content-Type', 'application/json; charset=utf-8');
+  
+  try {
+    // Nueva consulta: obtener productos cuya combinación prenda+color+talle no tiene stock disponible
+    const query = `
+      WITH stock_combinations AS (
+        SELECT 
+          prenda, 
+          color, 
+          talle,
+          COUNT(*) FILTER (WHERE estado = 'Disponible') as stock_disponible,
+          array_agg(id_articulo) as all_ids
+        FROM productos 
+        WHERE prenda IS NOT NULL 
+          AND color IS NOT NULL 
+          AND talle IS NOT NULL
+        GROUP BY prenda, color, talle
+      )
+      SELECT DISTINCT unnest(all_ids) as id_articulo
+      FROM stock_combinations 
+      WHERE stock_disponible = 0
+    `;
+    
+    const result = await executeQueryWithRetry(pool, query, [], 2);
+    
+    const idsAgotados = result.rows.map(row => parseInt(row.id_articulo));
+    
+    res.json({ 
+      ok: true, 
+      ids: idsAgotados,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en /stock-agotado:', error);
+    res.status(500).json({ 
+      ok: false, 
+      ids: [], 
+      error: error.message 
+    });
   }
 });
 
@@ -597,6 +677,76 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       error: 'Error interno del servidor',
       message: error.message,
       payment_id: paymentId
+    });
+  }
+});
+
+// ===============================
+// ENDPOINT: OBTENER STOCK DE PRODUCTO ESPECÍFICO
+// ===============================
+app.get('/stock-producto/:id', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Content-Type', 'application/json; charset=utf-8');
+  
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'ID de producto requerido' });
+    }
+
+    // Primero obtener los datos del producto base (prenda, color, talle)
+    const productQuery = `
+      SELECT prenda, color, talle 
+      FROM productos 
+      WHERE id_articulo = $1 
+      LIMIT 1
+    `;
+    
+    const productResult = await executeQueryWithRetry(pool, productQuery, [parseInt(id)], 2);
+    
+    if (!productResult.rows || productResult.rows.length === 0) {
+      return res.json({ ok: true, stock: 0, disponible: false, producto_no_encontrado: true });
+    }
+
+    const { prenda, color, talle } = productResult.rows[0];
+
+    // Ahora contar todos los productos con la misma combinación prenda+color+talle que estén disponibles
+    const stockQuery = `
+      SELECT COUNT(*) as stock_total
+      FROM productos 
+      WHERE prenda = $1 
+        AND color = $2 
+        AND talle = $3 
+        AND estado = 'Disponible'
+    `;
+    
+    const stockResult = await executeQueryWithRetry(
+      pool, 
+      stockQuery, 
+      [prenda, color, talle], 
+      2
+    );
+
+    const stockTotal = parseInt(stockResult.rows[0]?.stock_total || 0);
+    
+    res.json({
+      ok: true,
+      stock: stockTotal,
+      disponible: stockTotal > 0,
+      prenda,
+      color,
+      talle,
+      producto_id: id
+    });
+
+  } catch (error) {
+    console.error('❌ Error en /stock-producto:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Error interno del servidor',
+      message: error.message 
     });
   }
 });

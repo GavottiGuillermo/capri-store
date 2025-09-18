@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         inputCantidad.style.backgroundColor = '#f8f9fa';
         inputCantidad.style.cursor = 'not-allowed';
       }
-      // Marcar sin stock consultando servidor (fallback a cache)
+      // Consultar stock usando nuevo endpoint
       try {
         const path = decodeURIComponent((producto.img || producto.txt || ''));
         const m = path.match(/\/(\d+)-[^/]+/);
@@ -50,23 +50,32 @@ document.addEventListener('DOMContentLoaded', async function() {
           const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
             ? 'https://capri-store.onrender.com'
             : '';
-          let agotado = false;
+          let stockDisponible = 0;
           try {
-            const respAg = await fetch(`${API_BASE}/stock-agotado`, { cache: 'no-store' });
-            if (respAg.ok) {
-              const js = await respAg.json();
-              agotado = Array.isArray(js.ids) && js.ids.includes(id);
-              if (Array.isArray(js.ids)) {
-                localStorage.setItem('agotados', JSON.stringify(js.ids));
-                localStorage.setItem('agotados_last_sync', String(Date.now()));
+            const stockResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
+            if (stockResp.ok) {
+              const stockData = await stockResp.json();
+              if (stockData.ok) {
+                stockDisponible = stockData.stock || 0;
+                
+                // Mostrar stock disponible
+                mostrarStockDisponible(stockDisponible);
+                
+                // Configurar cantidad máxima
+                if (inputCantidad) {
+                  inputCantidad.max = stockDisponible;
+                  if (stockDisponible > 0) {
+                    inputCantidad.disabled = false;
+                    inputCantidad.style.backgroundColor = '';
+                    inputCantidad.style.cursor = '';
+                    inputCantidad.value = 1;
+                  }
+                }
               }
             }
           } catch {}
-          if (!agotado) {
-            const cached = new Set(JSON.parse(localStorage.getItem('agotados') || '[]'));
-            agotado = cached.has(id);
-          }
-          if (agotado) {
+          
+          if (stockDisponible === 0) {
             const btn = document.getElementById('btnAgregarCarrito');
             if (btn) {
               btn.disabled = true;
@@ -196,8 +205,16 @@ document.addEventListener('DOMContentLoaded', function() {
     btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
     function validarFormulario() {
       const talleValido = selectTalle.value !== "";
-      const cantidadValida = inputCantidad.value && Number(inputCantidad.value) > 0;
-      if (talleValido && cantidadValida) {
+      const cantidadInput = parseInt(inputCantidad.value) || 0;
+      const maxStock = parseInt(inputCantidad.max) || 0;
+      const cantidadValida = cantidadInput > 0 && cantidadInput <= maxStock;
+      
+      // Mostrar mensaje si excede el stock
+      if (cantidadInput > maxStock && maxStock > 0) {
+        inputCantidad.value = maxStock;
+      }
+      
+      if (talleValido && cantidadValida && maxStock > 0) {
         btnAgregar.disabled = false;
         btnAgregar.classList.remove('bg-rosado', 'opacity-50');
         btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
@@ -216,36 +233,60 @@ document.addEventListener('DOMContentLoaded', function() {
       const producto = productoStr ? JSON.parse(productoStr) : null;
       const size = selectTalle.value;
       const quantity = parseInt(inputCantidad.value);
+      const maxStock = parseInt(inputCantidad.max) || 0;
+      
       if (!producto || !size || !quantity || quantity < 1) return;
+      
+      if (quantity > maxStock) {
+        alert(`Solo hay ${maxStock} unidades disponibles`);
+        inputCantidad.value = maxStock;
+        return;
+      }
+      
       let id = producto.id_articulo;
       if (!id && producto.img) {
         const m = decodeURIComponent(producto.img).match(/\/(\d+)-[^/]+/);
         if (m && m[1]) id = parseInt(m[1], 10);
       }
-      const bodyStock = JSON.stringify({ ids: [id] });
+      
       if (!id) {
         alert('No se pudo determinar el ID del producto.');
         return;
       }
+      
+      // Validar stock actualizado antes de agregar
       try {
-        const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: bodyStock
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          alert('Error al validar stock. Intenta nuevamente.');
-          return;
+        const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+          ? 'https://capri-store.onrender.com'
+          : '';
+          
+        const stockResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
+        
+        if (stockResp.ok) {
+          const stockData = await stockResp.json();
+          
+          if (stockData.ok) {
+            const stockActual = stockData.stock || 0;
+            
+            if (stockActual === 0) {
+              alert('El producto ya no se encuentra en stock.');
+              location.reload();
+              return;
+            }
+            
+            if (quantity > stockActual) {
+              alert(`Solo hay ${stockActual} unidades disponibles. Se ajustará la cantidad.`);
+              inputCantidad.value = stockActual;
+              inputCantidad.max = stockActual;
+              mostrarStockDisponible(stockActual);
+              return;
+            }
+          }
         }
-        if (data.faltantes && data.faltantes.includes(id)) {
-          alert('El producto ' + producto.nombre + ' ya no se encuentra en stock.');
-          return;
-        }
-      } catch (err) {
-        alert('Error de conexión al validar stock.');
-        return;
+      } catch (error) {
+        console.warn('Error verificando stock actualizado:', error);
       }
+      
       // Lógica para agregar al carrito (usa función global)
       if (typeof agregarAlCarrito === 'function') {
         agregarAlCarrito(
@@ -269,3 +310,39 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+// Función para mostrar el stock disponible
+function mostrarStockDisponible(stock) {
+  // Buscar si ya existe el elemento de stock
+  let stockElement = document.getElementById('stock-disponible');
+  
+  if (!stockElement) {
+    // Crear elemento de stock si no existe
+    stockElement = document.createElement('div');
+    stockElement.id = 'stock-disponible';
+    stockElement.className = 'mb-3';
+    
+    // Insertarlo después del precio
+    const precioElement = document.getElementById('precio-producto');
+    if (precioElement && precioElement.parentNode) {
+      precioElement.parentNode.insertBefore(stockElement, precioElement.nextSibling);
+    }
+  }
+  
+  // Configurar el contenido y estilo según el stock
+  if (stock > 0) {
+    stockElement.innerHTML = `
+      <div class="d-flex align-items-center">
+        <i class="fas fa-check-circle text-success mr-2"></i>
+        <span class="text-success font-weight-bold">Stock Disponible: ${stock}</span>
+      </div>
+    `;
+  } else {
+    stockElement.innerHTML = `
+      <div class="d-flex align-items-center">
+        <i class="fas fa-times-circle text-danger mr-2"></i>
+        <span class="text-danger font-weight-bold">Sin stock</span>
+      </div>
+    `;
+  }
+}
