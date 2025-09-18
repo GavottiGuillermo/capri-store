@@ -49,6 +49,25 @@
       from { opacity: 0; transform: translateX(30px); }
       to { opacity: 1; transform: translateX(0); }
     }
+    
+    /* === ESTILOS DEL CARRITO SIDEBAR === */
+    .cart-sidenav {
+      transform: translateX(100%);
+      transition: transform 0.3s ease-in-out;
+    }
+    .cart-sidenav.open {
+      transform: translateX(0);
+    }
+    #cartSidenavOverlay {
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+    }
+    #cartSidenavOverlay.show {
+      opacity: 1;
+    }
+    .cart-item {
+      animation: fadeInLeft 0.3s ease-out;
+    }
   </style>
  </head>
  <body class="bg-white text-vino">
@@ -165,18 +184,6 @@
   <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
   <script src="js/scripts.js"></script>
-document.addEventListener('DOMContentLoaded', function() {
-  var cartLink = document.getElementById('navbar-cart-link');
-  if (cartLink) {
-    cartLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      if (typeof openCartSidenav === 'function') {
-        openCartSidenav();
-      }
-    });
-  }
-});
-  </script>
   <script>
     // Solo scripts menores de UI, como el menú móvil
     const menuBtn = document.getElementById("menu-btn");

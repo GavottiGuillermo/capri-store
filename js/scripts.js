@@ -17,9 +17,42 @@ try {
   cartItems = [];
 }
 
+// Inicializar carrito al cargar la página
+function inicializarCarrito() {
+  console.log('🚀 Inicializando carrito...');
+  actualizarCartSidenav();
+  configurarEventListeners();
+  console.log('✅ Carrito inicializado');
+}
+
+// Configurar event listeners del carrito
+function configurarEventListeners() {
+  // Event listener para abrir carrito desde navbar
+  const cartLink = document.getElementById('navbar-cart-link');
+  if (cartLink) {
+    cartLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      openCartSidenav();
+    });
+  }
+
+  // Event listener para cerrar carrito
+  const closeBtn = document.getElementById('closeCartBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeCartSidenav);
+  }
+
+  // Event listener para overlay
+  const overlay = document.getElementById('cartSidenavOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', closeCartSidenav);
+  }
+}
+
 // Guardar el carrito en localStorage
 function guardarCarrito() {
   localStorage.setItem("carrito", JSON.stringify(cartItems));
+  console.log('🛒 Carrito guardado:', cartItems.length, 'items');
 }
 
 // Agregar un producto al carrito (permite repetidos con cantidad)
@@ -29,6 +62,15 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
 
   precio = Number(precio);
   cantidad = Number(cantidad);
+
+  // Recargar carrito desde localStorage para asegurar estado actualizado
+  try {
+    const cartRaw = localStorage.getItem("carrito");
+    cartItems = cartRaw ? JSON.parse(cartRaw) : [];
+    if (!Array.isArray(cartItems)) cartItems = [];
+  } catch {
+    cartItems = [];
+  }
 
   // Obtener id_articulo del producto o extraerlo del path de la imagen
   let id_articulo = null;
@@ -69,6 +111,7 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
   }
   guardarCarrito();
   actualizarCartSidenav();
+  console.log('➕ Producto agregado al carrito:', nombre);
   // Abrir automáticamente el sidebar del carrito después de agregar (sin popup)
   openCartSidenav();
 }
@@ -138,16 +181,35 @@ function closeCartSidenav() {
 
 // Actualizar el contenido del sidebar del carrito
 function actualizarCartSidenav() {
+  console.log('🔄 Actualizando carrito sidebar...');
+  
+  // Recargar carrito desde localStorage para asegurar consistencia
+  try {
+    const cartRaw = localStorage.getItem("carrito");
+    cartItems = cartRaw ? JSON.parse(cartRaw) : [];
+    if (!Array.isArray(cartItems)) cartItems = [];
+  } catch {
+    cartItems = [];
+  }
+
   const lista = document.getElementById("cart-sidenav-items");
   const total = document.getElementById("cart-sidenav-total");
   const cartCount = document.getElementById("cart-count");
-  if (!lista || !total) return;
+  
+  if (!lista || !total) {
+    console.log('⚠️ Elementos del carrito no encontrados en el DOM');
+    return;
+  }
+  
   lista.innerHTML = "";
   let suma = 0;
   let cantidadTotal = 0;
-  if (!Array.isArray(cartItems)) cartItems = [];
+
   // Filtrar productos inválidos
   cartItems = cartItems.filter(item => item && item.nombre && !isNaN(Number(item.precio)) && item.img && !isNaN(Number(item.cantidad)) && Number(item.cantidad) > 0);
+  
+  console.log('📊 Items en carrito:', cartItems.length);
+  
   if (cartItems.length === 0) {
     lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
     total.textContent = "$0.00 ARS";
@@ -326,5 +388,40 @@ function limpiarCarritoDespuesDeCompra() {
   vaciarCarrito();
   mostrarPopup('¡Compra realizada! El carrito ha sido vaciado.');
 }
+
+// === INICIALIZACIÓN AUTOMÁTICA DEL CARRITO ===
+// Inicializar carrito cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+  inicializarCarrito();
+});
+
+// También inicializar cuando la página se carga completamente
+window.addEventListener('load', function() {
+  inicializarCarrito();
+});
+
+// Actualizar carrito cuando la página recupera el foco (usuario vuelve de otra pestaña)
+window.addEventListener('focus', function() {
+  console.log('👁️ Página recuperó el foco, actualizando carrito...');
+  actualizarCartSidenav();
+});
+
+// Actualizar carrito cuando cambia el localStorage (sincronización entre pestañas)
+window.addEventListener('storage', function(e) {
+  if (e.key === 'carrito') {
+    console.log('🔄 Cambio detectado en localStorage, sincronizando carrito...');
+    actualizarCartSidenav();
+  }
+});
+
+// === HACER FUNCIONES DISPONIBLES GLOBALMENTE ===
+// Asegurar que las funciones están disponibles en el objeto window
+window.agregarAlCarrito = agregarAlCarrito;
+window.actualizarCartSidenav = actualizarCartSidenav;
+window.openCartSidenav = openCartSidenav;
+window.closeCartSidenav = closeCartSidenav;
+window.mostrarPopup = mostrarPopup;
+window.finalizarCompraSidebar = finalizarCompraSidebar;
+window.cartItems = cartItems;
 
 

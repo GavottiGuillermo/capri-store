@@ -10,28 +10,20 @@ const crypto = require('crypto');
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-console.log('🔧 Capri Store API iniciando...');
-console.log(`🌐 Modo: ${process.env.NODE_ENV || 'development'} | Directorio: ${__dirname}`);
+console.log('� Capri Store API iniciando...');
 
 // ===============================
 // VALIDACIÓN DE VARIABLES DE ENTORNO
 // ===============================
-console.log('🔧 Validando configuración de entorno...');
-
 if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
   console.warn('⚠️ Configuración de email incompleta');
 }
 
-if (process.env.ADMIN_EMAILS) {
-  const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
-  console.log('✅ Emails administrativos configurados:', adminEmails.length);
-} else {
+if (!process.env.ADMIN_EMAILS) {
   console.warn('⚠️ ADMIN_EMAILS no configurado');
 }
 
-console.log('✅ Creando instancia de Express...');
 const app = express();
-console.log('✅ Express app creada exitosamente');
 
 
 // Almacén en memoria para notificaciones de webhook
@@ -39,12 +31,9 @@ const webhookNotifications = new Map();
 // Bandera para evitar envío duplicado de email por paymentId
 const emailSentForPayment = new Set();
 
-console.log('🔧 Configurando middlewares básicos...');
-
 // ===============================
 // CONFIGURACIÓN DE MIDDLEWARES
 // ===============================
-console.log('📝 Configurando CORS...');
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -58,14 +47,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with']
 }));
-console.log('✅ CORS configurado exitosamente');
 
-console.log('📝 Configurando parsers JSON y URL...');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-console.log('✅ Parsers configurados exitosamente');
 
-console.log('📝 Configurando middleware de preflight (alternativo)...');
 // Middleware CORS alternativo más explícito
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -79,12 +64,9 @@ app.use((req, res, next) => {
   
   next();
 });
-console.log('✅ Middleware de preflight alternativo configurado');
 
-console.log('📝 Configurando archivos estáticos...');
 // Servir archivos estáticos desde la carpeta raíz
 app.use(express.static(path.join(__dirname, '..')));
-console.log('✅ Archivos estáticos configurados');
 
 // ===============================
 // CONFIGURACIÓN DE BASE DE DATOS
@@ -105,7 +87,6 @@ async function initializeDatabase() {
     const client = await pool.connect();
     await client.query('SELECT NOW()');
     client.release();
-    console.log('✅ Conexión a PostgreSQL exitosa');
 
     // Verificar si existe la columna mp_payment_id
     const client2 = await pool.connect();
@@ -117,10 +98,8 @@ async function initializeDatabase() {
     `);
     client2.release();
 
-    if (checkColumn.rows.length > 0) {
-  console.log('✅ Columna mp_payment_id existe');
-    } else {
-  console.warn('⚠️ Columna mp_payment_id NO existe en tabla productos');
+    if (checkColumn.rows.length === 0) {
+      console.warn('⚠️ Columna mp_payment_id NO existe en tabla productos');
     }
 
   } catch (error) {
@@ -132,28 +111,18 @@ async function initializeDatabase() {
 // ===============================
 // CONFIGURACIÓN DE MERCADO PAGO
 // ===============================
-console.log('🔧 Configurando MercadoPago...');
-
 // Validar token de acceso
 if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
   console.error('❌ MERCADOPAGO_ACCESS_TOKEN no configurado');
   process.exit(1);
 }
 
-// Verificar formato del token
-const tokenStart = process.env.MERCADOPAGO_ACCESS_TOKEN.substring(0, 20);
-console.log('🔑 Token MercadoPago configurado:', tokenStart + '...');
-
-if (process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('TEST-')) {
-  console.log('🧪 Usando token de PRUEBA');
-} else if (process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('APP_USR-')) {
-  console.log('🚀 Usando token de PRODUCCIÓN');
-} else {
-  console.warn('⚠️ Formato de token no reconocido');
+if (!process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('TEST-') && 
+    !process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('APP_USR-')) {
+  console.warn('⚠️ Formato de token MercadoPago no reconocido');
 }
 
 const client = new MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN });
-console.log('✅ Cliente MercadoPago configurado correctamente');
 
 // ===============================
 // FUNCIONES AUXILIARES
@@ -241,17 +210,11 @@ app.post('/crear-preferencia', async (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Type', 'application/json; charset=utf-8');
   try {
-    console.log('--- INICIO /crear-preferencia ---');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body recibido:', JSON.stringify(req.body, null, 2));
-    console.log('Creando preferencia de pago...');
-    console.log('📦 Datos recibidos:', JSON.stringify(req.body, null, 2));
-
     const { items, datosComprador } = req.body;
 
     // Validar datos requeridos
     if (!items || !Array.isArray(items) || items.length === 0) {
-      console.log('❌ Error: Items requeridos no presentes o vacíos');
+      console.error('❌ /crear-preferencia: Items requeridos no presentes');
       return res.status(400).json({
         error: 'Items requeridos',
         message: 'Se requiere al menos un item',
@@ -260,7 +223,7 @@ app.post('/crear-preferencia', async (req, res) => {
     }
 
     if (!datosComprador || !datosComprador.email) {
-      console.log('❌ Error: Datos del comprador incompletos:', datosComprador);
+      console.error('❌ /crear-preferencia: Datos del comprador incompletos');
       return res.status(400).json({
         error: 'Datos del comprador incompletos',
         message: 'Email del comprador es requerido',
@@ -271,7 +234,7 @@ app.post('/crear-preferencia', async (req, res) => {
     // Validar que cada item tenga los campos requeridos por MercadoPago
     const itemsMP = items.map((item, idx) => {
       if (!item.id_articulo && !item.id) {
-        console.log(`❌ Error: El item en posición ${idx} no tiene id_articulo ni id`, item);
+        console.error(`❌ /crear-preferencia: Item en posición ${idx} sin ID`);
         throw new Error(`El item en posición ${idx} no tiene id_articulo ni id`);
       }
       const mapped = {
@@ -281,13 +244,12 @@ app.post('/crear-preferencia', async (req, res) => {
         currency_id: 'ARS',
         unit_price: item.precio || item.unit_price || 0
       };
-      console.log(`Item mapeado para MP [${idx}]:`, mapped);
       return mapped;
     });
 
     for (const [idx, item] of itemsMP.entries()) {
       if (!item.id || !item.title || !item.unit_price || !item.quantity) {
-        console.log(`❌ Error: El item en posición ${idx} no tiene todos los campos requeridos`, item);
+        console.error(`❌ /crear-preferencia: Item en posición ${idx} incompleto`);
         return res.status(400).json({
           error: 'Item inválido',
           message: `El item en posición ${idx} no tiene todos los campos requeridos`,
@@ -319,19 +281,15 @@ app.post('/crear-preferencia', async (req, res) => {
       }
     };
 
-    console.log('🔄 Creando preferencia con datos:', JSON.stringify(preferenceData, null, 2));
     const result = await preference.create({ body: preferenceData });
     
-    console.log('✅ Preferencia creada exitosamente');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.json({
       preference_id: result.id,
       init_point: result.init_point
     });
   } catch (error) {
-    // Loguear error inesperado y devolver JSON siempre
-    console.error('❌ Error inesperado al crear preferencia:');
-    console.error('📋 Detalles completos del error:', error && error.stack ? error.stack : error);
+    console.error('❌ Error al crear preferencia:', error.message);
     try {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.status(500).json({
@@ -572,38 +530,17 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   
   const { paymentId } = req.params;
-  console.log('🔍 === ENDPOINT CONSULTA PEDIDO ===');
-  console.log('Payment ID recibido:', paymentId);
-  console.log('Headers de la petición:', req.headers.origin);
-  
-  // Primero, vamos a verificar qué datos tenemos en la BD para este payment_id
-  console.log('🔍 Verificando datos en BD para payment_id:', paymentId);
   
   // Intentar hasta MAX_TRIES veces esperando entre intentos (para dar tiempo al webhook)
   const MAX_TRIES = 3;
   const RETRY_DELAY_MS = 2000; // 2 segundos
   let intento = 0;
   let pedidoEncontrado = null;
-  let debugResult = null;
   
   try {
     while (intento < MAX_TRIES && !pedidoEncontrado) {
       intento++;
-      console.log('🔁 Intento', intento, '/', MAX_TRIES, 'para payment_id:', paymentId);
       
-      // Resultados debug opcionales
-      try {
-        debugResult = await executeQueryWithRetry(
-          pool,
-          'SELECT p.id_articulo, p.mp_payment_id, p.id_pedido, p.estado, p.pedido_fecha, p.pedido_nombre_cliente, p.pedido_monto_total FROM productos p WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2 ORDER BY p.pedido_fecha DESC',
-          [paymentId, paymentId.toString()],
-          2
-        );
-      } catch (err) {
-        console.error('⚠️ Error en consulta debugResult:', err.message || err);
-      }
-      
-      console.log('🔍 Resultados debug (', (debugResult && debugResult.rows.length) || 0, 'filas)');
       
       try {
         const pedidoResult = await executeQueryWithRetry(
@@ -618,11 +555,10 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
           break;
         }
       } catch (err) {
-        console.error('⚠️ Intento', intento, 'falló al consultar pedido:', err.message || err);
+        console.error(`⚠️ Error al consultar pedido (intento ${intento}):`, err.message);
       }
       
       if (!pedidoEncontrado && intento < MAX_TRIES) {
-        console.log('⏳ Esperando', RETRY_DELAY_MS / 1000, 'segundos antes del siguiente intento...');
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
       }
     }
@@ -631,7 +567,6 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       const numeroDisplay = pedidoEncontrado.id_pedido && pedidoEncontrado.id_pedido.length >= 2 ? 
         pedidoEncontrado.id_pedido.slice(-2) : pedidoEncontrado.id_pedido;
       
-      console.log('✅ Pedido encontrado:', pedidoEncontrado.id_pedido);
       
       res.json({
         success: true,
@@ -644,7 +579,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         payment_id: paymentId
       });
     } else {
-      console.log('❌ Pedido no encontrado después de', MAX_TRIES, 'intentos');
+      console.warn(`⚠️ Pedido no encontrado para payment_id: ${paymentId} después de ${MAX_TRIES} intentos`);
       
       res.json({
         success: false,
@@ -656,7 +591,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Error en endpoint /numero-pedido/:paymentId:', error);
+    console.error('❌ Error en /numero-pedido:', error.message);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor',
@@ -688,8 +623,6 @@ app.use((error, req, res, next) => {
     timestamp: new Date().toISOString() 
   });
 });
-
-console.log('✅ Todos los endpoints definidos exitosamente');
 
 // ===============================
 // SERVIDOR HTTP

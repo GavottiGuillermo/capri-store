@@ -322,18 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }, index * 200);
     });
   }, 500);
-  // Event listener para el carrito en navbar
-  const cartLink = document.getElementById('navbar-cart-link');
-  if (cartLink) {
-    cartLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      if (typeof openCartSidenav === 'function') {
-        openCartSidenav();
-      } else {
-        window.location.href = 'index.html';
-      }
-    });
-  }
+  
   // Configurar event listeners para tipo de entrega
   const retiroLocal = document.getElementById('retiroLocal');
   const envioDomicilio = document.getElementById('enviosDomicilio');

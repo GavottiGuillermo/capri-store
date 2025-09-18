@@ -88,6 +88,25 @@
       from { opacity: 0; }
       to { opacity: 1; }
     }
+    
+    /* === ESTILOS DEL CARRITO SIDEBAR === */
+    .cart-sidenav {
+      transform: translateX(100%);
+      transition: transform 0.3s ease-in-out;
+    }
+    .cart-sidenav.open {
+      transform: translateX(0);
+    }
+    #cartSidenavOverlay {
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+    }
+    #cartSidenavOverlay.show {
+      opacity: 1;
+    }
+    .cart-item {
+      animation: fadeInLeft 0.3s ease-out;
+    }
   </style>
 </head>
 <body class="bg-white text-vino">
@@ -233,7 +252,7 @@
         <span class="font-weight-bold" style="color:#6b0a0a;">Subtotal:</span>
         <span id="cart-sidenav-total" class="font-weight-bold" style="color:#6b0a0a;"></span>
       </div>
-      <button class="btn btn-rosado btn-block font-weight-bold py-3" id="finalizarCompraBtn">Finalizar compra</button>
+      <button class="btn btn-rosado btn-block font-weight-bold py-3" onclick="finalizarCompraSidebar()">Comenzar Compra</button>
     </div>
   </div>
   <!-- Overlay para cerrar el sidebar -->
