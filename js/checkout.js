@@ -42,59 +42,50 @@ function manejarTipoEntrega() {
 }
 // === RESUMEN DE COMPRA ===
 function cargarResumenCompra() {
+  console.log('📊 Cargando resumen de compra...');
+  
   const checkoutItems = document.getElementById('checkout-items');
   const subtotalElement = document.getElementById('checkout-subtotal');
   const totalElement = document.getElementById('checkout-total');
   const cartCount = document.getElementById('cart-count');
+  
   let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
+  
+  console.log('🛒 Items en carrito:', cartItems.length);
+  
   // Fallback: si carrito está vacío, intentar con productosCompra
   if ((!cartItems || cartItems.length === 0) && localStorage.getItem("productosCompra")) {
     try {
       cartItems = JSON.parse(localStorage.getItem("productosCompra")) || [];
+      console.log('📦 Usando productosCompra como fallback:', cartItems.length);
     } catch (e) {
       cartItems = [];
     }
   }
-  // Validar stock al cargar el resumen
-  (async function validarStockResumen() {
-    if (!cartItems || cartItems.length === 0) return;
-    const ids = cartItems.map(item => item.id_articulo || item.id).filter(Boolean);
-    try {
-      const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids })
-      });
-      const data = await resp.json();
-      if (resp.ok && data.ok && data.faltantes && data.faltantes.length > 0) {
-        let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
-        if (nombres.length > 0) {
-          mostrarPopup('😔 El producto ' + nombres.join(', ') + ' ya no se encuentra en stock!');
-        }
-        cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
-        localStorage.setItem("carrito", JSON.stringify(cartItems));
-      }
-    } catch (err) {
-      // No bloquear el resumen si falla la validación, solo loguear
-      console.warn('No se pudo validar stock al cargar resumen:', err);
-    }
-  })();
+  
   let subtotal = 0;
   let cantidadTotal = 0;
+  
   if (!cartItems || cartItems.length === 0) {
-    if (checkoutItems) checkoutItems.innerHTML = '';
+    console.log('⚠️ Carrito vacío');
+    if (checkoutItems) checkoutItems.innerHTML = '<div class="text-center py-4"><h5 class="text-muted">Tu carrito está vacío</h5><a href="index.html" class="btn btn-vino-tinto">Volver a la tienda</a></div>';
     if (subtotalElement) subtotalElement.textContent = formatPrice(0);
     if (totalElement) totalElement.textContent = formatPrice(0);
     if (cartCount) cartCount.textContent = "0";
     return;
   }
+  
   if (checkoutItems) checkoutItems.innerHTML = '';
+  
   cartItems.forEach((item, index) => {
+    console.log(`📝 Procesando item ${index + 1}:`, item.nombre);
+    
     const precioNum = Number(item.precio);
     const cantidadNum = Number(item.cantidad);
     const itemTotal = precioNum * cantidadNum;
     subtotal += itemTotal;
     cantidadTotal += cantidadNum;
+    
     // Renderizar cada item del carrito
     if (checkoutItems) {
       checkoutItems.innerHTML += `
@@ -109,10 +100,15 @@ function cargarResumenCompra() {
       `;
     }
   });
+  
   const total = subtotal + costoEnvio;
+  
+  console.log('💰 Subtotal:', subtotal, 'Total:', total);
+  
   if (subtotalElement) subtotalElement.textContent = formatPrice(subtotal);
   if (totalElement) totalElement.textContent = formatPrice(total);
   if (cartCount) cartCount.textContent = cantidadTotal;
+  
   // Mostrar/ocultar sección de envío
   const envioSection = document.getElementById('envio-section');
   const checkoutEnvio = document.getElementById('checkout-envio');
@@ -123,6 +119,43 @@ function cargarResumenCompra() {
     } else {
       envioSection.style.display = 'none';
     }
+  }
+  
+  // Validar stock de manera asíncrona (sin bloquear la UI)
+  validarStockAsync(cartItems);
+}
+
+// === VALIDACIÓN DE STOCK ASÍNCRONA ===
+async function validarStockAsync(cartItems) {
+  if (!cartItems || cartItems.length === 0) return;
+  
+  const ids = cartItems.map(item => item.id_articulo || item.id).filter(Boolean);
+  if (ids.length === 0) return;
+  
+  try {
+    console.log('🔍 Validando stock para:', ids);
+    const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    const data = await resp.json();
+    
+    if (resp.ok && data.ok && data.faltantes && data.faltantes.length > 0) {
+      let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
+      if (nombres.length > 0) {
+        alert('⚠️ El producto ' + nombres.join(', ') + ' ya no se encuentra en stock y será removido del carrito.');
+      }
+      // Filtrar productos sin stock y recargar resumen
+      const cartItemsFiltrados = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
+      localStorage.setItem("carrito", JSON.stringify(cartItemsFiltrados));
+      // Recargar página o resumen si es necesario
+      if (cartItemsFiltrados.length !== cartItems.length) {
+        location.reload();
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ No se pudo validar stock:', err);
   }
 }
 
@@ -313,15 +346,43 @@ async function iniciarProcesoPago() {
 
 // === EVENT LISTENERS PRINCIPALES ===
 document.addEventListener('DOMContentLoaded', function() {
-  // Inicializar animaciones de secciones si es necesario
+  console.log('🚀 Checkout inicializando...');
+  
+  // Remover clase no-js para activar animaciones
+  document.documentElement.classList.remove('no-js');
+  
+  // PRIMERO: Activar animaciones para que el contenido sea visible
   setTimeout(() => {
+    // Hacer visible el contenido principal
+    const mainContent = document.querySelector('.main-section');
+    if (mainContent) mainContent.classList.add('visible');
+    
+    // Activar títulos de sección
+    const sectionTitles = document.querySelectorAll('.section-title');
+    sectionTitles.forEach((title, index) => {
+      setTimeout(() => {
+        title.classList.add('visible');
+      }, index * 100);
+    });
+    
+    // Activar secciones del checkout
     const checkoutSections = document.querySelectorAll('.checkout-section');
     checkoutSections.forEach((section, index) => {
       setTimeout(() => {
         section.classList.add('visible');
       }, index * 200);
     });
-  }, 500);
+    
+    // Activar animaciones laterales
+    const fadeInLeft = document.querySelectorAll('.fade-in-left');
+    const fadeInRight = document.querySelectorAll('.fade-in-right');
+    const fadeIn = document.querySelectorAll('.fade-in');
+    
+    fadeInLeft.forEach(el => el.classList.add('visible'));
+    fadeInRight.forEach(el => el.classList.add('visible'));
+    fadeIn.forEach(el => el.classList.add('visible'));
+    
+  }, 100);
   
   // Configurar event listeners para tipo de entrega
   const retiroLocal = document.getElementById('retiroLocal');
@@ -342,14 +403,40 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   if (calcularEnvioBtn) calcularEnvioBtn.addEventListener('click', calcularEnvio);
   if (iniciarPagoBtn) {
+    console.log('✅ Botón iniciar pago encontrado');
     iniciarPagoBtn.addEventListener('click', function(e) {
       console.log('[checkout] Click en #iniciarPago, llamando iniciarProcesoPago');
       iniciarProcesoPago();
     });
   } else {
-    console.warn('[checkout] No se encontró el botón #iniciarPago');
+    console.warn('⚠️ No se encontró el botón #iniciarPago');
   }
+  
+  console.log('📊 Cargando resumen de compra inicial...');
   cargarResumenCompra();
+  
+  console.log('🚛 Configurando tipo de entrega...');
   manejarTipoEntrega();
+  
+  console.log('✅ Checkout inicializado correctamente');
   // Puedes agregar aquí la función de animaciones fade-in si la necesitas
 });
+
+// === FUNCIONES AUXILIARES PARA EL CARRITO ===
+function volverAInicio() {
+  window.location.href = 'index.html';
+}
+
+// Función básica para mostrar alertas/popups
+function mostrarPopup(mensaje) {
+  // Usar la función global si está disponible, sino usar alert
+  if (window.mostrarPopup && typeof window.mostrarPopup === 'function') {
+    window.mostrarPopup(mensaje);
+  } else {
+    alert(mensaje);
+  }
+}
+
+// Hacer disponibles globalmente
+window.volverAInicio = volverAInicio;
+window.mostrarPopup = mostrarPopup;

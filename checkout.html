@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="no-js">
 <head>
   <meta charset="utf-8"/>
   <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
@@ -120,6 +120,16 @@
       opacity: 1;
       transform: translateY(0);
     }
+    
+    /* Fallback: Mostrar contenido si JavaScript no funciona */
+    .no-js .fade-in, 
+    .no-js .fade-in-left, 
+    .no-js .fade-in-right, 
+    .no-js .section-title, 
+    .no-js .checkout-section {
+      opacity: 1 !important;
+      transform: none !important;
+    }
     .subtle-pulse {
       animation: subtlePulse 3s ease-in-out infinite;
     }
@@ -156,6 +166,25 @@
       75% { transform: translateX(5px); }
     }
     /* ...otros estilos clave pueden agregarse aquí según necesidad... */
+    
+    /* === ESTILOS DEL CARRITO SIDEBAR === */
+    .cart-sidenav {
+      transform: translateX(100%);
+      transition: transform 0.3s ease-in-out;
+    }
+    .cart-sidenav.open {
+      transform: translateX(0);
+    }
+    #cartSidenavOverlay {
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+    }
+    #cartSidenavOverlay.show {
+      opacity: 1;
+    }
+    .cart-item {
+      animation: fadeInLeft 0.3s ease-out;
+    }
   </style>
 </head>
 <body class="bg-white text-vino">
