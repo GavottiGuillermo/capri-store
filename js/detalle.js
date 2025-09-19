@@ -64,11 +64,18 @@ document.addEventListener('DOMContentLoaded', async function() {
                 // Configurar cantidad máxima
                 if (inputCantidad) {
                   inputCantidad.max = stockDisponible;
+                  console.log('🔢 Stock establecido:', stockDisponible, 'max:', inputCantidad.max);
                   if (stockDisponible > 0) {
                     inputCantidad.disabled = false;
                     inputCantidad.style.backgroundColor = '';
                     inputCantidad.style.cursor = '';
                     inputCantidad.value = 1;
+                  }
+                  
+                  // Revalidar formulario después de actualizar el stock
+                  if (typeof window.validarFormularioDetalle === 'function') {
+                    console.log('🔄 Revalidando formulario después de cargar stock');
+                    window.validarFormularioDetalle();
                   }
                 }
               }
@@ -82,6 +89,10 @@ document.addEventListener('DOMContentLoaded', async function() {
               btn.textContent = 'Sin stock';
               btn.classList.remove('btn-vino-tinto');
               btn.classList.add('btn-secondary');
+            }
+            // Revalidar formulario cuando no hay stock
+            if (typeof window.validarFormularioDetalle === 'function') {
+              window.validarFormularioDetalle();
             }
           }
         }
@@ -206,24 +217,42 @@ document.addEventListener('DOMContentLoaded', function() {
     function validarFormulario() {
       const talleValido = selectTalle.value !== "";
       const cantidadInput = parseInt(inputCantidad.value) || 0;
-      const maxStock = parseInt(inputCantidad.max) || 0;
+      const maxStock = parseInt(inputCantidad.max) || 999; // Valor por defecto alto si no hay max establecido
       const cantidadValida = cantidadInput > 0 && cantidadInput <= maxStock;
       
+      console.log('🔍 Validando formulario:', {
+        talle: selectTalle.value,
+        talleValido,
+        cantidad: cantidadInput,
+        maxStock,
+        cantidadValida,
+        inputMax: inputCantidad.max
+      });
+      
       // Mostrar mensaje si excede el stock
-      if (cantidadInput > maxStock && maxStock > 0) {
+      if (cantidadInput > maxStock && maxStock < 999) {
         inputCantidad.value = maxStock;
       }
       
-      if (talleValido && cantidadValida && maxStock > 0) {
+      // Si hay stock establecido (maxStock < 999), verificar que sea mayor que 0
+      // Si no hay stock establecido aún, permitir si talle y cantidad son válidos
+      const stockValido = maxStock < 999 ? maxStock > 0 : true;
+      
+      if (talleValido && cantidadValida && stockValido) {
         btnAgregar.disabled = false;
         btnAgregar.classList.remove('bg-rosado', 'opacity-50');
         btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+        console.log('✅ Botón habilitado');
       } else {
         btnAgregar.disabled = true;
         btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
         btnAgregar.classList.add('bg-rosado', 'opacity-50');
+        console.log('❌ Botón deshabilitado - stockValido:', stockValido);
       }
     }
+    
+    // Hacer la función disponible globalmente para llamarla después de cargar el stock
+    window.validarFormularioDetalle = validarFormulario;
     selectTalle.addEventListener('change', validarFormulario);
     inputCantidad.addEventListener('input', validarFormulario);
     validarFormulario();
