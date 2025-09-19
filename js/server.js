@@ -304,6 +304,13 @@ app.post('/crear-preferencia', async (req, res) => {
   
   try {
     const { items, datosComprador } = req.body;
+    console.log('📋 Datos recibidos en /crear-preferencia:');
+    console.log('📋 Items:', JSON.stringify(items, null, 2));
+    console.log('📋 Datos comprador:', JSON.stringify(datosComprador, null, 2));
+    console.log('🌐 URLs calculadas:');
+    console.log('  - Protocol:', req.protocol);
+    console.log('  - Host:', req.get('host'));
+    console.log('  - Success URL:', 'https://capristorezte.com.ar/success.html');
 
     // Validar datos requeridos
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -368,10 +375,11 @@ app.post('/crear-preferencia', async (req, res) => {
       statement_descriptor: 'CAPRI STORE',
       auto_return: 'approved',
       back_urls: {
-        success: `${req.protocol}://${req.get('host')}/success.html`,
-        failure: `${req.protocol}://${req.get('host')}/failure.html`,
-        pending: `${req.protocol}://${req.get('host')}/pending.html`
-      }
+        success: 'https://capristorezte.com.ar/success.html',
+        failure: 'https://capristorezte.com.ar/failure.html',
+        pending: 'https://capristorezte.com.ar/pending.html'
+      },
+      notification_url: 'https://capri-store.onrender.com/webhook'
     };
 
     const result = await preference.create({ body: preferenceData });
@@ -383,12 +391,17 @@ app.post('/crear-preferencia', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error al crear preferencia:', error.message);
+    console.error('❌ Stack trace:', error.stack);
+    console.error('❌ Error completo:', error);
+    console.error('❌ Datos recibidos:', JSON.stringify(req.body, null, 2));
+    
     try {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.status(500).json({
         error: 'Error inesperado al crear preferencia',
         message: error.message || String(error),
-        stack: error.stack || null
+        stack: error.stack || null,
+        details: 'Ver logs del servidor para más información'
       });
     } catch (err2) {
       console.error('❌ Error al intentar enviar respuesta de error:', err2);
