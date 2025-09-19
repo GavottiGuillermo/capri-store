@@ -454,21 +454,30 @@ document.addEventListener('DOMContentLoaded', function() {
           if (stockFinalData.ok) {
             const stockFinalActual = stockFinalData.stock || 0;
             
-            // RECALCULAR cantidad en carrito para la validación final
+            // VALIDACIÓN FINAL CON CARRITO EN TIEMPO REAL
+            // Leer el carrito en el momento exacto de la validación
             let cantidadFinalEnCarrito = 0;
             try {
-              const cartItemsFinal = JSON.parse(localStorage.getItem('cartItems')) || [];
-              console.log('🔍 DEBUG - Items en carrito:', cartItemsFinal);
-              console.log('🔍 DEBUG - Buscando producto:', producto.nombre);
-              console.log('🔍 DEBUG - Buscando talle:', size);
-              console.log('🔍 DEBUG - Patrón de búsqueda:', `${producto.nombre} (Talle: ${size})`);
+              // Recargar carrito exactamente como lo hace agregarAlCarrito
+              const cartRaw = localStorage.getItem("carrito");
+              const cartItemsFinal = cartRaw ? JSON.parse(cartRaw) : [];
+              console.log('🔍 DEBUG - Items en carrito desde "carrito":', cartItemsFinal);
               
-              const productoFinalEnCarrito = cartItemsFinal.find(item => {
-                console.log('🔍 DEBUG - Evaluando item:', item.nombre);
-                const includeNombre = item.nombre && item.nombre.includes(producto.nombre);
-                const includeTalle = item.nombre && item.nombre.includes(`(Talle: ${size})`);
-                console.log('🔍 DEBUG - Coincide nombre:', includeNombre, 'Coincide talle:', includeTalle);
-                return includeNombre && includeTalle;
+              // También revisar "cartItems" por si usa otra clave
+              const cartItemsAlt = JSON.parse(localStorage.getItem('cartItems') || '[]');
+              console.log('🔍 DEBUG - Items en carrito desde "cartItems":', cartItemsAlt);
+              
+              // Usar el que tenga contenido
+              const cartToUse = (cartItemsFinal.length > 0) ? cartItemsFinal : cartItemsAlt;
+              console.log('🔍 DEBUG - Carrito a usar:', cartToUse);
+              
+              // Buscar en el carrito que tiene contenido
+              const nombreCompleto = `${producto.nombre} (Talle: ${size})`;
+              console.log('🔍 DEBUG - Buscando nombre completo:', nombreCompleto);
+              
+              const productoFinalEnCarrito = cartToUse.find(item => {
+                console.log('🔍 DEBUG - Comparando con:', item.nombre);
+                return item.nombre === nombreCompleto;
               });
               
               if (productoFinalEnCarrito) {
