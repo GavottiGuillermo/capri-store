@@ -113,16 +113,18 @@ async function initializeDatabase() {
 // ===============================
 // Validar token de acceso
 if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
-  console.error('❌ MERCADOPAGO_ACCESS_TOKEN no configurado');
-  process.exit(1);
+  console.error('❌ MERCADOPAGO_ACCESS_TOKEN no configurado - MercadoPago no estará disponible');
+  // No terminar el proceso, solo deshabilitar MercadoPago
+} else {
+  if (!process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('TEST-') && 
+      !process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('APP_USR-')) {
+    console.warn('⚠️ Formato de token MercadoPago no reconocido');
+  }
 }
 
-if (!process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('TEST-') && 
-    !process.env.MERCADOPAGO_ACCESS_TOKEN.startsWith('APP_USR-')) {
-  console.warn('⚠️ Formato de token MercadoPago no reconocido');
-}
-
-const client = new MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN });
+const client = process.env.MERCADOPAGO_ACCESS_TOKEN ? 
+  new MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN }) : 
+  null;
 
 // ===============================
 // FUNCIONES AUXILIARES
@@ -289,6 +291,17 @@ app.post('/crear-preferencia', async (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Type', 'application/json; charset=utf-8');
+  
+  // Verificar si MercadoPago está configurado
+  if (!client || !process.env.MERCADOPAGO_ACCESS_TOKEN) {
+    console.error('❌ MercadoPago no configurado - no se puede crear preferencia');
+    return res.status(503).json({
+      error: 'Servicio no disponible',
+      message: 'MercadoPago no está configurado correctamente',
+      details: 'El token de acceso de MercadoPago no está configurado en el servidor'
+    });
+  }
+  
   try {
     const { items, datosComprador } = req.body;
 

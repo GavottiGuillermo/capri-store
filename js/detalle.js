@@ -359,23 +359,12 @@ document.addEventListener('DOMContentLoaded', function() {
       let cantidadEnCarrito = 0;
       try {
         const cartItems = JSON.parse(localStorage.getItem('cartItems')) || [];
-        console.log('🔍 DEBUG INICIAL - Items en carrito:', cartItems);
-        console.log('🔍 DEBUG INICIAL - Buscando producto:', producto.nombre);
-        console.log('🔍 DEBUG INICIAL - Buscando talle:', size);
-        
         const productoEnCarrito = cartItems.find(item => {
-          console.log('🔍 DEBUG INICIAL - Evaluando item:', item.nombre);
-          const includeNombre = item.nombre && item.nombre.includes(producto.nombre);
-          const includeTalle = item.nombre && item.nombre.includes(`(Talle: ${size})`);
-          console.log('🔍 DEBUG INICIAL - Coincide nombre:', includeNombre, 'Coincide talle:', includeTalle);
-          return includeNombre && includeTalle;
+          return item.nombre && item.nombre.includes(producto.nombre) && item.nombre.includes(`(Talle: ${size})`);
         });
         
         if (productoEnCarrito) {
           cantidadEnCarrito = productoEnCarrito.cantidad || 0;
-          console.log('🛒 Cantidad ya en carrito:', cantidadEnCarrito);
-        } else {
-          console.log('🔍 DEBUG INICIAL - NO se encontró el producto en carrito');
         }
       } catch (error) {
         console.warn('Error verificando carrito:', error);
@@ -455,36 +444,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const stockFinalActual = stockFinalData.stock || 0;
             
             // VALIDACIÓN FINAL CON CARRITO EN TIEMPO REAL
-            // Leer el carrito en el momento exacto de la validación
             let cantidadFinalEnCarrito = 0;
             try {
-              // Recargar carrito exactamente como lo hace agregarAlCarrito
               const cartRaw = localStorage.getItem("carrito");
               const cartItemsFinal = cartRaw ? JSON.parse(cartRaw) : [];
-              console.log('🔍 DEBUG - Items en carrito desde "carrito":', cartItemsFinal);
-              
-              // También revisar "cartItems" por si usa otra clave
               const cartItemsAlt = JSON.parse(localStorage.getItem('cartItems') || '[]');
-              console.log('🔍 DEBUG - Items en carrito desde "cartItems":', cartItemsAlt);
-              
-              // Usar el que tenga contenido
               const cartToUse = (cartItemsFinal.length > 0) ? cartItemsFinal : cartItemsAlt;
-              console.log('🔍 DEBUG - Carrito a usar:', cartToUse);
               
-              // Buscar en el carrito que tiene contenido
               const nombreCompleto = `${producto.nombre} (Talle: ${size})`;
-              console.log('🔍 DEBUG - Buscando nombre completo:', nombreCompleto);
-              
-              const productoFinalEnCarrito = cartToUse.find(item => {
-                console.log('🔍 DEBUG - Comparando con:', item.nombre);
-                return item.nombre === nombreCompleto;
-              });
+              const productoFinalEnCarrito = cartToUse.find(item => item.nombre === nombreCompleto);
               
               if (productoFinalEnCarrito) {
                 cantidadFinalEnCarrito = productoFinalEnCarrito.cantidad || 0;
-                console.log('🛒 VALIDACIÓN FINAL - Cantidad recalculada en carrito:', cantidadFinalEnCarrito);
-              } else {
-                console.log('🔍 DEBUG - NO se encontró el producto en carrito');
               }
             } catch (error) {
               console.warn('Error verificando carrito en validación final:', error);
@@ -492,7 +463,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const stockFinalDisponible = stockFinalActual - cantidadFinalEnCarrito;
-            
             console.log('📊 VALIDACIÓN FINAL - Stock actual:', stockFinalActual, 'En carrito:', cantidadFinalEnCarrito, 'Disponible:', stockFinalDisponible, 'Solicitando:', quantity);
             
             if (stockFinalActual === 0) {
