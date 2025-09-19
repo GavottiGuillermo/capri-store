@@ -427,6 +427,65 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
+      // SI LLEGAMOS AQUÍ, TODAS LAS VALIDACIONES PASARON EXITOSAMENTE
+      console.log('✅ TODAS LAS VALIDACIONES PASARON - Agregando al carrito');
+      
+      // VALIDACIÓN FINAL: Verificar una última vez el stock justo antes de agregar
+      console.log('🔍 VALIDACIÓN FINAL - Última verificación de stock...');
+      try {
+        const stockFinalResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
+        
+        if (stockFinalResp.ok) {
+          const stockFinalData = await stockFinalResp.json();
+          
+          if (stockFinalData.ok) {
+            const stockFinalActual = stockFinalData.stock || 0;
+            const stockFinalDisponible = stockFinalActual - cantidadEnCarrito;
+            
+            console.log('📊 VALIDACIÓN FINAL - Stock actual:', stockFinalActual, 'En carrito:', cantidadEnCarrito, 'Disponible:', stockFinalDisponible, 'Solicitando:', quantity);
+            
+            if (stockFinalActual === 0) {
+              console.log('❌ VALIDACIÓN FINAL FALLÓ: Sin stock');
+              alert('El producto se agotó mientras procesabas la compra. La página se actualizará.');
+              location.reload();
+              return;
+            }
+            
+            if (stockFinalDisponible <= 0) {
+              console.log('❌ VALIDACIÓN FINAL FALLÓ: Todo el stock ya está en carrito');
+              alert('Ya no hay stock disponible para agregar. Otro usuario pudo haber tomado las últimas unidades.');
+              location.reload();
+              return;
+            }
+            
+            if (quantity > stockFinalDisponible) {
+              console.log('❌ VALIDACIÓN FINAL FALLÓ: Cantidad excede stock disponible');
+              alert(`Solo quedan ${stockFinalDisponible} unidades disponibles. La página se actualizará para mostrar el stock correcto.`);
+              location.reload();
+              return;
+            }
+            
+            console.log('✅ VALIDACIÓN FINAL EXITOSA - Procediendo a agregar al carrito');
+            
+          } else {
+            console.log('❌ VALIDACIÓN FINAL: Error en respuesta del servidor');
+            alert('Error al verificar stock final. La página se actualizará.');
+            location.reload();
+            return;
+          }
+        } else {
+          console.log('❌ VALIDACIÓN FINAL: Error de conexión');
+          alert('Error de conexión al verificar stock final. La página se actualizará.');
+          location.reload();
+          return;
+        }
+      } catch (error) {
+        console.error('❌ Error en validación final de stock:', error);
+        alert('Error crítico al verificar stock. La página se actualizará.');
+        location.reload();
+        return;
+      }
+      
       // Lógica para agregar al carrito (usa función global)
       if (typeof agregarAlCarrito === 'function') {
         agregarAlCarrito(
@@ -439,7 +498,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof mostrarPopup === 'function') {
           mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${size}) x${quantity}`);
         }
+        console.log('✅ Producto agregado exitosamente al carrito');
+      } else {
+        console.error('❌ Función agregarAlCarrito no disponible');
+        alert('Error: No se pudo agregar el producto al carrito.');
+        return;
       }
+      
+      // Resetear formulario solo si se agregó exitosamente
       productForm.reset();
       selectTalle.value = "M";
       inputCantidad.value = 1;
