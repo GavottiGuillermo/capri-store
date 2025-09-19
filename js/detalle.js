@@ -354,6 +354,25 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Validación CRÍTICA de stock antes de agregar al carrito
       console.log('🔍 VALIDACIÓN CRÍTICA - Verificando stock antes de agregar...');
+      
+      // NUEVO: Verificar cuántas unidades ya hay en el carrito
+      let cantidadEnCarrito = 0;
+      try {
+        const cartItems = JSON.parse(localStorage.getItem('cartItems')) || [];
+        const productoEnCarrito = cartItems.find(item => {
+          // Buscar el mismo producto con el mismo talle
+          return item.nombre && item.nombre.includes(producto.nombre) && item.nombre.includes(`(Talle: ${size})`);
+        });
+        
+        if (productoEnCarrito) {
+          cantidadEnCarrito = productoEnCarrito.cantidad || 0;
+          console.log('🛒 Cantidad ya en carrito:', cantidadEnCarrito);
+        }
+      } catch (error) {
+        console.warn('Error verificando carrito:', error);
+        cantidadEnCarrito = 0;
+      }
+      
       try {
         const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
           ? 'https://capri-store.onrender.com'
@@ -366,7 +385,8 @@ document.addEventListener('DOMContentLoaded', function() {
           
           if (stockData.ok) {
             const stockActual = stockData.stock || 0;
-            console.log('📊 Stock actual del servidor:', stockActual, 'Cantidad solicitada:', quantity);
+            const stockDisponible = stockActual - cantidadEnCarrito;
+            console.log('📊 Stock total:', stockActual, 'En carrito:', cantidadEnCarrito, 'Disponible:', stockDisponible, 'Solicitando:', quantity);
             
             if (stockActual === 0) {
               console.log('❌ CRÍTICO: Sin stock disponible - Recargando página');
@@ -375,10 +395,15 @@ document.addEventListener('DOMContentLoaded', function() {
               return;
             }
             
-            if (quantity > stockActual) {
-              console.log('❌ CRÍTICO: Cantidad excede stock - Recargando página');
-              alert(`Solo hay ${stockActual} unidades disponibles. La página se actualizará para reflejar el stock correcto.`);
-              location.reload();
+            if (stockDisponible <= 0) {
+              console.log('❌ CRÍTICO: Ya tienes todo el stock disponible en el carrito');
+              alert(`Ya tienes todo el stock disponible (${stockActual}) de este producto en tu carrito.`);
+              return;
+            }
+            
+            if (quantity > stockDisponible) {
+              console.log('❌ CRÍTICO: Cantidad solicitada excede stock disponible');
+              alert(`Solo puedes agregar ${stockDisponible} unidades más de este producto. Ya tienes ${cantidadEnCarrito} en tu carrito.`);
               return;
             }
             
