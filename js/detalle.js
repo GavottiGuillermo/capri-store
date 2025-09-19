@@ -259,7 +259,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const inputCantidad = document.getElementById('quantity');
   const productForm = document.getElementById('productForm');
   if (btnAgregar && selectTalle && inputCantidad && productForm) {
-    selectTalle.value = "M";
+    // Obtener el producto para usar su talle original
+    const productoStr = localStorage.getItem('productoDetalle');
+    const producto = productoStr ? JSON.parse(productoStr) : null;
+    const talleOriginal = producto?.talle || "M";
+    
+    selectTalle.value = talleOriginal;
     inputCantidad.value = 1;
     btnAgregar.disabled = false;
     btnAgregar.classList.remove('bg-rosado', 'opacity-50');
@@ -536,7 +541,9 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Resetear formulario solo si se agregó exitosamente
       productForm.reset();
-      selectTalle.value = "M";
+      // Mantener el talle original del producto (no forzar "M")
+      const talleOriginal = producto.talle || "M";
+      selectTalle.value = talleOriginal;
       inputCantidad.value = 1;
       btnAgregar.disabled = false;
       btnAgregar.classList.remove('bg-rosado', 'opacity-50');
