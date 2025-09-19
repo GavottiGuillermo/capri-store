@@ -444,9 +444,27 @@ document.addEventListener('DOMContentLoaded', function() {
           
           if (stockFinalData.ok) {
             const stockFinalActual = stockFinalData.stock || 0;
-            const stockFinalDisponible = stockFinalActual - cantidadEnCarrito;
             
-            console.log('📊 VALIDACIÓN FINAL - Stock actual:', stockFinalActual, 'En carrito:', cantidadEnCarrito, 'Disponible:', stockFinalDisponible, 'Solicitando:', quantity);
+            // RECALCULAR cantidad en carrito para la validación final
+            let cantidadFinalEnCarrito = 0;
+            try {
+              const cartItemsFinal = JSON.parse(localStorage.getItem('cartItems')) || [];
+              const productoFinalEnCarrito = cartItemsFinal.find(item => {
+                return item.nombre && item.nombre.includes(producto.nombre) && item.nombre.includes(`(Talle: ${size})`);
+              });
+              
+              if (productoFinalEnCarrito) {
+                cantidadFinalEnCarrito = productoFinalEnCarrito.cantidad || 0;
+                console.log('🛒 VALIDACIÓN FINAL - Cantidad recalculada en carrito:', cantidadFinalEnCarrito);
+              }
+            } catch (error) {
+              console.warn('Error verificando carrito en validación final:', error);
+              cantidadFinalEnCarrito = 0;
+            }
+            
+            const stockFinalDisponible = stockFinalActual - cantidadFinalEnCarrito;
+            
+            console.log('📊 VALIDACIÓN FINAL - Stock actual:', stockFinalActual, 'En carrito:', cantidadFinalEnCarrito, 'Disponible:', stockFinalDisponible, 'Solicitando:', quantity);
             
             if (stockFinalActual === 0) {
               console.log('❌ VALIDACIÓN FINAL FALLÓ: Sin stock');
