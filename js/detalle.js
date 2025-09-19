@@ -57,19 +57,31 @@ document.addEventListener('DOMContentLoaded', async function() {
               const stockData = await stockResp.json();
               if (stockData.ok) {
                 stockDisponible = stockData.stock || 0;
+                console.log('📊 Stock obtenido del servidor:', stockDisponible);
                 
                 // Mostrar stock disponible
                 mostrarStockDisponible(stockDisponible);
                 
-                // Configurar cantidad máxima
+                // Configurar cantidad y botón según stock
                 if (inputCantidad) {
                   inputCantidad.max = stockDisponible;
                   console.log('🔢 Stock establecido:', stockDisponible, 'max:', inputCantidad.max);
+                  
                   if (stockDisponible > 0) {
+                    // HAY STOCK - Habilitar funcionalidad
                     inputCantidad.disabled = false;
                     inputCantidad.style.backgroundColor = '';
                     inputCantidad.style.cursor = '';
                     inputCantidad.value = 1;
+                    
+                    // Habilitar botón
+                    const btn = document.getElementById('btnAgregarCarrito');
+                    if (btn) {
+                      btn.disabled = false;
+                      btn.textContent = 'Agregar al carrito';
+                      btn.classList.remove('btn-secondary');
+                      btn.classList.add('btn-vino-tinto');
+                    }
                     
                     // Agregar validación estricta en el input
                     inputCantidad.addEventListener('input', function() {
@@ -92,6 +104,22 @@ document.addEventListener('DOMContentLoaded', async function() {
                         this.value = 1;
                       }
                     });
+                  } else {
+                    // NO HAY STOCK - Bloquear todo
+                    console.log('❌ SIN STOCK - Bloqueando interfaz');
+                    inputCantidad.disabled = true;
+                    inputCantidad.style.backgroundColor = '#f8f9fa';
+                    inputCantidad.style.cursor = 'not-allowed';
+                    inputCantidad.value = 0;
+                    
+                    // Deshabilitar botón
+                    const btn = document.getElementById('btnAgregarCarrito');
+                    if (btn) {
+                      btn.disabled = true;
+                      btn.textContent = 'Sin stock';
+                      btn.classList.remove('btn-vino-tinto');
+                      btn.classList.add('btn-secondary');
+                    }
                   }
                   
                   // Revalidar formulario después de actualizar el stock
@@ -258,14 +286,25 @@ document.addEventListener('DOMContentLoaded', function() {
         cantidadInput = maxStock; // Actualizar la variable local
       }
       
-      // Validación más estricta
+      // Validación más estricta - Si stock es 0, siempre deshabilitar
       const stockValido = maxStock < 999 ? (maxStock > 0 && cantidadInput <= maxStock) : true;
+      
+      // Verificación especial para stock cero
+      if (maxStock === 0) {
+        btnAgregar.disabled = true;
+        btnAgregar.textContent = 'Sin stock';
+        btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
+        btnAgregar.classList.add('btn-secondary');
+        console.log('❌ Botón deshabilitado - SIN STOCK');
+        return;
+      }
       
       if (talleValido && cantidadValida && stockValido) {
         btnAgregar.disabled = false;
-        btnAgregar.classList.remove('bg-rosado', 'opacity-50');
+        btnAgregar.textContent = 'Agregar al carrito';
+        btnAgregar.classList.remove('bg-rosado', 'opacity-50', 'btn-secondary');
         btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
-        console.log('✅ Botón habilitado');
+        console.log('✅ Botón habilitado - Stock:', maxStock);
       } else {
         btnAgregar.disabled = true;
         btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
@@ -313,7 +352,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
-      // Validar stock actualizado antes de agregar
+      // Validación CRÍTICA de stock antes de agregar al carrito
+      console.log('🔍 VALIDACIÓN CRÍTICA - Verificando stock antes de agregar...');
       try {
         const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
           ? 'https://capri-store.onrender.com'
@@ -326,24 +366,40 @@ document.addEventListener('DOMContentLoaded', function() {
           
           if (stockData.ok) {
             const stockActual = stockData.stock || 0;
+            console.log('📊 Stock actual del servidor:', stockActual, 'Cantidad solicitada:', quantity);
             
             if (stockActual === 0) {
-              alert('El producto ya no se encuentra en stock.');
+              console.log('❌ CRÍTICO: Sin stock disponible - Recargando página');
+              alert('El producto ya no se encuentra en stock. La página se actualizará.');
               location.reload();
               return;
             }
             
             if (quantity > stockActual) {
-              alert(`Solo hay ${stockActual} unidades disponibles. Se ajustará la cantidad.`);
-              inputCantidad.value = stockActual;
-              inputCantidad.max = stockActual;
-              mostrarStockDisponible(stockActual);
+              console.log('❌ CRÍTICO: Cantidad excede stock - Recargando página');
+              alert(`Solo hay ${stockActual} unidades disponibles. La página se actualizará para reflejar el stock correcto.`);
+              location.reload();
               return;
             }
+            
+            console.log('✅ Validación de stock exitosa - Procediendo a agregar al carrito');
+          } else {
+            console.log('❌ Error en respuesta del servidor de stock');
+            alert('Error al verificar stock. Por favor, recarga la página.');
+            location.reload();
+            return;
           }
+        } else {
+          console.log('❌ Error al consultar stock del servidor');
+          alert('Error de conexión al verificar stock. Por favor, recarga la página.');
+          location.reload();
+          return;
         }
       } catch (error) {
-        console.warn('Error verificando stock actualizado:', error);
+        console.error('❌ Error crítico verificando stock:', error);
+        alert('Error al verificar stock. Por favor, recarga la página.');
+        location.reload();
+        return;
       }
       
       // Lógica para agregar al carrito (usa función global)
