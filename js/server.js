@@ -337,13 +337,29 @@ app.post('/crear-preferencia', async (req, res) => {
         console.error(`❌ /crear-preferencia: Item en posición ${idx} sin ID`);
         throw new Error(`El item en posición ${idx} no tiene id_articulo ni id`);
       }
+      
+      const precio = Number(item.precio || item.unit_price || 0);
+      const cantidad = Number(item.cantidad || item.quantity || 1);
+      
+      if (precio <= 0) {
+        throw new Error(`El item en posición ${idx} tiene precio inválido: ${precio}`);
+      }
+      
+      if (cantidad <= 0) {
+        throw new Error(`El item en posición ${idx} tiene cantidad inválida: ${cantidad}`);
+      }
+      
       const mapped = {
-        id: item.id_articulo ? String(item.id_articulo) : String(item.id),
-        title: item.nombre || item.title || 'Producto Capri',
-        quantity: item.cantidad || item.quantity || 1,
+        id: String(item.id_articulo || item.id),
+        title: (item.nombre || item.title || 'Producto Capri').substring(0, 256), // Limitar título
+        description: `Producto de Capri Store - ${item.nombre || 'Sin descripción'}`.substring(0, 600),
+        quantity: cantidad,
         currency_id: 'ARS',
-        unit_price: item.precio || item.unit_price || 0
+        unit_price: precio,
+        category_id: 'fashion'  // Categoría para ropa
       };
+      
+      console.log(`✅ Item ${idx} mapeado:`, mapped);
       return mapped;
     });
 
@@ -367,20 +383,38 @@ app.post('/crear-preferencia', async (req, res) => {
         surname: datosComprador.apellido || '',
         email: datosComprador.email,
         phone: {
-          area_code: '',
-          number: datosComprador.telefono || ''
+          area_code: '11',
+          number: (datosComprador.telefono || '').replace(/[^\d]/g, '').substring(-8)
+        },
+        identification: {
+          type: 'DNI',
+          number: '12345678'  // Placeholder - idealmente pedir DNI en el formulario
         }
+      },
+      payment_methods: {
+        excluded_payment_methods: [],
+        excluded_payment_types: [],
+        installments: 12  // Permitir hasta 12 cuotas
+      },
+      shipments: {
+        mode: 'not_specified'
       },
       external_reference: JSON.stringify(datosComprador),
       statement_descriptor: 'CAPRI STORE',
       auto_return: 'approved',
+      binary_mode: false,  // Permitir pagos pendientes
       back_urls: {
         success: 'https://capristorezte.com.ar/success.html',
         failure: 'https://capristorezte.com.ar/failure.html',
         pending: 'https://capristorezte.com.ar/pending.html'
       },
-      notification_url: 'https://capri-store.onrender.com/webhook'
+      notification_url: 'https://capri-store.onrender.com/webhook',
+      expires: false,
+      expiration_date_from: null,
+      expiration_date_to: null
     };
+
+    console.log('🚀 Creando preferencia con datos:', JSON.stringify(preferenceData, null, 2));
 
     const result = await preference.create({ body: preferenceData });
     
