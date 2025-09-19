@@ -358,13 +358,19 @@ document.addEventListener('DOMContentLoaded', function() {
       // NUEVO: Verificar cuántas unidades ya hay en el carrito
       let cantidadEnCarrito = 0;
       try {
-        const cartItems = JSON.parse(localStorage.getItem('cartItems')) || [];
-        const productoEnCarrito = cartItems.find(item => {
-          return item.nombre && item.nombre.includes(producto.nombre) && item.nombre.includes(`(Talle: ${size})`);
-        });
+        // Usar la misma lógica que agregarAlCarrito - buscar por nombre e img
+        const nombreCompleto = `${producto.nombre} (Talle: ${size})`;
+        const cartRaw = localStorage.getItem("carrito");
+        const cartItems = cartRaw ? JSON.parse(cartRaw) : [];
+        
+        // Buscar exactamente como lo hace agregarAlCarrito: por nombre e img
+        const productoEnCarrito = cartItems.find(item => 
+          item.nombre === nombreCompleto && item.img === producto.img
+        );
         
         if (productoEnCarrito) {
           cantidadEnCarrito = productoEnCarrito.cantidad || 0;
+          console.log('🛒 Cantidad ya en carrito (CORREGIDA):', cantidadEnCarrito);
         }
       } catch (error) {
         console.warn('Error verificando carrito:', error);
@@ -446,16 +452,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // VALIDACIÓN FINAL CON CARRITO EN TIEMPO REAL
             let cantidadFinalEnCarrito = 0;
             try {
-              const cartRaw = localStorage.getItem("carrito");
-              const cartItemsFinal = cartRaw ? JSON.parse(cartRaw) : [];
-              const cartItemsAlt = JSON.parse(localStorage.getItem('cartItems') || '[]');
-              const cartToUse = (cartItemsFinal.length > 0) ? cartItemsFinal : cartItemsAlt;
-              
               const nombreCompleto = `${producto.nombre} (Talle: ${size})`;
-              const productoFinalEnCarrito = cartToUse.find(item => item.nombre === nombreCompleto);
+              const cartRaw = localStorage.getItem("carrito");
+              const cartItems = cartRaw ? JSON.parse(cartRaw) : [];
+              
+              // Buscar exactamente como lo hace agregarAlCarrito: por nombre e img
+              const productoFinalEnCarrito = cartItems.find(item => 
+                item.nombre === nombreCompleto && item.img === producto.img
+              );
               
               if (productoFinalEnCarrito) {
                 cantidadFinalEnCarrito = productoFinalEnCarrito.cantidad || 0;
+                console.log('🛒 VALIDACIÓN FINAL - Cantidad en carrito (CORREGIDA):', cantidadFinalEnCarrito);
               }
             } catch (error) {
               console.warn('Error verificando carrito en validación final:', error);
