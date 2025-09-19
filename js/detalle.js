@@ -359,14 +359,23 @@ document.addEventListener('DOMContentLoaded', function() {
       let cantidadEnCarrito = 0;
       try {
         const cartItems = JSON.parse(localStorage.getItem('cartItems')) || [];
+        console.log('🔍 DEBUG INICIAL - Items en carrito:', cartItems);
+        console.log('🔍 DEBUG INICIAL - Buscando producto:', producto.nombre);
+        console.log('🔍 DEBUG INICIAL - Buscando talle:', size);
+        
         const productoEnCarrito = cartItems.find(item => {
-          // Buscar el mismo producto con el mismo talle
-          return item.nombre && item.nombre.includes(producto.nombre) && item.nombre.includes(`(Talle: ${size})`);
+          console.log('🔍 DEBUG INICIAL - Evaluando item:', item.nombre);
+          const includeNombre = item.nombre && item.nombre.includes(producto.nombre);
+          const includeTalle = item.nombre && item.nombre.includes(`(Talle: ${size})`);
+          console.log('🔍 DEBUG INICIAL - Coincide nombre:', includeNombre, 'Coincide talle:', includeTalle);
+          return includeNombre && includeTalle;
         });
         
         if (productoEnCarrito) {
           cantidadEnCarrito = productoEnCarrito.cantidad || 0;
           console.log('🛒 Cantidad ya en carrito:', cantidadEnCarrito);
+        } else {
+          console.log('🔍 DEBUG INICIAL - NO se encontró el producto en carrito');
         }
       } catch (error) {
         console.warn('Error verificando carrito:', error);
@@ -449,13 +458,24 @@ document.addEventListener('DOMContentLoaded', function() {
             let cantidadFinalEnCarrito = 0;
             try {
               const cartItemsFinal = JSON.parse(localStorage.getItem('cartItems')) || [];
+              console.log('🔍 DEBUG - Items en carrito:', cartItemsFinal);
+              console.log('🔍 DEBUG - Buscando producto:', producto.nombre);
+              console.log('🔍 DEBUG - Buscando talle:', size);
+              console.log('🔍 DEBUG - Patrón de búsqueda:', `${producto.nombre} (Talle: ${size})`);
+              
               const productoFinalEnCarrito = cartItemsFinal.find(item => {
-                return item.nombre && item.nombre.includes(producto.nombre) && item.nombre.includes(`(Talle: ${size})`);
+                console.log('🔍 DEBUG - Evaluando item:', item.nombre);
+                const includeNombre = item.nombre && item.nombre.includes(producto.nombre);
+                const includeTalle = item.nombre && item.nombre.includes(`(Talle: ${size})`);
+                console.log('🔍 DEBUG - Coincide nombre:', includeNombre, 'Coincide talle:', includeTalle);
+                return includeNombre && includeTalle;
               });
               
               if (productoFinalEnCarrito) {
                 cantidadFinalEnCarrito = productoFinalEnCarrito.cantidad || 0;
                 console.log('🛒 VALIDACIÓN FINAL - Cantidad recalculada en carrito:', cantidadFinalEnCarrito);
+              } else {
+                console.log('🔍 DEBUG - NO se encontró el producto en carrito');
               }
             } catch (error) {
               console.warn('Error verificando carrito en validación final:', error);
