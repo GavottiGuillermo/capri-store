@@ -433,6 +433,10 @@ document.addEventListener('DOMContentLoaded', function() {
       // VALIDACIÓN FINAL: Verificar una última vez el stock justo antes de agregar
       console.log('🔍 VALIDACIÓN FINAL - Última verificación de stock...');
       try {
+        const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
+          ? 'https://capri-store.onrender.com'
+          : '';
+          
         const stockFinalResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
         
         if (stockFinalResp.ok) {
