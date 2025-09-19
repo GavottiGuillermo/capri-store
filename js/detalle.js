@@ -70,6 +70,28 @@ document.addEventListener('DOMContentLoaded', async function() {
                     inputCantidad.style.backgroundColor = '';
                     inputCantidad.style.cursor = '';
                     inputCantidad.value = 1;
+                    
+                    // Agregar validación estricta en el input
+                    inputCantidad.addEventListener('input', function() {
+                      const valor = parseInt(this.value) || 0;
+                      const maxPermitido = parseInt(this.max) || 0;
+                      if (valor > maxPermitido && maxPermitido > 0) {
+                        this.value = maxPermitido;
+                        console.log('⚠️ Cantidad ajustada al máximo permitido:', maxPermitido);
+                      }
+                    });
+                    
+                    inputCantidad.addEventListener('change', function() {
+                      const valor = parseInt(this.value) || 0;
+                      const maxPermitido = parseInt(this.max) || 0;
+                      if (valor > maxPermitido && maxPermitido > 0) {
+                        this.value = maxPermitido;
+                        console.log('⚠️ Cantidad ajustada al máximo permitido:', maxPermitido);
+                      }
+                      if (valor < 1) {
+                        this.value = 1;
+                      }
+                    });
                   }
                   
                   // Revalidar formulario después de actualizar el stock
@@ -229,14 +251,15 @@ document.addEventListener('DOMContentLoaded', function() {
         inputMax: inputCantidad.max
       });
       
-      // Mostrar mensaje si excede el stock
-      if (cantidadInput > maxStock && maxStock < 999) {
+      // Mostrar mensaje si excede el stock y forzar corrección
+      if (cantidadInput > maxStock && maxStock < 999 && maxStock > 0) {
+        console.log('⚠️ Cantidad excede stock. Cantidad:', cantidadInput, 'Stock:', maxStock);
         inputCantidad.value = maxStock;
+        cantidadInput = maxStock; // Actualizar la variable local
       }
       
-      // Si hay stock establecido (maxStock < 999), verificar que sea mayor que 0
-      // Si no hay stock establecido aún, permitir si talle y cantidad son válidos
-      const stockValido = maxStock < 999 ? maxStock > 0 : true;
+      // Validación más estricta
+      const stockValido = maxStock < 999 ? (maxStock > 0 && cantidadInput <= maxStock) : true;
       
       if (talleValido && cantidadValida && stockValido) {
         btnAgregar.disabled = false;
@@ -247,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnAgregar.disabled = true;
         btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
         btnAgregar.classList.add('bg-rosado', 'opacity-50');
-        console.log('❌ Botón deshabilitado - stockValido:', stockValido);
+        console.log('❌ Botón deshabilitado - stockValido:', stockValido, 'maxStock:', maxStock, 'cantidad:', cantidadInput);
       }
     }
     
@@ -264,13 +287,20 @@ document.addEventListener('DOMContentLoaded', function() {
       const quantity = parseInt(inputCantidad.value);
       const maxStock = parseInt(inputCantidad.max) || 0;
       
-      if (!producto || !size || !quantity || quantity < 1) return;
-      
-      if (quantity > maxStock) {
-        alert(`Solo hay ${maxStock} unidades disponibles`);
-        inputCantidad.value = maxStock;
+      if (!producto || !size || !quantity || quantity < 1) {
+        console.log('❌ Datos incompletos del formulario');
         return;
       }
+      
+      // Validación estricta de stock antes de proceder
+      if (maxStock > 0 && quantity > maxStock) {
+        alert(`Solo hay ${maxStock} unidades disponibles. Ajustando cantidad.`);
+        inputCantidad.value = maxStock;
+        console.log('❌ Cantidad excede stock máximo');
+        return;
+      }
+      
+      console.log('🔍 Validando envío - Cantidad:', quantity, 'Stock máximo:', maxStock);
       
       let id = producto.id_articulo;
       if (!id && producto.img) {
