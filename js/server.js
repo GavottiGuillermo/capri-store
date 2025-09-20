@@ -127,6 +127,240 @@ const client = process.env.MERCADOPAGO_ACCESS_TOKEN ?
   null;
 
 // ===============================
+// FUNCIONES DE EMAIL TEMPLATES
+// ===============================
+
+// Template de email para cliente
+function createCustomerEmailTemplate(customerData, orderData, paymentInfo) {
+  const { nombre, apellido, email, telefono } = customerData;
+  const { numeroDisplay, idPedidoCompleto } = orderData;
+  const { transaction_amount, id: paymentId } = paymentInfo;
+  
+  // Obtener productos del payment info
+  const items = paymentInfo.additional_info?.items || [];
+  let productosHtml = '';
+  
+  if (items.length > 0) {
+    productosHtml = items.map(item => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e29ca3;">${item.title || 'Producto'}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e29ca3; text-align: center;">${item.quantity || 1}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e29ca3; text-align: right;">$${(item.unit_price || 0).toLocaleString('es-AR')}</td>
+      </tr>
+    `).join('');
+  } else {
+    productosHtml = `
+      <tr>
+        <td colspan="3" style="padding: 10px; text-align: center; color: #666;">Detalles de productos no disponibles</td>
+      </tr>
+    `;
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Confirmación de Pedido - Capri Store</title>
+    </head>
+    <body style="margin: 0; padding: 20px; font-family: 'Montserrat', Arial, sans-serif; background-color: #f8f9fa;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        
+        <!-- Header con logo -->
+        <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1a1a 100%); padding: 30px 20px; text-align: center;">
+          <div style="display: inline-flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+            <div style="width: 50px; height: 50px; background-color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 15px;">
+              <span style="color: #6b0a0a; font-weight: bold; font-size: 20px;">C</span>
+            </div>
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">Capri Store</h1>
+          </div>
+          <p style="color: #e29ca3; margin: 0; font-size: 16px;">Moda femenina con estilo único</p>
+        </div>
+
+        <!-- Contenido principal -->
+        <div style="padding: 30px 20px;">
+          <h2 style="color: #6b0a0a; margin-bottom: 20px; text-align: center;">¡Gracias por tu compra!</h2>
+          
+          <div style="background-color: #f8f9fa; border-left: 4px solid #e29ca3; padding: 20px; margin-bottom: 25px; border-radius: 5px;">
+            <h3 style="color: #6b0a0a; margin: 0 0 10px 0;">Tu pedido ha sido confirmado</h3>
+            <p style="margin: 0; color: #666; line-height: 1.5;">
+              Hola <strong>${nombre}</strong>, hemos recibido tu pedido y está siendo procesado. 
+              Te enviaremos actualizaciones sobre el estado de tu compra.
+            </p>
+          </div>
+
+          <!-- Detalles del pedido -->
+          <div style="margin-bottom: 25px;">
+            <h3 style="color: #6b0a0a; border-bottom: 2px solid #e29ca3; padding-bottom: 10px; margin-bottom: 15px;">Detalles del Pedido</h3>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+              <span style="color: #666;">Número de Pedido:</span>
+              <strong style="color: #6b0a0a; font-size: 18px;">#${numeroDisplay}</strong>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+              <span style="color: #666;">ID de Pago MercadoPago:</span>
+              <strong style="color: #6b0a0a;">${paymentId}</strong>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+              <span style="color: #666;">Total:</span>
+              <strong style="color: #6b0a0a; font-size: 20px;">$${transaction_amount.toLocaleString('es-AR')} ARS</strong>
+            </div>
+          </div>
+
+          <!-- Productos -->
+          <div style="margin-bottom: 25px;">
+            <h3 style="color: #6b0a0a; border-bottom: 2px solid #e29ca3; padding-bottom: 10px; margin-bottom: 15px;">Productos</h3>
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #e29ca3; border-radius: 5px;">
+              <thead>
+                <tr style="background-color: #6b0a0a; color: white;">
+                  <th style="padding: 12px; text-align: left;">Producto</th>
+                  <th style="padding: 12px; text-align: center;">Cant.</th>
+                  <th style="padding: 12px; text-align: right;">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${productosHtml}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Información importante -->
+          <div style="background-color: #fff8f6; border: 1px solid #e29ca3; border-radius: 5px; padding: 20px; margin-bottom: 25px;">
+            <h4 style="color: #6b0a0a; margin: 0 0 10px 0;">📍 Información de Entrega</h4>
+            <p style="margin: 0; color: #666; line-height: 1.5;">
+              Tu pedido será preparado para <strong>retiro en local</strong>. Te contactaremos pronto para coordinar el retiro.
+            </p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #6b0a0a; color: white; padding: 20px; text-align: center;">
+          <p style="margin: 0 0 10px 0;">¿Tienes alguna pregunta?</p>
+          <p style="margin: 0; color: #e29ca3;">
+            📞 +54 9 11 1234 5678 | 📧 contacto@capristore.com.ar
+          </p>
+          <p style="margin: 15px 0 0 0; font-size: 12px; color: #cccccc;">
+            © 2024 Capri Store. Todos los derechos reservados.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// Template de email para administradores
+function createAdminEmailTemplate(customerData, orderData, paymentInfo) {
+  const { nombre, apellido, email, telefono } = customerData;
+  const { numeroDisplay, idPedidoCompleto } = orderData;
+  const { transaction_amount, id: paymentId, status, payment_method_id } = paymentInfo;
+  
+  // Obtener productos del payment info
+  const items = paymentInfo.additional_info?.items || [];
+  let productosHtml = '';
+  
+  if (items.length > 0) {
+    productosHtml = items.map(item => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.id || 'N/A'}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.title || 'Producto'}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity || 1}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${(item.unit_price || 0).toLocaleString('es-AR')}</td>
+      </tr>
+    `).join('');
+  } else {
+    productosHtml = `
+      <tr>
+        <td colspan="4" style="padding: 10px; text-align: center; color: #666;">No hay detalles de productos disponibles</td>
+      </tr>
+    `;
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Nueva Venta - Capri Store Admin</title>
+    </head>
+    <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+      <div style="max-width: 700px; margin: 0 auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        
+        <!-- Header -->
+        <div style="background-color: #6b0a0a; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px;">🛍️ Nueva Venta Recibida</h1>
+          <p style="margin: 5px 0 0 0; color: #e29ca3;">Capri Store - Panel Administrativo</p>
+        </div>
+
+        <!-- Información del cliente -->
+        <div style="padding: 20px; border-bottom: 1px solid #eee;">
+          <h2 style="color: #6b0a0a; margin: 0 0 15px 0; font-size: 18px;">👤 Datos del Cliente</h2>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><strong>Nombre:</strong> ${nombre} ${apellido}</div>
+            <div><strong>Email:</strong> ${email}</div>
+            <div><strong>Teléfono:</strong> ${telefono}</div>
+            <div><strong>Tipo Entrega:</strong> Retiro en Local</div>
+          </div>
+        </div>
+
+        <!-- Información del pedido -->
+        <div style="padding: 20px; border-bottom: 1px solid #eee;">
+          <h2 style="color: #6b0a0a; margin: 0 0 15px 0; font-size: 18px;">📋 Información del Pedido</h2>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><strong>Pedido Nº:</strong> #${numeroDisplay} (${idPedidoCompleto})</div>
+            <div><strong>Estado Pago:</strong> <span style="color: green;">${status.toUpperCase()}</span></div>
+            <div><strong>ID Pago MP:</strong> ${paymentId}</div>
+            <div><strong>Método Pago:</strong> ${payment_method_id || 'N/A'}</div>
+            <div><strong>Total:</strong> <span style="color: #6b0a0a; font-size: 18px; font-weight: bold;">$${transaction_amount.toLocaleString('es-AR')} ARS</span></div>
+          </div>
+        </div>
+
+        <!-- Productos -->
+        <div style="padding: 20px;">
+          <h2 style="color: #6b0a0a; margin: 0 0 15px 0; font-size: 18px;">🛒 Productos Vendidos</h2>
+          <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+            <thead>
+              <tr style="background-color: #f8f9fa;">
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">ID</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Producto</th>
+                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Cant.</th>
+                <th style="padding: 10px; text-align: right; border-bottom: 2px solid #ddd;">Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${productosHtml}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Acciones recomendadas -->
+        <div style="background-color: #f8f9fa; padding: 20px; margin: 20px; border-radius: 5px; border-left: 4px solid #e29ca3;">
+          <h3 style="color: #6b0a0a; margin: 0 0 10px 0;">📝 Próximos Pasos</h3>
+          <ul style="margin: 0; padding-left: 20px; color: #666;">
+            <li>Preparar los productos para retiro</li>
+            <li>Contactar al cliente para coordinar horario de retiro</li>
+            <li>Verificar stock disponible</li>
+            <li>Actualizar estado del pedido en el sistema</li>
+          </ul>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #6b0a0a; color: white; padding: 15px; text-align: center;">
+          <p style="margin: 0; font-size: 12px;">
+            Este email fue generado automáticamente por el sistema de Capri Store
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// ===============================
 // FUNCIONES AUXILIARES
 // ===============================
 async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
@@ -556,7 +790,7 @@ app.post('/webhook', async (req, res) => {
         if (faltantes.length > 0) {
           // Hay productos no disponibles, NO crear pedido, enviar correo de aviso
           try {
-            if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
+            if ((customerData.email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
               const transporter = nodemailer.createTransport({
                 host: process.env.SMTP_HOST || 'smtp.gmail.com',
                 port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
@@ -566,7 +800,7 @@ app.post('/webhook', async (req, res) => {
                   pass: process.env.SMTP_PASS
                 }
               });
-              const toEmails = [customerData.customer_email || paymentInfo.payer?.email];
+              const toEmails = [customerData.email || paymentInfo.payer?.email];
               if (process.env.ADMIN_EMAILS) {
                 toEmails.push(...process.env.ADMIN_EMAILS.split(','));
               }
@@ -626,8 +860,9 @@ app.post('/webhook', async (req, res) => {
             }
           } catch (err) {}
           if (pedidoCreado && !pedidoExistenteAntes) {
+            // Enviar emails de confirmación
             try {
-              if ((customerData.customer_email || paymentInfo.payer?.email) && process.env.SMTP_USER && process.env.SMTP_PASS) {
+              if (process.env.SMTP_USER && process.env.SMTP_PASS) {
                 const transporter = nodemailer.createTransport({
                   host: process.env.SMTP_HOST || 'smtp.gmail.com',
                   port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
@@ -637,19 +872,70 @@ app.post('/webhook', async (req, res) => {
                     pass: process.env.SMTP_PASS
                   }
                 });
-                const toEmails = [customerData.customer_email || paymentInfo.payer?.email];
-                if (process.env.ADMIN_EMAILS) {
-                  toEmails.push(...process.env.ADMIN_EMAILS.split(','));
-                }
-                const mailOptions = {
-                  from: process.env.SMTP_USER,
-                  to: toEmails.join(','),
-                  subject: `Confirmación de pedido Capri Store #${numeroDisplay || ''}`,
-                  text: `¡Gracias por tu compra!\n\nTu número de pedido es: ${idPedidoCompleto || 'N/A'}\nMonto: $${paymentInfo.transaction_amount}\n\nSi tienes dudas, responde este email.\n\n-- Capri Store` 
+
+                const orderData = {
+                  numeroDisplay,
+                  idPedidoCompleto
                 };
-                await transporter.sendMail(mailOptions);
+
+                // EMAIL AL CLIENTE
+                if (customerData.email || paymentInfo.payer?.email) {
+                  const customerEmail = customerData.email || paymentInfo.payer?.email;
+                  const customerHtml = createCustomerEmailTemplate(
+                    {
+                      nombre: customerData.nombre || paymentInfo.payer?.first_name || 'Cliente',
+                      apellido: customerData.apellido || paymentInfo.payer?.last_name || '',
+                      email: customerEmail,
+                      telefono: customerData.telefono || ''
+                    },
+                    orderData,
+                    paymentInfo
+                  );
+
+                  const customerMailOptions = {
+                    from: `"Capri Store" <${process.env.SMTP_USER}>`,
+                    to: customerEmail,
+                    subject: `✅ Confirmación de Pedido #${numeroDisplay} - Capri Store`,
+                    html: customerHtml,
+                    text: `¡Gracias por tu compra!\n\nTu número de pedido es: #${numeroDisplay}\nID Pago MercadoPago: ${paymentInfo.id}\nMonto: $${paymentInfo.transaction_amount} ARS\n\nTe contactaremos pronto para coordinar el retiro.\n\n-- Capri Store`
+                  };
+
+                  await transporter.sendMail(customerMailOptions);
+                  console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${customerEmail}`);
+                }
+
+                // EMAIL A ADMINISTRADORES
+                if (process.env.ADMIN_EMAILS) {
+                  const adminEmails = process.env.ADMIN_EMAILS.split(',').map(email => email.trim());
+                  const adminHtml = createAdminEmailTemplate(
+                    {
+                      nombre: customerData.nombre || paymentInfo.payer?.first_name || 'Cliente',
+                      apellido: customerData.apellido || paymentInfo.payer?.last_name || '',
+                      email: customerData.email || paymentInfo.payer?.email || 'No disponible',
+                      telefono: customerData.telefono || 'No disponible'
+                    },
+                    orderData,
+                    paymentInfo
+                  );
+
+                  const adminMailOptions = {
+                    from: `"Capri Store Sistema" <${process.env.SMTP_USER}>`,
+                    to: adminEmails.join(','),
+                    subject: `🛍️ Nueva Venta #${numeroDisplay} - $${paymentInfo.transaction_amount} ARS`,
+                    html: adminHtml,
+                    text: `Nueva venta recibida!\n\nPedido: #${numeroDisplay}\nCliente: ${customerData.nombre || ''} ${customerData.apellido || ''}\nEmail: ${customerData.email || paymentInfo.payer?.email}\nTeléfono: ${customerData.telefono}\nTotal: $${paymentInfo.transaction_amount} ARS\n\nID Pago MP: ${paymentInfo.id}`
+                  };
+
+                  await transporter.sendMail(adminMailOptions);
+                  console.log(`[${timestamp}] ✅ Email de notificación enviado a administradores: ${adminEmails.join(', ')}`);
+                }
+
+                // Marcar como enviado para evitar duplicados
+                emailSentForPayment.add(paymentId);
               }
-            } catch (mailError) {}
+            } catch (mailError) {
+              console.error(`[${timestamp}] ❌ Error enviando emails:`, mailError.message);
+            }
           }
           console.log(`[${timestamp}] Pago ${paymentId} procesado correctamente`);
         }
