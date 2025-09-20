@@ -459,20 +459,20 @@ app.post('/webhook', async (req, res) => {
   let paymentId = null;
   let shouldProcess = false;
   
-  console.log(`[${timestamp}] 🔔 WEBHOOK RECIBIDO:`);
-  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
-  console.log(`[${timestamp}] Body:`, JSON.stringify(req.body, null, 2));
+  console.log(`[${timestamp}] 🔔 WEBHOOK RECIBIDO`);
   
   try {
     const { type, data, action, topic, resource } = req.body;
+    console.log(`[${timestamp}] Webhook - Type: ${type}, Action: ${action}, Topic: ${topic}`);
+    
     if (type === 'payment' && data?.id) {
       paymentId = data.id;
       shouldProcess = true;
-      console.log(`[${timestamp}] ✅ Webhook tipo 'payment' con ID: ${paymentId}`);
+      console.log(`[${timestamp}] ✅ Payment webhook ID: ${paymentId}`);
     } else if (action === 'payment.created' && data?.id) {
       paymentId = data.id;
       shouldProcess = true;
-      console.log(`[${timestamp}] ✅ Webhook action 'payment.created' con ID: ${paymentId}`);
+      console.log(`[${timestamp}] ✅ Payment created webhook ID: ${paymentId}`);
     } else if (topic === 'payment' && resource) {
       paymentId = resource;
       shouldProcess = true;

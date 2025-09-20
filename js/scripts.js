@@ -81,6 +81,10 @@ function configurarEventListeners() {
 
 // Guardar el carrito en localStorage
 function guardarCarrito() {
+  // Validar que cartItems existe y es un array
+  if (!cartItems || !Array.isArray(cartItems)) {
+    cartItems = [];
+  }
   localStorage.setItem("carrito", JSON.stringify(cartItems));
   console.log('🛒 Carrito guardado:', cartItems.length, 'items');
 }
@@ -181,7 +185,8 @@ function quitarDelCarrito(idx) {
 
 // Vaciar el carrito
 function vaciarCarrito() {
-  window.cartItems = [];
+  cartItems = [];
+  window.cartItems = cartItems; // Sincronizar con window
   guardarCarrito();
   actualizarCartSidenav();
 }
