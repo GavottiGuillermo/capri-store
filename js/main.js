@@ -221,19 +221,11 @@ async function renderizarNovedades() {
 
 // Renderizar productos con paginación
 async function renderizarProductos() {
-  console.log('=== INICIANDO RENDERIZADO DE PRODUCTOS ===');
   const productosList = document.getElementById('productos-list');
-  console.log('Elemento productos-list encontrado:', !!productosList);
-  console.log('Total productos disponibles:', todosLosProductos.length);
-  console.log('Total productos filtrados:', productosFiltrados.length);
   
   const inicio = (paginaActualProductos - 1) * ITEMS_POR_PAGINA_PRODUCTOS;
   const fin = inicio + ITEMS_POR_PAGINA_PRODUCTOS;
   const productosPagina = productosFiltrados.slice(inicio, fin);
-  
-  console.log('Productos para esta página:', productosPagina.length);
-  console.log('Página actual:', paginaActualProductos);
-  console.log('Inicio:', inicio, 'Fin:', fin);
 
   if (!productosList) {
     console.error('❌ ERROR: No se encontró el elemento productos-list');
@@ -241,7 +233,6 @@ async function renderizarProductos() {
   }
 
   if (productosPagina.length === 0) {
-    console.log('⚠️ No hay productos para mostrar en esta página');
     if (paginaActualProductos === 1) {
       productosList.innerHTML = '<div class="col-12 text-center"><p>No hay productos disponibles</p></div>';
     }
@@ -251,20 +242,15 @@ async function renderizarProductos() {
   // Solo limpiar si es la primera página
   if (paginaActualProductos === 1) {
     productosList.innerHTML = '';
-    console.log('🧹 Limpiando contenedor de productos');
   }
 
   let productosRenderizados = 0;
   for (const prod of productosPagina) {
     try {
-      console.log(`🔄 Renderizando producto ${productosRenderizados + 1}:`, prod.imagen);
       const cardHtml = await crearTarjetaProducto(prod, 'producto');
       if (cardHtml) {
         productosList.insertAdjacentHTML('beforeend', cardHtml);
         productosRenderizados++;
-        console.log(`✅ Producto renderizado exitosamente`);
-      } else {
-        console.log(`❌ Error: crearTarjetaProducto devolvió vacío`);
       }
     } catch (error) {
       console.error(`❌ Error renderizando producto:`, error);
@@ -299,8 +285,6 @@ async function renderizarProductos() {
                 card.appendChild(badge);
               }
             }
-          } else {
-            console.log(`[PRODUCTOS] Producto id=${id} CON STOCK`);
           }
         } else {
           console.warn('[PRODUCTOS] window.__CAPRI_SOLD_OUT__ no está definido');

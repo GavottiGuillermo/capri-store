@@ -17,6 +17,10 @@ console.log('💳 Payment ID detectado en URL:', paymentId);
 
 // --- LIMPIEZA DE CARRITO INMEDIATA AL ENTRAR A SUCCESS ---
 if (paymentId) {
+    // Marcar que hubo una compra exitosa
+    localStorage.setItem('compraExitosa', 'true');
+    localStorage.setItem('compraExitosaTimestamp', Date.now().toString());
+    
     if (typeof limpiarCarritoDespuesDeCompra === 'function') {
         limpiarCarritoDespuesDeCompra();
         console.log('✅ Carrito limpiado usando limpiarCarritoDespuesDeCompra() (inicio success)');

@@ -20,6 +20,26 @@ try {
 // Inicializar carrito al cargar la página
 function inicializarCarrito() {
   console.log('🚀 Inicializando carrito...');
+  
+  // Verificar si hay una compra exitosa reciente (últimos 30 segundos)
+  const compraExitosa = localStorage.getItem('compraExitosa');
+  const compraTimestamp = localStorage.getItem('compraExitosaTimestamp');
+  
+  if (compraExitosa === 'true' && compraTimestamp) {
+    const tiempoTranscurrido = Date.now() - parseInt(compraTimestamp);
+    const TIEMPO_LIMITE = 30000; // 30 segundos
+    
+    if (tiempoTranscurrido < TIEMPO_LIMITE) {
+      console.log('🛒 Compra exitosa detectada, manteniendo carrito vacío');
+      window.cartItems = [];
+      guardarCarrito();
+    } else {
+      // Limpiar marca de compra exitosa si ya pasó mucho tiempo
+      localStorage.removeItem('compraExitosa');
+      localStorage.removeItem('compraExitosaTimestamp');
+    }
+  }
+  
   actualizarCartSidenav();
   configurarEventListeners();
   console.log('✅ Carrito inicializado');
@@ -181,8 +201,6 @@ function closeCartSidenav() {
 
 // Actualizar el contenido del sidebar del carrito
 function actualizarCartSidenav() {
-  console.log('🔄 Actualizando carrito sidebar...');
-  
   // Recargar carrito desde localStorage para asegurar consistencia
   try {
     const cartRaw = localStorage.getItem("carrito");
@@ -207,8 +225,6 @@ function actualizarCartSidenav() {
 
   // Filtrar productos inválidos
   cartItems = cartItems.filter(item => item && item.nombre && !isNaN(Number(item.precio)) && item.img && !isNaN(Number(item.cantidad)) && Number(item.cantidad) > 0);
-  
-  console.log('📊 Items en carrito:', cartItems.length);
   
   if (cartItems.length === 0) {
     lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
@@ -402,7 +418,6 @@ window.addEventListener('load', function() {
 
 // Actualizar carrito cuando la página recupera el foco (usuario vuelve de otra pestaña)
 window.addEventListener('focus', function() {
-  console.log('👁️ Página recuperó el foco, actualizando carrito...');
   actualizarCartSidenav();
 });
 
