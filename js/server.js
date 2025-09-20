@@ -304,13 +304,8 @@ app.post('/crear-preferencia', async (req, res) => {
   
   try {
     const { items, datosComprador } = req.body;
-    console.log('📋 Datos recibidos en /crear-preferencia:');
-    console.log('📋 Items:', JSON.stringify(items, null, 2));
-    console.log('📋 Datos comprador:', JSON.stringify(datosComprador, null, 2));
-    console.log('🌐 URLs calculadas:');
-    console.log('  - Protocol:', req.protocol);
-    console.log('  - Host:', req.get('host'));
-    console.log('  - Success URL:', 'https://capristorezte.com.ar/success.html');
+    console.log('📋 Crear preferencia - Items:', items.length, 'productos');
+    console.log('📋 Cliente:', datosComprador.nombre, datosComprador.apellido, '- Total:', items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0), 'ARS');
 
     // Validar datos requeridos
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -359,7 +354,6 @@ app.post('/crear-preferencia', async (req, res) => {
         category_id: 'fashion'  // Categoría para ropa
       };
       
-      console.log(`✅ Item ${idx} mapeado:`, mapped);
       return mapped;
     });
 
@@ -421,7 +415,7 @@ app.post('/crear-preferencia', async (req, res) => {
       // expiration_date_to: null
     };
 
-    console.log('🚀 Creando preferencia con datos:', JSON.stringify(preferenceData, null, 2));
+    console.log('🚀 Creando preferencia MP - ID items:', itemsMP.map(item => item.id).join(', '));
 
     const result = await preference.create({ body: preferenceData });
     
@@ -594,19 +588,29 @@ app.post('/webhook', async (req, res) => {
           let numeroDisplay = null;
           let pedidoCreado = false;
           try {
+            const spParams = [
+              productIds,
+              paymentInfo.transaction_amount,
+              `${customerData.nombre || ''} ${customerData.apellido || ''}`.trim() || paymentInfo.payer?.first_name || 'Cliente Web',
+              customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
+              customerData.telefono || '',
+              'MercadoPago',
+              'Retiro',
+              paymentId
+            ];
+            
+            console.log(`[${timestamp}] 🔧 Ejecutando sp_crear_pedido_web con parámetros:`);
+            console.log(`[${timestamp}]   - IDs productos: ${spParams[0]}`);
+            console.log(`[${timestamp}]   - Monto: $${spParams[1]} ARS`);
+            console.log(`[${timestamp}]   - Cliente: ${spParams[2]}`);
+            console.log(`[${timestamp}]   - Email: ${spParams[3]}`);
+            console.log(`[${timestamp}]   - Teléfono: ${spParams[4]}`);
+            console.log(`[${timestamp}]   - Payment ID: ${spParams[7]}`);
+            
             await executeQueryWithRetry(
               pool,
               'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
-              [
-                productIds,
-                paymentInfo.transaction_amount,
-                `${customerData.nombre || ''} ${customerData.apellido || ''}`.trim() || paymentInfo.payer?.first_name || 'Cliente Web',
-                customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
-                customerData.telefono || '',
-                'MercadoPago',
-                'Retiro',
-                paymentId
-              ]
+              spParams
             );
             const pedidoResult = await executeQueryWithRetry(
               pool,
@@ -864,19 +868,29 @@ app.post('/procesar-pago-manual/:paymentId', async (req, res) => {
       
       // Crear pedido en la base de datos
       try {
+        const spParams = [
+          productIds,
+          paymentInfo.transaction_amount,
+          `${customerData.nombre || ''} ${customerData.apellido || ''}`.trim() || paymentInfo.payer?.first_name || 'Cliente Web',
+          customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
+          customerData.telefono || '',
+          'MercadoPago',
+          'Retiro',
+          paymentId
+        ];
+        
+        console.log(`[${timestamp}] 🔧 Ejecutando sp_crear_pedido_web (manual) con parámetros:`);
+        console.log(`[${timestamp}]   - IDs productos: ${spParams[0]}`);
+        console.log(`[${timestamp}]   - Monto: $${spParams[1]} ARS`);
+        console.log(`[${timestamp}]   - Cliente: ${spParams[2]}`);
+        console.log(`[${timestamp}]   - Email: ${spParams[3]}`);
+        console.log(`[${timestamp}]   - Teléfono: ${spParams[4]}`);
+        console.log(`[${timestamp}]   - Payment ID: ${spParams[7]}`);
+        
         await executeQueryWithRetry(
           pool,
           'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
-          [
-            productIds,
-            paymentInfo.transaction_amount,
-            `${customerData.nombre || ''} ${customerData.apellido || ''}`.trim() || paymentInfo.payer?.first_name || 'Cliente Web',
-            customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
-            customerData.telefono || '',
-            'MercadoPago',
-            'Retiro',
-            paymentId
-          ]
+          spParams
         );
         
         console.log(`[${timestamp}] ✅ Pedido creado manualmente para pago ${paymentId}`);
