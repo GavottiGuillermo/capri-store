@@ -23,11 +23,12 @@ if (paymentId) {
     } else {
         // Fallback manual si la función no existe
         if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem('cartItems');
+            localStorage.removeItem('carrito'); // CORREGIDO: usar 'carrito' en lugar de 'cartItems'
             localStorage.removeItem('datosCompra');
             localStorage.removeItem('productosCompra');
             localStorage.removeItem('totalCompra');
             localStorage.removeItem('costoEnvio');
+            localStorage.removeItem('productoDetalle'); // Limpiar también el producto de detalle
             console.log('✅ Carrito y datos de compra limpiados (fallback, inicio success)');
             if (typeof updateCartCounterAnimated === 'function') {
                 updateCartCounterAnimated(0);
@@ -240,11 +241,12 @@ function mostrarError(mensaje) {
 if (typeof limpiarCarritoDespuesDeCompra !== 'function') {
     function limpiarCarritoDespuesDeCompra() {
         if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem('cartItems');
+            localStorage.removeItem('carrito'); // CORREGIDO: usar 'carrito' 
             localStorage.removeItem('datosCompra');
             localStorage.removeItem('productosCompra');
             localStorage.removeItem('totalCompra');
             localStorage.removeItem('costoEnvio');
+            localStorage.removeItem('productoDetalle'); // Limpiar también el producto de detalle
             if (typeof updateCartCounterAnimated === 'function') {
                 updateCartCounterAnimated(0);
             }

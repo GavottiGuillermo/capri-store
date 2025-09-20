@@ -146,12 +146,15 @@ async function validarStockAsync(cartItems) {
       if (nombres.length > 0) {
         alert('⚠️ El producto ' + nombres.join(', ') + ' ya no se encuentra en stock y será removido del carrito.');
       }
-      // Filtrar productos sin stock y recargar resumen
+      // Filtrar productos sin stock y actualizar localStorage
       const cartItemsFiltrados = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
       localStorage.setItem("carrito", JSON.stringify(cartItemsFiltrados));
-      // Recargar página o resumen si es necesario
+      
+      // Recargar página si se removieron productos
       if (cartItemsFiltrados.length !== cartItems.length) {
-        location.reload();
+        console.log('🔄 Recargando página después de remover productos sin stock');
+        window.location.reload();
+        return;
       }
     }
   } catch (err) {
@@ -250,12 +253,14 @@ async function iniciarProcesoPago() {
       // Mostrar alerta personalizada por cada producto sin stock
       let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
       if (nombres.length > 0) {
-        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock.');
+        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock y será removido del carrito.');
       }
       // Quitar productos sin stock del carrito
-      cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
-      localStorage.setItem("carrito", JSON.stringify(cartItems));
-      cargarResumenCompra();
+      const cartFiltrado = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
+      localStorage.setItem("carrito", JSON.stringify(cartFiltrado));
+      
+      // Recargar la página para mostrar el carrito actualizado
+      window.location.reload();
       return;
     }
   } catch (err) {
