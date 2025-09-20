@@ -170,9 +170,9 @@ function createCustomerEmailTemplate(customerData, orderData, paymentInfo) {
         <!-- Header con logo -->
         <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1a1a 100%); padding: 30px 20px; text-align: center;">
           <div style="display: inline-flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-            <div style="width: 50px; height: 50px; background-color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 15px;">
-              <span style="color: #6b0a0a; font-weight: bold; font-size: 20px;">C</span>
-            </div>
+            <img src="https://capristorezte.com.ar/assets/img/logo-capri.jpg" 
+                 alt="Capri Store Logo" 
+                 style="width: 50px; height: 50px; margin-right: 15px; border-radius: 50%; object-fit: cover;" />
             <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">Capri Store</h1>
           </div>
           <p style="color: #e29ca3; margin: 0; font-size: 16px;">Moda femenina con estilo único</p>
@@ -240,7 +240,7 @@ function createCustomerEmailTemplate(customerData, orderData, paymentInfo) {
         <div style="background-color: #6b0a0a; color: white; padding: 20px; text-align: center;">
           <p style="margin: 0 0 10px 0;">¿Tienes alguna pregunta?</p>
           <p style="margin: 0; color: #e29ca3;">
-            📞 +54 9 11 1234 5678 | 📧 contacto@capristore.com.ar
+            📞 +54 9 11 1234 5678 | 📧 <info.capristorezte@gmail.com>
           </p>
           <p style="margin: 15px 0 0 0; font-size: 12px; color: #cccccc;">
             © 2024 Capri Store. Todos los derechos reservados.
