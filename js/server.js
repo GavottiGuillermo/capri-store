@@ -600,8 +600,8 @@ app.post('/webhook', async (req, res) => {
               [
                 productIds,
                 paymentInfo.transaction_amount,
-                paymentInfo.payer?.first_name || 'Cliente Web',
-                customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
+                `${customerData.nombre || ''} ${customerData.apellido || ''}`.trim() || paymentInfo.payer?.first_name || 'Cliente Web',
+                customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
                 customerData.telefono || '',
                 'MercadoPago',
                 'Retiro',
@@ -870,7 +870,7 @@ app.post('/procesar-pago-manual/:paymentId', async (req, res) => {
           [
             productIds,
             paymentInfo.transaction_amount,
-            paymentInfo.payer?.first_name || 'Cliente Web',
+            `${customerData.nombre || ''} ${customerData.apellido || ''}`.trim() || paymentInfo.payer?.first_name || 'Cliente Web',
             customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
             customerData.telefono || '',
             'MercadoPago',
