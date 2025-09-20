@@ -403,7 +403,8 @@ app.post('/crear-preferencia', async (req, res) => {
       external_reference: JSON.stringify({
         email: datosComprador.email,
         nombre: datosComprador.nombre,
-        apellido: datosComprador.apellido
+        apellido: datosComprador.apellido,
+        telefono: datosComprador.telefono
       }),
       statement_descriptor: 'CAPRI STORE',
       auto_return: 'approved',
@@ -601,7 +602,7 @@ app.post('/webhook', async (req, res) => {
                 paymentInfo.transaction_amount,
                 paymentInfo.payer?.first_name || 'Cliente Web',
                 customerData.customer_email || paymentInfo.payer?.email || 'cliente@web.com',
-                customerData.customer_phone || '',
+                customerData.telefono || '',
                 'MercadoPago',
                 'Retiro',
                 paymentId
