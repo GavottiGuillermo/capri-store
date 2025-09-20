@@ -294,13 +294,24 @@ function actualizarCartSidenav() {
     });
   });
   guardarCarrito();
-  // Cambiar el texto y acción del botón de compra
-  const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado');
+  // Cambiar el texto, color y acción del botón de compra según el estado del carrito
+  const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado, .cart-sidenav .btn-vino-tinto');
   if (finalizarBtn) {
-    finalizarBtn.textContent = 'Comenzar Compra';
-    finalizarBtn.onclick = function() {
-      window.location.href = 'checkout.html';
-    };
+    if (cartItems.length > 0) {
+      // Carrito con productos - botón vino tinto y habilitado
+      finalizarBtn.className = 'btn btn-vino-tinto btn-block font-weight-bold py-3';
+      finalizarBtn.textContent = 'Comenzar Compra';
+      finalizarBtn.disabled = false;
+      finalizarBtn.onclick = function() {
+        window.location.href = 'checkout.html';
+      };
+    } else {
+      // Carrito vacío - botón rosado y deshabilitado
+      finalizarBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3';
+      finalizarBtn.textContent = 'Carrito Vacío';
+      finalizarBtn.disabled = true;
+      finalizarBtn.onclick = null;
+    }
   }
 }
 

@@ -17,7 +17,7 @@
       --color-acento: #fbeee6;
     }
     body { font-family: 'Montserrat', sans-serif; }
-    .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+    .logo-capri { height: 48px; width: 48px; border-radius: 50%; margin-right: 10px; vertical-align: middle; object-fit: cover; }
     .navbar-brand { display: flex; align-items: center; font-size: 2rem; font-weight: bold; }
     .bg-vino-tinto { background-color: var(--vino-tinto) !important; }
     .text-vino-tinto { color: var(--vino-tinto) !important; }
@@ -29,6 +29,8 @@
     .btn-rosado:hover { background-color: #d1848d; color: #fff; }
     .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; }
     .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    .btn-vino-tinto:disabled { background-color: var(--rosado); color: #fff; opacity: 0.7; cursor: not-allowed; }
+    .btn-rosado:disabled { background-color: #cccccc; color: #666; opacity: 0.7; cursor: not-allowed; }
     .btn-outline-vino-tinto { border: 2px solid var(--vino-tinto); color: var(--vino-tinto); background: transparent; }
     .btn-outline-vino-tinto:hover { background-color: var(--vino-tinto); color: #fff; }
     .btn-contacto-disabled {
