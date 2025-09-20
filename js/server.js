@@ -384,34 +384,41 @@ app.post('/crear-preferencia', async (req, res) => {
         email: datosComprador.email,
         phone: {
           area_code: '11',
-          number: (datosComprador.telefono || '').replace(/[^\d]/g, '').substring(-8)
-        },
-        identification: {
-          type: 'DNI',
-          number: '12345678'  // Placeholder - idealmente pedir DNI en el formulario
+          number: (datosComprador.telefono || '').replace(/[^\d]/g, '').slice(-8)
         }
+        // Remover identification temporalmente - puede estar causando el rechazo
+        // identification: {
+        //   type: 'DNI',
+        //   number: '12345678'
+        // }
       },
       payment_methods: {
         excluded_payment_methods: [],
         excluded_payment_types: [],
-        installments: 12  // Permitir hasta 12 cuotas
+        installments: 6  // Reducir a 6 cuotas por si 12 causa problemas
       },
       shipments: {
         mode: 'not_specified'
       },
-      external_reference: JSON.stringify(datosComprador),
+      external_reference: JSON.stringify({
+        email: datosComprador.email,
+        nombre: datosComprador.nombre,
+        apellido: datosComprador.apellido
+      }),
       statement_descriptor: 'CAPRI STORE',
       auto_return: 'approved',
-      binary_mode: false,  // Permitir pagos pendientes
+      binary_mode: false,
       back_urls: {
         success: 'https://capristorezte.com.ar/success.html',
         failure: 'https://capristorezte.com.ar/failure.html',
         pending: 'https://capristorezte.com.ar/pending.html'
-      },
-      notification_url: 'https://capri-store.onrender.com/webhook',
-      expires: false,
-      expiration_date_from: null,
-      expiration_date_to: null
+      }
+      // Temporal: Remover notification_url para testear si es el problema
+      // notification_url: 'https://capri-store.onrender.com/webhook'
+      // Remover campos que pueden causar conflictos
+      // expires: false,
+      // expiration_date_from: null,
+      // expiration_date_to: null
     };
 
     console.log('🚀 Creando preferencia con datos:', JSON.stringify(preferenceData, null, 2));
