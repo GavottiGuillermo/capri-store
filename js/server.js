@@ -412,9 +412,8 @@ app.post('/crear-preferencia', async (req, res) => {
         success: 'https://capristorezte.com.ar/success.html',
         failure: 'https://capristorezte.com.ar/failure.html',
         pending: 'https://capristorezte.com.ar/pending.html'
-      }
-      // Temporal: Remover notification_url para testear si es el problema
-      // notification_url: 'https://capri-store.onrender.com/webhook'
+      },
+      notification_url: 'https://capri-store.onrender.com/webhook'
       // Remover campos que pueden causar conflictos
       // expires: false,
       // expiration_date_from: null,
@@ -458,19 +457,27 @@ app.post('/webhook', async (req, res) => {
   const timestamp = new Date().toISOString();
   let paymentId = null;
   let shouldProcess = false;
+  
+  console.log(`[${timestamp}] 🔔 WEBHOOK RECIBIDO:`);
+  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`[${timestamp}] Body:`, JSON.stringify(req.body, null, 2));
+  
   try {
     const { type, data, action, topic, resource } = req.body;
     if (type === 'payment' && data?.id) {
       paymentId = data.id;
       shouldProcess = true;
+      console.log(`[${timestamp}] ✅ Webhook tipo 'payment' con ID: ${paymentId}`);
     } else if (action === 'payment.created' && data?.id) {
       paymentId = data.id;
       shouldProcess = true;
+      console.log(`[${timestamp}] ✅ Webhook action 'payment.created' con ID: ${paymentId}`);
     } else if (topic === 'payment' && resource) {
       paymentId = resource;
       shouldProcess = true;
+      console.log(`[${timestamp}] ✅ Webhook topic 'payment' con resource: ${paymentId}`);
     } else {
-      console.log(`[${timestamp}] Webhook ignorado (no payment)`);
+      console.log(`[${timestamp}] ❌ Webhook ignorado - type: ${type}, action: ${action}, topic: ${topic}, resource: ${resource}`);
       return res.status(200).send('OK - Ignored (not payment)');
     }
     if (shouldProcess && paymentId) {
@@ -814,6 +821,97 @@ app.get('/stock-producto/:id', async (req, res) => {
       ok: false, 
       error: 'Error interno del servidor',
       message: error.message 
+    });
+  }
+});
+
+// ===============================
+// ENDPOINT DE EMERGENCIA: PROCESAR PAGO MANUAL
+// ===============================
+app.post('/procesar-pago-manual/:paymentId', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Content-Type', 'application/json; charset=utf-8');
+  
+  const { paymentId } = req.params;
+  const timestamp = new Date().toISOString();
+  
+  console.log(`[${timestamp}] 🚨 PROCESAMIENTO MANUAL para pago: ${paymentId}`);
+  
+  try {
+    // Simular el procesamiento del webhook manualmente
+    const payment = new Payment(client);
+    const paymentInfo = await payment.get({ id: paymentId });
+    
+    console.log(`[${timestamp}] 📋 Info del pago:`, JSON.stringify(paymentInfo, null, 2));
+    
+    if (paymentInfo.status === 'approved') {
+      // Extraer información del external_reference
+      let customerData = {};
+      try {
+        if (paymentInfo.external_reference) {
+          customerData = JSON.parse(paymentInfo.external_reference);
+        }
+      } catch (error) {}
+      
+      let productIds = '';
+      const items = paymentInfo.additional_info?.items || [];
+      if (items.length > 0) {
+        productIds = (items.map(item => item.id).filter(Boolean) || []).join(',');
+      }
+      if (!productIds) productIds = 'MANUAL';
+      
+      // Crear pedido en la base de datos
+      try {
+        await executeQueryWithRetry(
+          pool,
+          'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+          [
+            productIds,
+            paymentInfo.transaction_amount,
+            paymentInfo.payer?.first_name || 'Cliente Web',
+            customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
+            customerData.telefono || '',
+            'MercadoPago',
+            'Retiro',
+            paymentId
+          ]
+        );
+        
+        console.log(`[${timestamp}] ✅ Pedido creado manualmente para pago ${paymentId}`);
+        
+        res.json({
+          success: true,
+          message: 'Pago procesado manualmente',
+          payment_id: paymentId,
+          status: paymentInfo.status
+        });
+        
+      } catch (dbError) {
+        console.error(`[${timestamp}] ❌ Error creando pedido manual:`, dbError);
+        res.status(500).json({
+          success: false,
+          error: 'Error creando pedido en base de datos',
+          payment_id: paymentId
+        });
+      }
+      
+    } else {
+      res.json({
+        success: false,
+        message: `Pago no aprobado. Estado: ${paymentInfo.status}`,
+        payment_id: paymentId,
+        status: paymentInfo.status
+      });
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error procesando pago manual:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Error procesando pago manual',
+      message: error.message,
+      payment_id: paymentId
     });
   }
 });
