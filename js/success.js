@@ -113,10 +113,10 @@ function consultarNumeroPedido(paymentId) {
     .then(data => {
         console.log('📦 Datos recibidos del servidor:', data);
         
-        if (data.existe) {
+        if (data.pedido_encontrado) {
             console.log('✅ Pedido encontrado!');
             console.log('🔢 Número display:', data.numero_display);
-            mostrarNumeroPedido(data.numero_display, data.id_pedido_completo);
+            mostrarNumeroPedido(data.numero_display, data.numero_pedido);
         } else {
             console.log('❌ Pedido no encontrado...');
             intentosRealizados++;
