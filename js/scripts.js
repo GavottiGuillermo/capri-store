@@ -50,6 +50,9 @@ function inicializarCarrito() {
     }
   }
   
+  // Sincronizar con window
+  window.cartItems = cartItems;
+  
   actualizarCartSidenav();
   configurarEventListeners();
   console.log('✅ Carrito inicializado');
@@ -179,6 +182,8 @@ function quitarDelCarrito(idx) {
     // Si solo hay una unidad, eliminar el producto completo
     cartItems.splice(idx, 1);
   }
+  // Sincronizar con window
+  window.cartItems = cartItems;
   guardarCarrito();
   actualizarCartSidenav();
 }
@@ -238,6 +243,9 @@ function closeCartSidenav() {
 function actualizarCartSidenav() {
   // Recargar carrito usando la función auxiliar que respeta compra exitosa
   cartItems = cargarCarritoDesdeStorage();
+  
+  // Sincronizar con window
+  window.cartItems = cartItems;
 
   const lista = document.getElementById("cart-sidenav-items");
   const total = document.getElementById("cart-sidenav-total");
@@ -253,12 +261,28 @@ function actualizarCartSidenav() {
   let cantidadTotal = 0;
 
   // Filtrar productos inválidos
+  const cartItemsOriginalLength = cartItems.length;
   cartItems = cartItems.filter(item => item && item.nombre && !isNaN(Number(item.precio)) && item.img && !isNaN(Number(item.cantidad)) && Number(item.cantidad) > 0);
+  
+  // Si se filtraron productos, guardar el carrito actualizado
+  if (cartItemsOriginalLength !== cartItems.length) {
+    guardarCarrito();
+  }
   
   if (cartItems.length === 0) {
     lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
     total.textContent = "$0.00 ARS";
     if (cartCount) cartCount.textContent = "0";
+    
+    // Actualizar botón cuando carrito está vacío
+    const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado, .cart-sidenav .btn-vino-tinto');
+    if (finalizarBtn) {
+      finalizarBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3';
+      finalizarBtn.textContent = 'Carrito Vacío';
+      finalizarBtn.disabled = true;
+      finalizarBtn.onclick = null;
+    }
+    
     guardarCarrito();
     return;
   }
