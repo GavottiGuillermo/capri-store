@@ -404,6 +404,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const result = await response.json();
         
         if (response.ok && result.success) {
+          // Éxito completo
           mostrarAlerta(
             '¡Mensaje enviado correctamente! Te responderemos a la brevedad.',
             'success'
@@ -417,13 +418,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }, 100);
         } else {
-          mostrarAlerta(result.error || 'Error al enviar el mensaje. Intenta nuevamente.', 'error');
+          // Error del servidor - mostrar el mensaje específico del backend
+          const errorMessage = result.error || 'Error al enviar el mensaje. Intenta nuevamente.';
+          mostrarAlerta(errorMessage, 'error');
         }
         
       } catch (error) {
         console.error('Error al enviar formulario de contacto:', error);
+        
+        // Error de conexión o red
         mostrarAlerta(
-          'Error de conexión. Por favor verifica tu internet e intenta nuevamente.',
+          'Error de conexión. Por favor verifica tu internet e intenta nuevamente, o contáctanos por teléfono: +54 9 11 1234 5678',
           'error'
         );
       } finally {

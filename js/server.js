@@ -17,27 +17,60 @@ console.log('� Capri Store API iniciando...');
 // ===============================
 let transporter = null;
 
+console.log('🔍 Verificando configuración SMTP...');
+console.log('SMTP_USER:', process.env.SMTP_USER ? 'CONFIGURADO ✅' : 'NO CONFIGURADO ❌');
+console.log('SMTP_PASS:', process.env.SMTP_PASS ? 'CONFIGURADO ✅' : 'NO CONFIGURADO ❌');
+console.log('SMTP_HOST:', process.env.SMTP_HOST || 'smtp.gmail.com (default)');
+console.log('SMTP_PORT:', process.env.SMTP_PORT || '587 (default)');
+
 if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    },
-    // Configuraciones de timeout y retry
-    connectionTimeout: 10000, // 10 segundos
-    greetingTimeout: 5000,    // 5 segundos
-    socketTimeout: 10000,     // 10 segundos
-    // Pool de conexiones para mejor rendimiento
-    pool: true,
-    maxConnections: 1,
-    maxMessages: 3
-  });
-  console.log('✅ Transporter de email configurado con timeouts');
+  try {
+    transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
+      secure: false, // true para 465, false para otros puertos
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      },
+      // Configuraciones de timeout optimizadas para Render
+      connectionTimeout: 30000,  // 30 segundos para conexión inicial
+      greetingTimeout: 15000,    // 15 segundos para greeting
+      socketTimeout: 30000,      // 30 segundos para operaciones
+      // Pool de conexiones deshabilitado para evitar problemas en Render
+      pool: false,
+      // Configuraciones adicionales para mejor compatibilidad
+      tls: {
+        rejectUnauthorized: false // Para evitar problemas de certificados
+      },
+      debug: false, // Cambiar a true para debug completo
+      logger: false // Cambiar a true para logs detallados
+    });
+    
+    console.log('✅ Transporter de email configurado correctamente');
+    
+    // Verificar conexión al inicio (sin bloquear el servidor)
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('❌ Error verificando conexión SMTP al inicio:', error.message);
+        console.error('   Posibles causas:');
+        console.error('   - Credenciales incorrectas');
+        console.error('   - Firewall de Render bloqueando SMTP');
+        console.error('   - Configuración de Gmail/SMTP incorrecta');
+      } else {
+        console.log('✅ Conexión SMTP verificada exitosamente al inicio');
+      }
+    });
+    
+  } catch (configError) {
+    console.error('❌ Error configurando transporter:', configError.message);
+    transporter = null;
+  }
 } else {
   console.warn('⚠️ Configuración de email incompleta - emails no serán enviados');
+  console.warn('   Variables faltantes:');
+  if (!process.env.SMTP_USER) console.warn('   - SMTP_USER');
+  if (!process.env.SMTP_PASS) console.warn('   - SMTP_PASS');
 }
 
 // ===============================
@@ -1258,6 +1291,71 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Endpoint para probar configuración de email
+app.get('/test-email-config', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  
+  try {
+    if (!transporter) {
+      return res.json({
+        status: 'ERROR',
+        message: 'Transporter no configurado',
+        smtp_configured: false,
+        env_vars: {
+          SMTP_USER: !!process.env.SMTP_USER,
+          SMTP_PASS: !!process.env.SMTP_PASS,
+          SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com (default)',
+          SMTP_PORT: process.env.SMTP_PORT || '587 (default)',
+          ADMIN_EMAILS: !!process.env.ADMIN_EMAILS
+        }
+      });
+    }
+    
+    console.log(`[${timestamp}] 🧪 Probando configuración de email...`);
+    
+    await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout verificando conexión')), 15000)
+      )
+    ]);
+    
+    console.log(`[${timestamp}] ✅ Configuración de email OK`);
+    
+    res.json({
+      status: 'OK',
+      message: 'Configuración de email funcionando correctamente',
+      smtp_configured: true,
+      connection_verified: true,
+      env_vars: {
+        SMTP_USER: !!process.env.SMTP_USER,
+        SMTP_PASS: !!process.env.SMTP_PASS,
+        SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com (default)',
+        SMTP_PORT: process.env.SMTP_PORT || '587 (default)',
+        ADMIN_EMAILS: !!process.env.ADMIN_EMAILS
+      }
+    });
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error probando email:`, error.message);
+    
+    res.json({
+      status: 'ERROR',
+      message: 'Error en configuración de email',
+      smtp_configured: true,
+      connection_verified: false,
+      error: error.message,
+      env_vars: {
+        SMTP_USER: !!process.env.SMTP_USER,
+        SMTP_PASS: !!process.env.SMTP_PASS,
+        SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com (default)',
+        SMTP_PORT: process.env.SMTP_PORT || '587 (default)',
+        ADMIN_EMAILS: !!process.env.ADMIN_EMAILS
+      }
+    });
+  }
+});
+
 // Manejo de errores global
 app.use((error, req, res, next) => {
   console.error('� Error global capturado:', error);
@@ -1317,29 +1415,33 @@ app.post('/contact', async (req, res) => {
     
     // Solo proceder si el transporter está configurado
     if (!transporter) {
-      console.log(`[${timestamp}] ⚠️ Transporter no configurado - guardando consulta sin enviar email`);
+      console.log(`[${timestamp}] ⚠️ Transporter no configurado - email no disponible`);
       
-      // En lugar de fallar, responder exitosamente pero sin enviar email
-      return res.json({
-        success: true,
-        message: 'Mensaje recibido. Te contactaremos pronto por teléfono.',
-        email_sent: false
+      return res.status(503).json({
+        success: false,
+        error: 'Sistema de email temporalmente no disponible. Por favor contáctanos por teléfono: +54 9 11 1234 5678'
       });
     }
     
     // Probar conexión SMTP antes de enviar
     try {
-      await transporter.verify();
+      console.log(`[${timestamp}] 🔍 Verificando conexión SMTP...`);
+      
+      await Promise.race([
+        transporter.verify(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 15000) // 15 segundos
+        )
+      ]);
+      
       console.log(`[${timestamp}] ✅ Conexión SMTP verificada exitosamente`);
     } catch (verifyError) {
       console.error(`[${timestamp}] ❌ Error verificando conexión SMTP:`, verifyError.message);
+      console.error(`[${timestamp}] ❌ Stack trace:`, verifyError.stack);
       
-      // Responder exitosamente pero indicar que el email no se envió
-      return res.json({
-        success: true,
-        message: 'Tu consulta ha sido recibida. Te contactaremos por teléfono a la brevedad.',
-        email_sent: false,
-        note: 'Sistema de email temporalmente no disponible'
+      return res.status(503).json({
+        success: false,
+        error: 'Sistema de email temporalmente no disponible. Por favor contáctanos por teléfono: +54 9 11 1234 5678'
       });
     }
     
@@ -1377,6 +1479,9 @@ app.post('/contact', async (req, res) => {
       </div>
     `;
     
+    let adminEmailSent = false;
+    let clientEmailSent = false;
+    
     try {
       // Enviar email a administradores con timeout
       const adminMailOptions = {
@@ -1392,15 +1497,21 @@ app.post('/contact', async (req, res) => {
       await Promise.race([
         transporter.sendMail(adminMailOptions),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email timeout')), 10000) // 10 segundos timeout
+          setTimeout(() => reject(new Error('Email timeout - admin')), 20000) // 20 segundos timeout
         )
       ]);
       
       console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores`);
+      adminEmailSent = true;
+      
     } catch (emailError) {
       console.error(`[${timestamp}] ❌ Error enviando email de administradores:`, emailError.message);
       
-      // Continuar para intentar enviar el email al cliente
+      // Si falla el email de admin, fallar inmediatamente
+      return res.status(500).json({
+        success: false,
+        error: 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678'
+      });
     }
     
     try {
@@ -1456,19 +1567,35 @@ app.post('/contact', async (req, res) => {
       await Promise.race([
         transporter.sendMail(clientMailOptions),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email timeout')), 10000) // 10 segundos timeout
+          setTimeout(() => reject(new Error('Email timeout - client')), 20000) // 20 segundos timeout
         )
       ]);
       
       console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
+      clientEmailSent = true;
+      
     } catch (emailError) {
       console.error(`[${timestamp}] ❌ Error enviando email al cliente:`, emailError.message);
+      
+      // Si falla el email del cliente, también fallar la operación completa
+      return res.status(500).json({
+        success: false,
+        error: 'Error enviando confirmación. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678'
+      });
     }
     
-    res.json({
-      success: true,
-      message: 'Mensaje enviado exitosamente. Te responderemos pronto.'
-    });
+    // Solo responder éxito si ambos emails se enviaron correctamente
+    if (adminEmailSent && clientEmailSent) {
+      res.json({
+        success: true,
+        message: 'Mensaje enviado exitosamente. Te responderemos pronto.'
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678'
+      });
+    }
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error en endpoint de contacto:`, error);
