@@ -25,7 +25,7 @@ console.log('SMTP_PORT:', process.env.SMTP_PORT || '587 (default)');
 
 if (process.env.SMTP_USER && process.env.SMTP_PASS) {
   try {
-    transporter = nodemailer.createTransporter({
+    transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
       secure: false, // true para 465, false para otros puertos
