@@ -25,40 +25,27 @@ console.log('SMTP_PORT:', process.env.SMTP_PORT || '587 (default)');
 
 if (process.env.SMTP_USER && process.env.SMTP_PASS) {
   try {
+    // Usar la misma configuración simple que funciona en el webhook
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-      secure: false, // true para 465, false para otros puertos
+      secure: false,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
-      },
-      // Configuraciones de timeout optimizadas para Render
-      connectionTimeout: 30000,  // 30 segundos para conexión inicial
-      greetingTimeout: 15000,    // 15 segundos para greeting
-      socketTimeout: 30000,      // 30 segundos para operaciones
-      // Pool de conexiones deshabilitado para evitar problemas en Render
-      pool: false,
-      // Configuraciones adicionales para mejor compatibilidad
-      tls: {
-        rejectUnauthorized: false // Para evitar problemas de certificados
-      },
-      debug: false, // Cambiar a true para debug completo
-      logger: false // Cambiar a true para logs detallados
+      }
     });
     
-    console.log('✅ Transporter de email configurado correctamente');
+    console.log('✅ Transporter de email configurado (configuración simple como webhook)');
     
     // Verificar conexión al inicio (sin bloquear el servidor)
     transporter.verify((error, success) => {
       if (error) {
-        console.error('❌ Error verificando conexión SMTP al inicio:', error.message);
-        console.error('   Posibles causas:');
-        console.error('   - Credenciales incorrectas');
-        console.error('   - Firewall de Render bloqueando SMTP');
-        console.error('   - Configuración de Gmail/SMTP incorrecta');
+        console.error('❌ Error verificando conexión SMTP:', error.message);
+        console.error('   Código de error:', error.code);
+        console.error('   Comando que falló:', error.command);
       } else {
-        console.log('✅ Conexión SMTP verificada exitosamente al inicio');
+        console.log('✅ Conexión SMTP verificada exitosamente (usando configuración del webhook)');
       }
     });
     
@@ -1423,27 +1410,8 @@ app.post('/contact', async (req, res) => {
       });
     }
     
-    // Probar conexión SMTP antes de enviar
-    try {
-      console.log(`[${timestamp}] 🔍 Verificando conexión SMTP...`);
-      
-      await Promise.race([
-        transporter.verify(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 15000) // 15 segundos
-        )
-      ]);
-      
-      console.log(`[${timestamp}] ✅ Conexión SMTP verificada exitosamente`);
-    } catch (verifyError) {
-      console.error(`[${timestamp}] ❌ Error verificando conexión SMTP:`, verifyError.message);
-      console.error(`[${timestamp}] ❌ Stack trace:`, verifyError.stack);
-      
-      return res.status(503).json({
-        success: false,
-        error: 'Sistema de email temporalmente no disponible. Por favor contáctanos por teléfono: +54 9 11 1234 5678'
-      });
-    }
+    // No necesitamos verificar conexión aquí, ya se verificó al inicio
+    // Si el transporter funciona para webhooks, funcionará para contacto
     
     // Crear email para administradores
     const adminSubject = `Nueva consulta de ${nombre}`;
@@ -1494,12 +1462,7 @@ app.post('/contact', async (req, res) => {
         html: adminHtml
       };
       
-      await Promise.race([
-        transporter.sendMail(adminMailOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email timeout - admin')), 20000) // 20 segundos timeout
-        )
-      ]);
+      await transporter.sendMail(adminMailOptions);
       
       console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores`);
       adminEmailSent = true;
@@ -1564,12 +1527,7 @@ app.post('/contact', async (req, res) => {
         html: clientHtml
       };
       
-      await Promise.race([
-        transporter.sendMail(clientMailOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Email timeout - client')), 20000) // 20 segundos timeout
-        )
-      ]);
+      await transporter.sendMail(clientMailOptions);
       
       console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
       clientEmailSent = true;
