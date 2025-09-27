@@ -327,9 +327,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const todosLosCarposCompletos = nombre && email && mensaje && emailValido;
     
     if (todosLosCarposCompletos) {
-      // Habilitar botón
+      // Habilitar botón con color vino tinto
       enviarContactoBtn.disabled = false;
-      enviarContactoBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3 btn-contacto-transition';
+      enviarContactoBtn.className = 'btn btn-contacto-enabled btn-block font-weight-bold py-3 btn-contacto-transition';
     } else {
       // Deshabilitar botón
       enviarContactoBtn.disabled = true;
@@ -428,8 +428,8 @@ document.addEventListener('DOMContentLoaded', function() {
         );
       } finally {
         // Restaurar botón
-        enviarContactoBtn.disabled = false;
-        enviarContactoBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3 btn-contacto-transition';
+        enviarContactoBtn.disabled = true;
+        enviarContactoBtn.className = 'btn btn-contacto-disabled btn-block font-weight-bold py-3 btn-contacto-transition';
         enviarContactoBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje';
         
         // Re-validar campos para mantener estado correcto

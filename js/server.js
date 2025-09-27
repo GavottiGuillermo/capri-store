@@ -13,6 +13,26 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 console.log('� Capri Store API iniciando...');
 
 // ===============================
+// CONFIGURACIÓN DE NODEMAILER
+// ===============================
+let transporter = null;
+
+if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+  console.log('✅ Transporter de email configurado');
+} else {
+  console.warn('⚠️ Configuración de email incompleta - emails no serán enviados');
+}
+
+// ===============================
 // VALIDACIÓN DE VARIABLES DE ENTORNO
 // ===============================
 if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
@@ -1259,6 +1279,156 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// === ENDPOINT DE CONTACTO ===
+app.post('/contact', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 📧 Solicitud de contacto recibida`);
+  
+  try {
+    const { nombre, email, mensaje } = req.body;
+    
+    // Validar datos requeridos
+    if (!nombre || !email || !mensaje) {
+      console.log(`[${timestamp}] ❌ Datos faltantes en formulario de contacto`);
+      return res.status(400).json({
+        success: false,
+        error: 'Todos los campos son requeridos'
+      });
+    }
+    
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log(`[${timestamp}] ❌ Email inválido: ${email}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Formato de email inválido'
+      });
+    }
+    
+    // Crear email para administradores
+    const adminSubject = `Nueva consulta de ${nombre}`;
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
+          <h2>💌 Nueva Consulta - Capri Store</h2>
+        </div>
+        
+        <div style="padding: 30px; background: #f8f9fa;">
+          <h3 style="color: #6b0a0a; margin-bottom: 20px;">Información del Cliente:</h3>
+          
+          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #e29ca3;">
+            <p style="margin: 10px 0;"><strong>Nombre:</strong> ${nombre}</p>
+            <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+          </div>
+          
+          <h3 style="color: #6b0a0a; margin-bottom: 15px;">Mensaje:</h3>
+          <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #6b0a0a;">
+            <p style="line-height: 1.6; margin: 0;">${mensaje}</p>
+          </div>
+          
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="mailto:${email}" style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Responder al Cliente
+            </a>
+          </div>
+        </div>
+        
+        <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
+          <p>© 2024 Capri Store - Sistema de Contacto Automático</p>
+        </div>
+      </div>
+    `;
+    
+    // Solo proceder si el transporter está configurado
+    if (!transporter) {
+      console.log(`[${timestamp}] ⚠️ Transporter no configurado - no se pueden enviar emails`);
+      return res.status(500).json({
+        success: false,
+        error: 'Servicio de email no configurado'
+      });
+    }
+    
+    // Enviar email a administradores
+    const adminMailOptions = {
+      from: {
+        name: 'Capri Store - Sistema',
+        address: process.env.SMTP_USER
+      },
+      to: process.env.ADMIN_EMAILS || process.env.SMTP_USER,
+      subject: adminSubject,
+      html: adminHtml
+    };
+    
+    await transporter.sendMail(adminMailOptions);
+    console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores`);
+    
+    // Enviar confirmación al cliente
+    const clientSubject = `Gracias por contactarnos, ${nombre}`;
+    const clientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
+          <h2>✉️ Mensaje Recibido - Capri Store</h2>
+        </div>
+        
+        <div style="padding: 30px; background: #f8f9fa;">
+          <h3 style="color: #6b0a0a;">¡Hola ${nombre}!</h3>
+          
+          <p style="line-height: 1.6; color: #333;">
+            Gracias por contactarnos. Hemos recibido tu mensaje y nuestro equipo te responderá a la brevedad.
+          </p>
+          
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #e29ca3;">
+            <h4 style="color: #6b0a0a; margin-top: 0;">Tu mensaje:</h4>
+            <p style="color: #555; line-height: 1.6; margin-bottom: 0;">${mensaje}</p>
+          </div>
+          
+          <p style="line-height: 1.6; color: #333;">
+            Mientras tanto, puedes seguir explorando nuestros productos en 
+            <a href="https://capristorezte.com.ar" style="color: #6b0a0a;">capristorezte.com.ar</a>
+          </p>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="https://capristorezte.com.ar" style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Ver Productos
+            </a>
+          </div>
+        </div>
+        
+        <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
+          <p>© 2024 Capri Store - Zárate, Buenos Aires</p>
+          <p>📧 contacto@capristore.com.ar | 📱 +54 9 11 1234 5678</p>
+        </div>
+      </div>
+    `;
+    
+    const clientMailOptions = {
+      from: {
+        name: 'Capri Store',
+        address: process.env.SMTP_USER
+      },
+      to: email,
+      subject: clientSubject,
+      html: clientHtml
+    };
+    
+    await transporter.sendMail(clientMailOptions);
+    console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
+    
+    res.json({
+      success: true,
+      message: 'Mensaje enviado exitosamente. Te responderemos pronto.'
+    });
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en endpoint de contacto:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor al procesar la consulta'
+    });
+  }
+});
 
 // Manejo de cierre del servidor
 process.on('SIGTERM', () => {
