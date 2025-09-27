@@ -275,12 +275,14 @@ function actualizarCartSidenav() {
     if (cartCount) cartCount.textContent = "0";
     
     // Actualizar botón cuando carrito está vacío
-    const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado, .cart-sidenav .btn-vino-tinto');
+    const finalizarBtn = document.getElementById('finalizarCompraBtn');
+    console.log('🔍 Botón encontrado (carrito vacío):', finalizarBtn);
     if (finalizarBtn) {
       finalizarBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3';
       finalizarBtn.textContent = 'Carrito Vacío';
       finalizarBtn.disabled = true;
       finalizarBtn.onclick = null;
+      console.log('✅ Botón actualizado a estado vacío');
     }
     
     guardarCarrito();
@@ -319,7 +321,8 @@ function actualizarCartSidenav() {
   });
   guardarCarrito();
   // Cambiar el texto, color y acción del botón de compra según el estado del carrito
-  const finalizarBtn = document.querySelector('.cart-sidenav .btn-rosado, .cart-sidenav .btn-vino-tinto');
+  const finalizarBtn = document.getElementById('finalizarCompraBtn');
+  console.log('🔍 Botón encontrado (final función):', finalizarBtn);
   if (finalizarBtn) {
     if (cartItems.length > 0) {
       // Carrito con productos - botón vino tinto y habilitado
@@ -329,12 +332,14 @@ function actualizarCartSidenav() {
       finalizarBtn.onclick = function() {
         window.location.href = 'checkout.html';
       };
+      console.log('✅ Botón actualizado a estado con productos');
     } else {
       // Carrito vacío - botón rosado y deshabilitado
       finalizarBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3';
       finalizarBtn.textContent = 'Carrito Vacío';
       finalizarBtn.disabled = true;
       finalizarBtn.onclick = null;
+      console.log('✅ Botón actualizado a estado vacío (final)');
     }
   }
 }
