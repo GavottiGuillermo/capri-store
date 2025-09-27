@@ -562,12 +562,18 @@ function mostrarStockDisponible(stock) {
     // Crear elemento de stock si no existe
     stockElement = document.createElement('div');
     stockElement.id = 'stock-disponible';
-    stockElement.className = 'mb-3';
+    stockElement.className = 'mt-3 mb-2';
     
-    // Insertarlo después del precio
-    const precioElement = document.getElementById('precio-producto');
-    if (precioElement && precioElement.parentNode) {
-      precioElement.parentNode.insertBefore(stockElement, precioElement.nextSibling);
+    // Insertarlo después del botón "Agregar al carrito"
+    const botonAgregar = document.getElementById('btnAgregarCarrito');
+    if (botonAgregar && botonAgregar.parentNode) {
+      botonAgregar.parentNode.insertBefore(stockElement, botonAgregar.nextSibling);
+    } else {
+      // Fallback: insertarlo después del precio si no encuentra el botón
+      const precioElement = document.getElementById('precio-producto');
+      if (precioElement && precioElement.parentNode) {
+        precioElement.parentNode.insertBefore(stockElement, precioElement.nextSibling);
+      }
     }
   }
   
