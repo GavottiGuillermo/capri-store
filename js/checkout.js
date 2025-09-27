@@ -194,14 +194,14 @@ function verificarCamposCompletos() {
 
 function calcularEnvio() {
   if (!verificarCamposCompletos()) {
-    alert('Por favor completa todos los campos de dirección obligatorios');
+    mostrarPopup('Por favor completa todos los campos de dirección obligatorios', 'warning');
     return;
   }
   const codigoPostal = document.getElementById('codigoPostal').value.trim();
   const ciudad = document.getElementById('ciudad').value.trim();
   const provincia = document.getElementById('provincia').value;
   if (!/^\d{4}$/.test(codigoPostal)) {
-    alert('Por favor ingresa un código postal válido (4 dígitos)');
+    mostrarPopup('Por favor ingresa un código postal válido (4 dígitos)', 'warning');
     return;
   }
   const calcularBtn = document.getElementById('calcularEnvio');
@@ -228,12 +228,12 @@ async function iniciarProcesoPago() {
   const form = document.getElementById('checkout-form');
   if (!form.checkValidity()) {
     form.classList.add('was-validated');
-    alert('Por favor completa todos los campos requeridos');
+    mostrarPopup('Por favor completa todos los campos requeridos', 'warning');
     return;
   }
   let cartItems = JSON.parse(localStorage.getItem("carrito")) || [];
   if (!cartItems || cartItems.length === 0) {
-    alert('Tu carrito está vacío');
+    mostrarPopup('Tu carrito está vacío', 'info');
     return;
   }
   // Validar stock antes de iniciar pago
@@ -433,10 +433,10 @@ function volverAInicio() {
 }
 
 // Función básica para mostrar alertas/popups
-function mostrarPopup(mensaje) {
+function mostrarPopup(mensaje, tipo = 'success') {
   // Usar la función global si está disponible, sino usar alert
-  if (window.mostrarPopup && typeof window.mostrarPopup === 'function') {
-    window.mostrarPopup(mensaje);
+  if (window.mostrarPopup && typeof window.mostrarPopup === 'function' && window.mostrarPopup !== mostrarPopup) {
+    window.mostrarPopup(mensaje, tipo);
   } else {
     alert(mensaje);
   }

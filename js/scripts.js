@@ -197,8 +197,8 @@ function vaciarCarrito() {
 }
 
 // Mostrar pop-up de agregado al carrito con animación mejorada
-function mostrarPopup(mensaje) {
-  mostrarPopupAnimado(mensaje);
+function mostrarPopup(mensaje, tipo = 'success') {
+  mostrarPopupAnimado(mensaje, tipo);
 }
 
 // Mostrar el sidebar del carrito con animación
@@ -374,7 +374,7 @@ async function finalizarCompraSidebar() {
       // Mostrar alerta personalizada por cada producto sin stock
       let nombres = cartItems.filter(item => data.faltantes.includes(item.id_articulo || item.id)).map(item => item.nombre);
       if (nombres.length > 0) {
-        alert('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.');
+        mostrarPopup('El producto ' + nombres.join(', ') + ' ya no se encuentra en stock. Lo quitaremos del carrito.', 'warning');
       }
       // Quitar productos sin stock del carrito
       cartItems = cartItems.filter(item => !data.faltantes.includes(item.id_articulo || item.id));
@@ -396,9 +396,35 @@ async function finalizarCompraSidebar() {
 // ...existing code...
 
 // Función para animar la aparición del popup con más suavidad
-function mostrarPopupAnimado(mensaje) {
+function mostrarPopupAnimado(mensaje, tipo = 'success') {
   let popup = document.getElementById("popup-carrito");
   if (popup) popup.remove();
+  
+  // Definir colores y iconos según el tipo
+  const tipos = {
+    success: { 
+      bg: 'linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%)', 
+      icon: '✓', 
+      color: '#fff' 
+    },
+    error: { 
+      bg: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', 
+      icon: '⚠', 
+      color: '#fff' 
+    },
+    warning: { 
+      bg: 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', 
+      icon: '!', 
+      color: '#212529' 
+    },
+    info: { 
+      bg: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', 
+      icon: 'ℹ', 
+      color: '#fff' 
+    }
+  };
+  
+  const config = tipos[tipo] || tipos.success;
   
   popup = document.createElement("div");
   popup.id = "popup-carrito";
@@ -407,33 +433,56 @@ function mostrarPopupAnimado(mensaje) {
     position: fixed;
     top: 30px;
     right: 30px;
-    background: #6b0a0a;
-    color: #fff;
-    padding: 16px 24px;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    background: ${config.bg};
+    color: ${config.color};
+    padding: 20px 28px;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15);
+    backdrop-filter: blur(10px);
     z-index: 9999;
-    font-size: 1.1rem;
+    font-size: 1rem;
+    font-weight: 500;
     opacity: 0;
-    transform: scale(0.8) translateY(-10px);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(0.8) translateY(-20px) translateX(20px);
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 1px solid rgba(255,255,255,0.2);
+    max-width: 350px;
+    min-width: 280px;
   `;
   
-  popup.textContent = mensaje;
+  // Crear contenido con icono y mensaje
+  popup.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="
+        font-size: 1.4rem; 
+        font-weight: bold; 
+        background: rgba(255,255,255,0.2); 
+        width: 32px; 
+        height: 32px; 
+        border-radius: 50%; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        flex-shrink: 0;
+      ">${config.icon}</div>
+      <div style="flex: 1; line-height: 1.4;">${mensaje}</div>
+    </div>
+  `;
+  
   document.body.appendChild(popup);
   
-  // Animar aparición
+  // Animar aparición con rebote elegante
   requestAnimationFrame(() => {
     popup.style.opacity = '1';
-    popup.style.transform = 'scale(1) translateY(0)';
+    popup.style.transform = 'scale(1) translateY(0) translateX(0)';
   });
   
   // Animar desaparición
   setTimeout(() => {
     popup.style.opacity = '0';
-    popup.style.transform = 'scale(0.8) translateY(-10px)';
-    setTimeout(() => popup.remove(), 400);
-  }, 2500);
+    popup.style.transform = 'scale(0.9) translateY(-10px) translateX(10px)';
+    setTimeout(() => popup.remove(), 500);
+  }, 3500);
 }
 
 // === MEJORAS ESPECÍFICAS PARA EL CARRITO ===
