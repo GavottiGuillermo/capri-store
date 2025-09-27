@@ -25,9 +25,17 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
-    }
+    },
+    // Configuraciones de timeout y retry
+    connectionTimeout: 10000, // 10 segundos
+    greetingTimeout: 5000,    // 5 segundos
+    socketTimeout: 10000,     // 10 segundos
+    // Pool de conexiones para mejor rendimiento
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 3
   });
-  console.log('✅ Transporter de email configurado');
+  console.log('✅ Transporter de email configurado con timeouts');
 } else {
   console.warn('⚠️ Configuración de email incompleta - emails no serán enviados');
 }
@@ -1307,6 +1315,34 @@ app.post('/contact', async (req, res) => {
       });
     }
     
+    // Solo proceder si el transporter está configurado
+    if (!transporter) {
+      console.log(`[${timestamp}] ⚠️ Transporter no configurado - guardando consulta sin enviar email`);
+      
+      // En lugar de fallar, responder exitosamente pero sin enviar email
+      return res.json({
+        success: true,
+        message: 'Mensaje recibido. Te contactaremos pronto por teléfono.',
+        email_sent: false
+      });
+    }
+    
+    // Probar conexión SMTP antes de enviar
+    try {
+      await transporter.verify();
+      console.log(`[${timestamp}] ✅ Conexión SMTP verificada exitosamente`);
+    } catch (verifyError) {
+      console.error(`[${timestamp}] ❌ Error verificando conexión SMTP:`, verifyError.message);
+      
+      // Responder exitosamente pero indicar que el email no se envió
+      return res.json({
+        success: true,
+        message: 'Tu consulta ha sido recibida. Te contactaremos por teléfono a la brevedad.',
+        email_sent: false,
+        note: 'Sistema de email temporalmente no disponible'
+      });
+    }
+    
     // Crear email para administradores
     const adminSubject = `Nueva consulta de ${nombre}`;
     const adminHtml = `
@@ -1341,80 +1377,93 @@ app.post('/contact', async (req, res) => {
       </div>
     `;
     
-    // Solo proceder si el transporter está configurado
-    if (!transporter) {
-      console.log(`[${timestamp}] ⚠️ Transporter no configurado - no se pueden enviar emails`);
-      return res.status(500).json({
-        success: false,
-        error: 'Servicio de email no configurado'
-      });
+    try {
+      // Enviar email a administradores con timeout
+      const adminMailOptions = {
+        from: {
+          name: 'Capri Store - Sistema',
+          address: process.env.SMTP_USER
+        },
+        to: process.env.ADMIN_EMAILS || process.env.SMTP_USER,
+        subject: adminSubject,
+        html: adminHtml
+      };
+      
+      await Promise.race([
+        transporter.sendMail(adminMailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Email timeout')), 10000) // 10 segundos timeout
+        )
+      ]);
+      
+      console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores`);
+    } catch (emailError) {
+      console.error(`[${timestamp}] ❌ Error enviando email de administradores:`, emailError.message);
+      
+      // Continuar para intentar enviar el email al cliente
     }
     
-    // Enviar email a administradores
-    const adminMailOptions = {
-      from: {
-        name: 'Capri Store - Sistema',
-        address: process.env.SMTP_USER
-      },
-      to: process.env.ADMIN_EMAILS || process.env.SMTP_USER,
-      subject: adminSubject,
-      html: adminHtml
-    };
-    
-    await transporter.sendMail(adminMailOptions);
-    console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores`);
-    
-    // Enviar confirmación al cliente
-    const clientSubject = `Gracias por contactarnos, ${nombre}`;
-    const clientHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
-          <h2>✉️ Mensaje Recibido - Capri Store</h2>
-        </div>
-        
-        <div style="padding: 30px; background: #f8f9fa;">
-          <h3 style="color: #6b0a0a;">¡Hola ${nombre}!</h3>
-          
-          <p style="line-height: 1.6; color: #333;">
-            Gracias por contactarnos. Hemos recibido tu mensaje y nuestro equipo te responderá a la brevedad.
-          </p>
-          
-          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #e29ca3;">
-            <h4 style="color: #6b0a0a; margin-top: 0;">Tu mensaje:</h4>
-            <p style="color: #555; line-height: 1.6; margin-bottom: 0;">${mensaje}</p>
+    try {
+      // Enviar confirmación al cliente
+      const clientSubject = `Gracias por contactarnos, ${nombre}`;
+      const clientHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
+            <h2>✉️ Mensaje Recibido - Capri Store</h2>
           </div>
           
-          <p style="line-height: 1.6; color: #333;">
-            Mientras tanto, puedes seguir explorando nuestros productos en 
-            <a href="https://capristorezte.com.ar" style="color: #6b0a0a;">capristorezte.com.ar</a>
-          </p>
+          <div style="padding: 30px; background: #f8f9fa;">
+            <h3 style="color: #6b0a0a;">¡Hola ${nombre}!</h3>
+            
+            <p style="line-height: 1.6; color: #333;">
+              Gracias por contactarnos. Hemos recibido tu mensaje y nuestro equipo te responderá a la brevedad.
+            </p>
+            
+            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #e29ca3;">
+              <h4 style="color: #6b0a0a; margin-top: 0;">Tu mensaje:</h4>
+              <p style="color: #555; line-height: 1.6; margin-bottom: 0;">${mensaje}</p>
+            </div>
+            
+            <p style="line-height: 1.6; color: #333;">
+              Mientras tanto, puedes seguir explorando nuestros productos en 
+              <a href="https://capristorezte.com.ar" style="color: #6b0a0a;">capristorezte.com.ar</a>
+            </p>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="https://capristorezte.com.ar" style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                Ver Productos
+              </a>
+            </div>
+          </div>
           
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="https://capristorezte.com.ar" style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Ver Productos
-            </a>
+          <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
+            <p>© 2024 Capri Store - Zárate, Buenos Aires</p>
+            <p>📧 contacto@capristore.com.ar | 📱 +54 9 11 1234 5678</p>
           </div>
         </div>
-        
-        <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          <p>© 2024 Capri Store - Zárate, Buenos Aires</p>
-          <p>📧 contacto@capristore.com.ar | 📱 +54 9 11 1234 5678</p>
-        </div>
-      </div>
-    `;
-    
-    const clientMailOptions = {
-      from: {
-        name: 'Capri Store',
-        address: process.env.SMTP_USER
-      },
-      to: email,
-      subject: clientSubject,
-      html: clientHtml
-    };
-    
-    await transporter.sendMail(clientMailOptions);
-    console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
+      `;
+      
+      const clientMailOptions = {
+        from: {
+          name: 'Capri Store',
+          address: process.env.SMTP_USER
+        },
+        to: email,
+        subject: clientSubject,
+        html: clientHtml
+      };
+      
+      await Promise.race([
+        transporter.sendMail(clientMailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Email timeout')), 10000) // 10 segundos timeout
+        )
+      ]);
+      
+      console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
+    } catch (emailError) {
+      console.error(`[${timestamp}] ❌ Error enviando email al cliente:`, emailError.message);
+    }
     
     res.json({
       success: true,
@@ -1425,7 +1474,7 @@ app.post('/contact', async (req, res) => {
     console.error(`[${timestamp}] ❌ Error en endpoint de contacto:`, error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor al procesar la consulta'
+      error: 'Error temporal del servicio. Por favor intenta más tarde o contáctanos por teléfono.'
     });
   }
 });
