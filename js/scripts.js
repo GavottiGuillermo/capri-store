@@ -270,7 +270,7 @@ function actualizarCartSidenav() {
   }
   
   if (cartItems.length === 0) {
-    lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-rosado mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
+    lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-vino-tinto mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
     total.textContent = "$0.00 ARS";
     if (cartCount) cartCount.textContent = "0";
     

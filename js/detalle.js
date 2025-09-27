@@ -582,7 +582,7 @@ function mostrarStockDisponible(stock) {
     stockElement.innerHTML = `
       <div class="d-flex align-items-center">
         <i class="fas fa-check-circle text-success mr-2"></i>
-        <span class="text-success font-weight-bold">Stock Disponible: ${stock}</span>
+        <span class="font-weight-bold" style="color: #333;">Stock Disponible: ${stock}</span>
       </div>
     `;
   } else {
