@@ -38,16 +38,9 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     
     console.log('✅ Transporter de email configurado (configuración simple como webhook)');
     
-    // Verificar conexión al inicio (sin bloquear el servidor)
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error('❌ Error verificando conexión SMTP:', error.message);
-        console.error('   Código de error:', error.code);
-        console.error('   Comando que falló:', error.command);
-      } else {
-        console.log('✅ Conexión SMTP verificada exitosamente (usando configuración del webhook)');
-      }
-    });
+    // NO verificar conexión al inicio - puede causar problemas
+    // El webhook funciona sin verificación previa, así que el contacto también debería
+    console.log('ℹ️  Verificación de conexión SMTP omitida para evitar timeouts');
     
   } catch (configError) {
     console.error('❌ Error configurando transporter:', configError.message);
