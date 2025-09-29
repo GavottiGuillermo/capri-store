@@ -273,55 +273,43 @@ async function renderizarProductos() {
         cardElement.classList.add('visible');
       }, productosRenderizados * 50); // 50ms entre cada producto
       
+      // Marcar sin stock si corresponde (sin bloquear el detalle)
+      try {
+        const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+        const m = path.match(/\/(\d+)-[^/]+/);
+        const id = m && m[1] ? parseInt(m[1], 10) : null;
+        
+        if (!id) {
+          console.warn('[PRODUCTOS] No se pudo extraer id_articulo para', prod, 'path:', path);
+        } else {
+          if (window.__CAPRI_SOLD_OUT__ && window.__CAPRI_SOLD_OUT__.has(id)) {
+            console.log(`[PRODUCTOS] Producto id=${id} marcado como SIN STOCK`);
+            const card = cardElement.querySelector('.card');
+            if (card) {
+              card.style.filter = 'grayscale(0.6)';
+              card.style.opacity = '0.8';
+              const badge = document.createElement('div');
+              badge.textContent = 'Sin stock';
+              badge.style.position = 'absolute';
+              badge.style.top = '10px';
+              badge.style.left = '10px';
+              badge.style.background = '#dc3545';
+              badge.style.color = '#fff';
+              badge.style.padding = '6px 10px';
+              badge.style.borderRadius = '8px';
+              badge.style.fontWeight = 'bold';
+              badge.style.zIndex = '15';
+              card.appendChild(badge);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[PRODUCTOS] Error al marcar sin stock:', e);
+      }
+      
       productosRenderizados++;
     } catch (error) {
       console.error('❌ Error renderizando producto:', prod.id_articulo, error);
-    }
-  }
-      if (cardHtml) {
-        productosList.insertAdjacentHTML('beforeend', cardHtml);
-        productosRenderizados++;
-      }
-    } catch (error) {
-      console.error(`❌ Error renderizando producto:`, error);
-    }
-    // Marcar sin stock si corresponde (sin bloquear el detalle)
-    try {
-      const path = decodeURIComponent((prod.imagen || prod.txt || ''));
-      const m = path.match(/\/(\d+)-[^/]+/);
-      const id = m && m[1] ? parseInt(m[1], 10) : null;
-      const last = productosList.lastElementChild;
-      if (!id) {
-        console.warn('[PRODUCTOS] No se pudo extraer id_articulo para', prod, 'path:', path);
-      } else {
-        if (window.__CAPRI_SOLD_OUT__) {
-          if (window.__CAPRI_SOLD_OUT__.has(id)) {
-            console.log(`[PRODUCTOS] Producto id=${id} marcado como SIN STOCK`);
-            if (last) {
-              const card = last.querySelector('.card');
-              if (card) {
-                card.style.filter = 'grayscale(0.6)';
-                card.style.opacity = '0.8';
-                const badge = document.createElement('div');
-                badge.textContent = 'Sin stock';
-                badge.style.position = 'absolute';
-                badge.style.top = '10px';
-                badge.style.left = '10px';
-                badge.style.background = '#dc3545';
-                badge.style.color = '#fff';
-                badge.style.padding = '6px 10px';
-                badge.style.borderRadius = '8px';
-                badge.style.fontWeight = 'bold';
-                card.appendChild(badge);
-              }
-            }
-          }
-        } else {
-          console.warn('[PRODUCTOS] window.__CAPRI_SOLD_OUT__ no está definido');
-        }
-      }
-    } catch (e) {
-      console.error('[PRODUCTOS] Error al marcar sin stock:', e);
     }
   }
 
