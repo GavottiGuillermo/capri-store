@@ -356,38 +356,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // Remover clase no-js para activar animaciones
   document.documentElement.classList.remove('no-js');
   
-  // PRIMERO: Activar animaciones para que el contenido sea visible
-  setTimeout(() => {
-    // Hacer visible el contenido principal
-    const mainContent = document.querySelector('.main-section');
-    if (mainContent) mainContent.classList.add('visible');
-    
-    // Activar títulos de sección
-    const sectionTitles = document.querySelectorAll('.section-title');
-    sectionTitles.forEach((title, index) => {
-      setTimeout(() => {
-        title.classList.add('visible');
-      }, index * 50);
-    });
-    
-    // Activar secciones del checkout
-    const checkoutSections = document.querySelectorAll('.checkout-section');
-    checkoutSections.forEach((section, index) => {
-      setTimeout(() => {
-        section.classList.add('visible');
-      }, index * 100);
-    });
-    
-    // Activar animaciones laterales
-    const fadeInLeft = document.querySelectorAll('.fade-in-left');
-    const fadeInRight = document.querySelectorAll('.fade-in-right');
-    const fadeIn = document.querySelectorAll('.fade-in');
-    
-    fadeInLeft.forEach(el => el.classList.add('visible'));
-    fadeInRight.forEach(el => el.classList.add('visible'));
-    fadeIn.forEach(el => el.classList.add('visible'));
-    
-  }, 50);
+  // PREVENIR DOBLE CARGA - Inicializar datos primero
+  console.log('📊 Cargando resumen de compra inicial...');
+  cargarResumenCompra();
+  
+  console.log('🚛 Configurando tipo de entrega...');
+  manejarTipoEntrega();
   
   // Configurar event listeners para tipo de entrega
   const retiroLocal = document.getElementById('retiroLocal');
@@ -398,15 +372,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const codigoPostal = document.getElementById('codigoPostal');
   const ciudad = document.getElementById('ciudad');
   const provincia = document.getElementById('provincia');
+  
   if (retiroLocal) retiroLocal.addEventListener('change', manejarTipoEntrega);
   if (envioDomicilio) envioDomicilio.addEventListener('change', manejarTipoEntrega);
+  
   [calleNumero, codigoPostal, ciudad, provincia].forEach(campo => {
     if (campo) {
       campo.addEventListener('input', verificarCamposCompletos);
       campo.addEventListener('change', verificarCamposCompletos);
     }
   });
+  
   if (calcularEnvioBtn) calcularEnvioBtn.addEventListener('click', calcularEnvio);
+  
   if (iniciarPagoBtn) {
     console.log('✅ Botón iniciar pago encontrado');
     iniciarPagoBtn.addEventListener('click', function(e) {
@@ -417,14 +395,31 @@ document.addEventListener('DOMContentLoaded', function() {
     console.warn('⚠️ No se encontró el botón #iniciarPago');
   }
   
-  console.log('📊 Cargando resumen de compra inicial...');
-  cargarResumenCompra();
-  
-  console.log('🚛 Configurando tipo de entrega...');
-  manejarTipoEntrega();
+  // UNA SOLA ANIMACIÓN DE ENTRADA SUAVE - Evita doble fade-in
+  setTimeout(() => {
+    // Hacer visible el contenido principal
+    const mainContent = document.querySelector('.main-section');
+    if (mainContent) mainContent.classList.add('visible');
+    
+    // Activar secciones del checkout de forma escalonada pero rápida
+    const checkoutSections = document.querySelectorAll('.checkout-section');
+    checkoutSections.forEach((section, index) => {
+      setTimeout(() => {
+        section.classList.add('visible');
+      }, index * 50); // Reducido de 100ms a 50ms
+    });
+    
+    // Activar animaciones laterales solo si están en viewport
+    const fadeInElements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right');
+    fadeInElements.forEach(el => {
+      if (el.getBoundingClientRect().top < window.innerHeight * 0.8) {
+        el.classList.add('visible');
+      }
+    });
+    
+  }, 100); // Reducido de múltiples timeouts a uno solo
   
   console.log('✅ Checkout inicializado correctamente');
-  // Puedes agregar aquí la función de animaciones fade-in si la necesitas
 });
 
 // === FUNCIONES AUXILIARES PARA EL CARRITO ===

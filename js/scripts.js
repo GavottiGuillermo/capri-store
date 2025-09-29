@@ -487,7 +487,7 @@ function mostrarPopupAnimado(mensaje, tipo = 'success') {
 
 // === MEJORAS ESPECÍFICAS PARA EL CARRITO ===
 
-// Función mejorada para actualizar contador del carrito con animación
+// Función mejorada para actualizar contador del carrito con animación suavizada
 function updateCartCounterAnimated(newCount) {
   const cartCount = document.getElementById("cart-count");
   if (!cartCount) return;
@@ -495,20 +495,29 @@ function updateCartCounterAnimated(newCount) {
   const oldCount = cartCount.textContent;
   
   if (oldCount !== newCount.toString()) {
-    // Animar salida del número anterior
-    cartCount.style.transform = 'scale(0.8)';
-    cartCount.style.opacity = '0.5';
+    // Aplicar clase de animación suave
+    cartCount.classList.add('cart-counter-update');
+    
+    // Transición suave del número
+    cartCount.style.transition = 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    cartCount.style.transform = 'scale(0.9)';
+    cartCount.style.opacity = '0.7';
     
     setTimeout(() => {
       cartCount.textContent = newCount;
-      cartCount.style.transform = 'scale(1.2)';
+      cartCount.style.transform = 'scale(1.1)';
       cartCount.style.opacity = '1';
-      cartCount.classList.add('bounce');
       
       setTimeout(() => {
         cartCount.style.transform = 'scale(1)';
-        cartCount.classList.remove('bounce');
-      }, 300);
+        cartCount.classList.remove('cart-counter-update');
+        // Remover estilos inline para permitir CSS tomar control
+        setTimeout(() => {
+          cartCount.style.transition = '';
+          cartCount.style.transform = '';
+          cartCount.style.opacity = '';
+        }, 300);
+      }, 200);
     }, 150);
   }
 }

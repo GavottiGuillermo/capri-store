@@ -74,22 +74,37 @@ function setupIntersectionObserver() {
 }
 
 function animateOnScroll() {
-  const fadeElements = document.querySelectorAll('.fade-in, .section-title, .progressive-reveal, .card-animate, .checkout-section');
-  fadeElements.forEach(element => {
-    if (isElementInViewport(element, 0.15)) {
-      element.classList.add('visible');
-    }
-  });
-  const fadeLeftElements = document.querySelectorAll('.fade-in-left');
-  fadeLeftElements.forEach(element => {
-    if (isElementInViewport(element, 0.15)) {
-      element.classList.add('visible');
-    }
-  });
-  const fadeRightElements = document.querySelectorAll('.fade-in-right');
-  fadeRightElements.forEach(element => {
-    if (isElementInViewport(element, 0.15)) {
-      element.classList.add('visible');
+  // ANIMACIÓN UNIFICADA Y OPTIMIZADA
+  const allAnimatableElements = document.querySelectorAll(
+    '.fade-in, .fade-in-left, .fade-in-right, .section-title, .progressive-reveal, .card-animate, .checkout-section'
+  );
+  
+  const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+  
+  allAnimatableElements.forEach(element => {
+    // Solo animar elementos que no estén ya visibles
+    if (!element.classList.contains('visible')) {
+      const rect = element.getBoundingClientRect();
+      const threshold = 0.15; // 15% del viewport
+      
+      // Condición de visibilidad mejorada
+      const isVisible = (
+        rect.top <= windowHeight * (1 - threshold) &&
+        rect.bottom >= windowHeight * threshold &&
+        rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.left < (window.innerWidth || document.documentElement.clientWidth)
+      );
+      
+      if (isVisible) {
+        // Aplicar animación suave basada en el tipo de elemento
+        element.classList.add('visible');
+        
+        // Animación adicional para elementos especiales
+        if (element.classList.contains('progressive-reveal')) {
+          element.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        }
+      }
     }
   });
 }

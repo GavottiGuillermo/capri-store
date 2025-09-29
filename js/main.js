@@ -219,7 +219,7 @@ async function renderizarNovedades() {
   console.log('=== RENDERIZADO DE NOVEDADES COMPLETADO ===');
 }
 
-// Renderizar productos con paginación
+// Renderizar productos con paginación y animaciones suavizadas
 async function renderizarProductos() {
   const productosList = document.getElementById('productos-list');
   
@@ -239,15 +239,45 @@ async function renderizarProductos() {
     return;
   }
 
-  // Solo limpiar si es la primera página
+  // PREVENIR MOVIMIENTOS BRUSCOS - Solo limpiar si es la primera página
   if (paginaActualProductos === 1) {
-    productosList.innerHTML = '';
+    // Aplicar transición suave antes de limpiar
+    productosList.style.transition = 'opacity 0.3s ease';
+    productosList.style.opacity = '0.7';
+    
+    setTimeout(() => {
+      productosList.innerHTML = '';
+      productosList.style.opacity = '1';
+    }, 150);
   }
 
   let productosRenderizados = 0;
   for (const prod of productosPagina) {
     try {
       const cardHtml = await crearTarjetaProducto(prod, 'producto');
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = cardHtml;
+      const cardElement = tempDiv.firstElementChild;
+      
+      // ANIMACIÓN SUAVE DE ENTRADA
+      cardElement.style.opacity = '0';
+      cardElement.style.transform = 'translateY(20px) scale(0.95)';
+      cardElement.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      
+      productosList.appendChild(cardElement);
+      
+      // Animar entrada de forma escalonada
+      setTimeout(() => {
+        cardElement.style.opacity = '1';
+        cardElement.style.transform = 'translateY(0) scale(1)';
+        cardElement.classList.add('visible');
+      }, productosRenderizados * 50); // 50ms entre cada producto
+      
+      productosRenderizados++;
+    } catch (error) {
+      console.error('❌ Error renderizando producto:', prod.id_articulo, error);
+    }
+  }
       if (cardHtml) {
         productosList.insertAdjacentHTML('beforeend', cardHtml);
         productosRenderizados++;
