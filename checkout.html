@@ -1,10 +1,5 @@
 <!DOCTYPE html>
-<html lang=    .btn-vino-tinto { background-color: var(--vino-tinto) !important; color: #fff !important; border: none !important; }
-    .btn-vino-tinto:hover { background-color: #4a0707 !important; color: #fff !important; }
-    .btn-vino-tinto:disabled { background-color: #cccccc !important; color: #666 !important; opacity: 0.7; cursor: not-allowed; }
-    .btn-rosado { background-color: var(--rosado) !important; color: #fff !important; border: none !important; }
-    .btn-rosado:hover { background-color: #d88a96 !important; color: #fff !important; }
-    .btn-rosado:disabled { background-color: #cccccc !important; color: #666 !important; opacity: 0.7; cursor: not-allowed; } class="no-js">
+<html lang="es" class="no-js">
 <head>
   <meta charset="utf-8"/>
   <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
@@ -137,6 +132,13 @@
       opacity: 1 !important;
       transform: none !important;
     }
+    
+    /* Asegurar que el título principal del checkout sea siempre visible */
+    .checkout-page h1.display-4 {
+      opacity: 1 !important;
+      transform: none !important;
+      visibility: visible !important;
+    }
     .subtle-pulse {
       animation: subtlePulse 3s ease-in-out infinite;
     }
@@ -215,7 +217,7 @@
     }
   </style>
 </head>
-<body class="bg-white text-vino">
+<body class="bg-white text-vino checkout-page">
   <!-- Navbar -->
   <nav id="mainNav" class="navbar navbar-expand-lg bg-vino-tinto navbar-dark sticky-top shadow">
     <div class="container">

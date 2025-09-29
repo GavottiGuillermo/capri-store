@@ -395,8 +395,16 @@ document.addEventListener('DOMContentLoaded', function() {
     console.warn('⚠️ No se encontró el botón #iniciarPago');
   }
   
-  // UNA SOLA ANIMACIÓN DE ENTRADA SUAVE - Evita doble fade-in
+  // UNA SOLA ANIMACIÓN DE ENTRADA SUAVE - Control mejorado para evitar conflictos
   setTimeout(() => {
+    // Asegurar que el título principal esté visible desde el inicio
+    const mainTitle = document.querySelector('h1.display-4');
+    if (mainTitle) {
+      mainTitle.style.opacity = '1';
+      mainTitle.style.transform = 'none';
+      mainTitle.style.visibility = 'visible';
+    }
+    
     // Hacer visible el contenido principal
     const mainContent = document.querySelector('.main-section');
     if (mainContent) mainContent.classList.add('visible');

@@ -32,10 +32,13 @@ function setupAnimationClasses() {
       card.classList.add('fade-in-right');
     }
   });
-  const sectionTitles = document.querySelectorAll('h1, h2.display-4, h2.display-5');
-  sectionTitles.forEach(title => {
-    title.classList.add('section-title');
-  });
+  // Solo aplicar animaciones automáticas de título en la página principal
+  if (!document.body.classList.contains('checkout-page') && !window.location.pathname.includes('checkout.html')) {
+    const sectionTitles = document.querySelectorAll('h1, h2.display-4, h2.display-5');
+    sectionTitles.forEach(title => {
+      title.classList.add('section-title');
+    });
+  }
   const heroContent = document.querySelector('.position-absolute.w-100.h-100');
   if (heroContent) {
     heroContent.classList.add('hero-content');
