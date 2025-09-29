@@ -22,24 +22,26 @@ console.log('SMTP_USER:', process.env.SMTP_USER ? 'CONFIGURADO ✅' : 'NO CONFIG
 console.log('SMTP_PASS:', process.env.SMTP_PASS ? 'CONFIGURADO ✅' : 'NO CONFIGURADO ❌');
 console.log('SMTP_HOST:', process.env.SMTP_HOST || 'smtp.gmail.com (default)');
 console.log('SMTP_PORT:', process.env.SMTP_PORT || '587 (default)');
+console.log('SMTP_SECURE:', process.env.SMTP_SECURE || 'false (default)');
+console.log('SMTP_FROM:', process.env.SMTP_FROM || 'usando SMTP_USER');
 
 if (process.env.SMTP_USER && process.env.SMTP_PASS) {
   try {
-    // Usar la misma configuración simple que funciona en el webhook
+    // Usar TODAS las variables de entorno configuradas en Render
+    const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+    
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-      secure: false,
+      port: smtpPort,
+      secure: smtpSecure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
       }
     });
     
-    console.log('✅ Transporter de email configurado (configuración simple como webhook)');
-    
-    // NO verificar conexión al inicio - puede causar problemas
-    // El webhook funciona sin verificación previa, así que el contacto también debería
+    console.log(`✅ Transporter configurado: ${process.env.SMTP_HOST}:${smtpPort} (secure: ${smtpSecure})`);
     console.log('ℹ️  Verificación de conexión SMTP omitida para evitar timeouts');
     
   } catch (configError) {
@@ -904,10 +906,14 @@ app.post('/webhook', async (req, res) => {
             // Enviar emails de confirmación
             try {
               if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+                // Usar TODAS las variables de entorno de Render
+                const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+                const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+                
                 const transporter = nodemailer.createTransport({
                   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-                  port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-                  secure: false,
+                  port: smtpPort,
+                  secure: smtpSecure,
                   auth: {
                     user: process.env.SMTP_USER,
                     pass: process.env.SMTP_PASS
@@ -934,7 +940,10 @@ app.post('/webhook', async (req, res) => {
                   );
 
                   const customerMailOptions = {
-                    from: `"Capri Store" <${process.env.SMTP_USER}>`,
+                    from: {
+                      name: 'Capri Store',
+                      address: process.env.SMTP_FROM || process.env.SMTP_USER
+                    },
                     to: customerEmail,
                     subject: `✅ Confirmación de Pedido #${numeroDisplay} - Capri Store`,
                     html: customerHtml,
@@ -960,7 +969,10 @@ app.post('/webhook', async (req, res) => {
                   );
 
                   const adminMailOptions = {
-                    from: `"Capri Store Sistema" <${process.env.SMTP_USER}>`,
+                    from: {
+                      name: 'Capri Store Sistema',
+                      address: process.env.SMTP_FROM || process.env.SMTP_USER
+                    },
                     to: adminEmails.join(','),
                     subject: `🛍️ Nueva Venta #${numeroDisplay} - $${paymentInfo.transaction_amount} ARS`,
                     html: adminHtml,
@@ -1448,7 +1460,7 @@ app.post('/contact', async (req, res) => {
       const adminMailOptions = {
         from: {
           name: 'Capri Store - Sistema',
-          address: process.env.SMTP_USER
+          address: process.env.SMTP_FROM || process.env.SMTP_USER
         },
         to: process.env.ADMIN_EMAILS || process.env.SMTP_USER,
         subject: adminSubject,
@@ -1513,7 +1525,7 @@ app.post('/contact', async (req, res) => {
       const clientMailOptions = {
         from: {
           name: 'Capri Store',
-          address: process.env.SMTP_USER
+          address: process.env.SMTP_FROM || process.env.SMTP_USER
         },
         to: email,
         subject: clientSubject,
