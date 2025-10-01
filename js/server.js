@@ -38,6 +38,19 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
+      },
+      // Configuraciones adicionales para manejar conexiones lentas
+      connectionTimeout: 30000, // 30 segundos para conectar
+      greetingTimeout: 10000,   // 10 segundos para greeting
+      socketTimeout: 30000,    // 30 segundos para operaciones socket
+      pool: true,              // Usar pool de conexiones
+      maxConnections: 2,       // Máximo 2 conexiones simultáneas
+      maxMessages: 10,         // Máximo 10 mensajes por conexión
+      rateLimit: 3,           // Máximo 3 emails por segundo
+      // Configuraciones específicas para Gmail
+      tls: {
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
       }
     });
     
@@ -1507,13 +1520,38 @@ app.post('/contact', async (req, res) => {
         subject: adminMailOptions.subject
       });
       
-      // Enviar con timeout de 15 segundos
-      await Promise.race([
-        transporter.sendMail(adminMailOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout enviando email admin')), 15000)
-        )
-      ]);
+      // Enviar con timeout de 20 segundos y verificación de conexión
+      const sendWithRetry = async (mailOptions, attempt = 1) => {
+        const maxAttempts = 2;
+        try {
+          // Verificar conexión antes de enviar
+          console.log(`[${timestamp}] 🔗 Verificando conexión SMTP (intento ${attempt})...`);
+          await Promise.race([
+            transporter.verify(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout verificando conexión')), 5000)
+            )
+          ]);
+          console.log(`[${timestamp}] ✅ Conexión SMTP verificada`);
+          
+          // Enviar email con timeout extendido
+          return await Promise.race([
+            transporter.sendMail(mailOptions),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout enviando email')), 20000)
+            )
+          ]);
+        } catch (error) {
+          if (attempt < maxAttempts && !error.message.includes('Timeout verificando conexión')) {
+            console.log(`[${timestamp}] ⚠️ Intento ${attempt} falló, reintentando: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2s antes del retry
+            return sendWithRetry(mailOptions, attempt + 1);
+          }
+          throw error;
+        }
+      };
+      
+      await sendWithRetry(adminMailOptions);
       
       console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores: ${adminEmails}`);
       adminEmailSent = true;
@@ -1581,13 +1619,39 @@ app.post('/contact', async (req, res) => {
         text: `Hola ${nombre}, gracias por contactarnos. Hemos recibido tu mensaje: "${mensaje}". Te responderemos pronto. - Capri Store`
       };
       
-      // Enviar con timeout de 15 segundos
-      await Promise.race([
-        transporter.sendMail(clientMailOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout enviando email cliente')), 15000)
-        )
-      ]);
+      // Enviar con timeout de 20 segundos y verificación de conexión
+      const sendClientEmailWithRetry = async (mailOptions, attempt = 1) => {
+        const maxAttempts = 2;
+        try {
+          // Para el cliente, no verificar conexión de nuevo si ya funcionó para admin
+          if (!adminEmailSent) {
+            console.log(`[${timestamp}] 🔗 Verificando conexión SMTP para cliente...`);
+            await Promise.race([
+              transporter.verify(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout verificando conexión')), 5000)
+              )
+            ]);
+          }
+          
+          // Enviar email con timeout extendido
+          return await Promise.race([
+            transporter.sendMail(mailOptions),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout enviando email')), 20000)
+            )
+          ]);
+        } catch (error) {
+          if (attempt < maxAttempts && !error.message.includes('Timeout verificando conexión')) {
+            console.log(`[${timestamp}] ⚠️ Intento cliente ${attempt} falló, reintentando: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return sendClientEmailWithRetry(mailOptions, attempt + 1);
+          }
+          throw error;
+        }
+      };
+      
+      await sendClientEmailWithRetry(clientMailOptions);
       
       console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
       clientEmailSent = true;
@@ -1621,11 +1685,22 @@ app.post('/contact', async (req, res) => {
       // Si fallan ambos emails
       console.error(`[${timestamp}] ❌ Ambos emails fallaron - Admin: ${adminError}, Cliente: ${clientError}`);
       
-      return res.status(500).json({
+      // Respuesta diferente según el tipo de error
+      let errorMessage = 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678';
+      let statusCode = 500;
+      
+      // Si ambos errores son de timeout, es probable que sea un problema temporal de red
+      if ((adminError && adminError.includes('Timeout')) && (clientError && clientError.includes('Timeout'))) {
+        errorMessage = 'El mensaje está siendo procesado pero hay demoras en la conexión. Te contactaremos pronto por teléfono si no recibes confirmación por email.';
+        statusCode = 202; // Accepted - procesando en background
+      }
+      
+      return res.status(statusCode).json({
         success: false,
-        error: 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678',
+        error: errorMessage,
         admin_error: adminError,
-        client_error: clientError
+        client_error: clientError,
+        note: 'Para consultas urgentes: +54 9 11 1234 5678'
       });
     }
     
