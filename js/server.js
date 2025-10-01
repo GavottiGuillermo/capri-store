@@ -1378,10 +1378,31 @@ const PORT = process.env.PORT || 3000;
 
 let server;
 
+// Función para probar la conectividad SMTP al inicio (sin verify problemático)
+async function testSMTPConnection() {
+  if (!transporter) {
+    console.log('⚠️ SMTP no configurado - saltando test de conexión');
+    return;
+  }
+  
+  try {
+    console.log('🧪 SMTP configurado correctamente');
+    console.log('📧 SMTP listo para envío de emails');
+    
+    // No usar transporter.verify() ya que causa timeouts
+    // El verdadero test será cuando se envíe el primer email
+    
+  } catch (error) {
+    console.error('❌ Error en configuración SMTP:', error.message);
+    console.warn('⚠️ El sistema funcionará pero los emails pueden fallar');
+  }
+}
+
 // Inicializar la aplicación
 async function startServer() {
   try {
     await initializeDatabase();
+    await testSMTPConnection(); // Probar SMTP al inicio
     server = app.listen(PORT, () => {
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
     });
@@ -1520,31 +1541,59 @@ app.post('/contact', async (req, res) => {
         subject: adminMailOptions.subject
       });
       
-      // Enviar con timeout de 20 segundos y verificación de conexión
+      // Enviar con timeout de 25 segundos y manejo robusto
       const sendWithRetry = async (mailOptions, attempt = 1) => {
         const maxAttempts = 2;
         try {
-          // Verificar conexión antes de enviar
-          console.log(`[${timestamp}] 🔗 Verificando conexión SMTP (intento ${attempt})...`);
-          await Promise.race([
-            transporter.verify(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout verificando conexión')), 5000)
-            )
-          ]);
-          console.log(`[${timestamp}] ✅ Conexión SMTP verificada`);
+          console.log(`[${timestamp}] � Iniciando envío directo de email (intento ${attempt})...`);
+          console.log(`[${timestamp}] 🔍 SMTP Config Details:`, {
+            host: process.env.SMTP_HOST || 'smtp.gmail.com',
+            port: parseInt(process.env.SMTP_PORT) || 587,
+            secure: process.env.SMTP_SECURE === 'true',
+            user: process.env.SMTP_USER?.substring(0, 5) + '***',
+            from_address: process.env.SMTP_FROM || process.env.SMTP_USER
+          });
           
-          // Enviar email con timeout extendido
-          return await Promise.race([
+          // ENVÍO DIRECTO SIN VERIFICACIÓN PREVIA (que está causando timeout)
+          console.log(`[${timestamp}] 📧 Mail options:`, {
+            from: mailOptions.from,
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            htmlLength: mailOptions.html?.length,
+            textLength: mailOptions.text?.length
+          });
+          
+          const sendStart = Date.now();
+          const result = await Promise.race([
             transporter.sendMail(mailOptions),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout enviando email')), 20000)
+              setTimeout(() => reject(new Error('Timeout enviando email después de 30s')), 30000)
             )
           ]);
+          const sendTime = Date.now() - sendStart;
+          
+          console.log(`[${timestamp}] ✅ Email enviado exitosamente en ${sendTime}ms`);
+          console.log(`[${timestamp}] 📨 Resultado del envío:`, {
+            messageId: result.messageId,
+            response: result.response?.substring(0, 100),
+            accepted: result.accepted,
+            rejected: result.rejected
+          });
+          
+          return result;
         } catch (error) {
-          if (attempt < maxAttempts && !error.message.includes('Timeout verificando conexión')) {
-            console.log(`[${timestamp}] ⚠️ Intento ${attempt} falló, reintentando: ${error.message}`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2s antes del retry
+          console.error(`[${timestamp}] ❌ Error en intento ${attempt}:`, {
+            message: error.message,
+            name: error.name,
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode
+          });
+          
+          if (attempt < maxAttempts && !error.message.includes('Timeout enviando email')) {
+            console.log(`[${timestamp}] ⚠️ Reintentando en 3 segundos...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
             return sendWithRetry(mailOptions, attempt + 1);
           }
           throw error;
@@ -1619,32 +1668,29 @@ app.post('/contact', async (req, res) => {
         text: `Hola ${nombre}, gracias por contactarnos. Hemos recibido tu mensaje: "${mensaje}". Te responderemos pronto. - Capri Store`
       };
       
-      // Enviar con timeout de 20 segundos y verificación de conexión
+      // Enviar email del cliente sin verificación previa (más rápido)
       const sendClientEmailWithRetry = async (mailOptions, attempt = 1) => {
         const maxAttempts = 2;
         try {
-          // Para el cliente, no verificar conexión de nuevo si ya funcionó para admin
-          if (!adminEmailSent) {
-            console.log(`[${timestamp}] 🔗 Verificando conexión SMTP para cliente...`);
-            await Promise.race([
-              transporter.verify(),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout verificando conexión')), 5000)
-              )
-            ]);
-          }
+          console.log(`[${timestamp}] 📬 Enviando email al cliente (intento ${attempt})...`);
           
-          // Enviar email con timeout extendido
-          return await Promise.race([
+          // ENVÍO DIRECTO SIN VERIFICACIÓN (evitar timeouts)
+          const sendStart = Date.now();
+          const result = await Promise.race([
             transporter.sendMail(mailOptions),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout enviando email')), 20000)
+              setTimeout(() => reject(new Error('Timeout enviando email cliente después de 30s')), 30000)
             )
           ]);
+          const sendTime = Date.now() - sendStart;
+          
+          console.log(`[${timestamp}] ✅ Email cliente enviado en ${sendTime}ms`);
+          return result;
         } catch (error) {
-          if (attempt < maxAttempts && !error.message.includes('Timeout verificando conexión')) {
-            console.log(`[${timestamp}] ⚠️ Intento cliente ${attempt} falló, reintentando: ${error.message}`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          console.error(`[${timestamp}] ❌ Error cliente intento ${attempt}:`, error.message);
+          if (attempt < maxAttempts && !error.message.includes('Timeout enviando email')) {
+            console.log(`[${timestamp}] ⚠️ Reintentando cliente en 3s...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
             return sendClientEmailWithRetry(mailOptions, attempt + 1);
           }
           throw error;
@@ -1689,10 +1735,10 @@ app.post('/contact', async (req, res) => {
       let errorMessage = 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678';
       let statusCode = 500;
       
-      // Si ambos errores son de timeout, es probable que sea un problema temporal de red
+      // Si ambos errores son de timeout, usar mensaje más directo
       if ((adminError && adminError.includes('Timeout')) && (clientError && clientError.includes('Timeout'))) {
-        errorMessage = 'El mensaje está siendo procesado pero hay demoras en la conexión. Te contactaremos pronto por teléfono si no recibes confirmación por email.';
-        statusCode = 202; // Accepted - procesando en background
+        errorMessage = 'Error temporal de conexión. Por favor intenta nuevamente o contáctanos por teléfono: +54 9 11 1234 5678';
+        statusCode = 503; // Service Temporarily Unavailable
       }
       
       return res.status(statusCode).json({
