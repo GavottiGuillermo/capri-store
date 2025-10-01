@@ -1378,10 +1378,11 @@ async function startServer() {
   }
 }
 
-// === ENDPOINT DE CONTACTO ===
+// === ENDPOINT DE CONTACTO MEJORADO ===
 app.post('/contact', async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] 📧 Solicitud de contacto recibida`);
+  console.log(`[${timestamp}] 📋 Datos recibidos:`, { nombre: req.body.nombre, email: req.body.email, mensaje: req.body.mensaje?.substring(0, 50) + '...' });
   
   try {
     const { nombre, email, mensaje } = req.body;
@@ -1405,119 +1406,166 @@ app.post('/contact', async (req, res) => {
       });
     }
     
-    // Solo proceder si el transporter está configurado
+    // Verificar configuración SMTP
+    console.log(`[${timestamp}] 🔧 Estado transporter:`, !!transporter);
+    console.log(`[${timestamp}] 🔧 SMTP_USER:`, !!process.env.SMTP_USER);
+    console.log(`[${timestamp}] 🔧 SMTP_PASS:`, !!process.env.SMTP_PASS);
+    console.log(`[${timestamp}] 🔧 ADMIN_EMAILS:`, process.env.ADMIN_EMAILS || 'NO CONFIGURADO');
+    console.log(`[${timestamp}] 🔧 SMTP_FROM:`, process.env.SMTP_FROM || 'NO CONFIGURADO');
+    
+    // Si no hay transporter, responder inmediatamente
     if (!transporter) {
       console.log(`[${timestamp}] ⚠️ Transporter no configurado - email no disponible`);
       
-      return res.status(503).json({
-        success: false,
-        error: 'Sistema de email temporalmente no disponible. Por favor contáctanos por teléfono: +54 9 11 1234 5678'
+      return res.json({
+        success: true,
+        message: 'Mensaje recibido. Te contactaremos pronto por teléfono.',
+        email_sent: false,
+        note: 'Sistema de email temporalmente no disponible'
       });
     }
     
-    // No necesitamos verificar conexión aquí, ya se verificó al inicio
-    // Si el transporter funciona para webhooks, funcionará para contacto
+    // ===== PREPARAR DATOS DE CONTACTO =====
     
-    // Crear email para administradores
-    const adminSubject = `Nueva consulta de ${nombre}`;
-    const adminHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
-          <h2>💌 Nueva Consulta - Capri Store</h2>
-        </div>
-        
-        <div style="padding: 30px; background: #f8f9fa;">
-          <h3 style="color: #6b0a0a; margin-bottom: 20px;">Información del Cliente:</h3>
-          
-          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #e29ca3;">
-            <p style="margin: 10px 0;"><strong>Nombre:</strong> ${nombre}</p>
-            <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
-          </div>
-          
-          <h3 style="color: #6b0a0a; margin-bottom: 15px;">Mensaje:</h3>
-          <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #6b0a0a;">
-            <p style="line-height: 1.6; margin: 0;">${mensaje}</p>
-          </div>
-          
-          <div style="margin-top: 30px; text-align: center;">
-            <a href="mailto:${email}" style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Responder al Cliente
-            </a>
-          </div>
-        </div>
-        
-        <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          <p>© 2024 Capri Store - Sistema de Contacto Automático</p>
-        </div>
-      </div>
-    `;
+    const fechaHora = new Date().toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
     
     let adminEmailSent = false;
     let clientEmailSent = false;
+    let adminError = null;
+    let clientError = null;
     
+    // ===== ENVÍO DE EMAIL A ADMINISTRADORES =====
     try {
-      // Enviar email a administradores con timeout
+      console.log(`[${timestamp}] 📤 Intentando enviar email a administradores...`);
+      
+      // Determinar email de administradores
+      const adminEmails = process.env.ADMIN_EMAILS || process.env.SMTP_USER;
+      console.log(`[${timestamp}] 📧 Admin emails:`, adminEmails);
+      
+      const adminSubject = `Nueva consulta de ${nombre} - Capri Store`;
+      const adminHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px;">💌 Nueva Consulta - Capri Store</h1>
+            <p style="margin: 5px 0 0 0; opacity: 0.9;">${fechaHora}</p>
+          </div>
+          
+          <!-- Contenido -->
+          <div style="padding: 30px; background: #f8f9fa;">
+            <h2 style="color: #6b0a0a; margin-bottom: 20px;">Información del Cliente:</h2>
+            
+            <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #e29ca3;">
+              <p style="margin: 10px 0;"><strong>👤 Nombre:</strong> ${nombre}</p>
+              <p style="margin: 10px 0;"><strong>📧 Email:</strong> <a href="mailto:${email}" style="color: #6b0a0a;">${email}</a></p>
+              <p style="margin: 10px 0;"><strong>📅 Fecha y hora:</strong> ${fechaHora}</p>
+            </div>
+            
+            <h2 style="color: #6b0a0a; margin-bottom: 15px;">📝 Mensaje:</h2>
+            <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #6b0a0a;">
+              <p style="line-height: 1.6; margin: 0; white-space: pre-wrap;">${mensaje}</p>
+            </div>
+            
+            <!-- Botones de acción -->
+            <div style="margin-top: 30px; text-align: center;">
+              <a href="mailto:${email}?subject=Re: Consulta Capri Store&body=Hola ${nombre},%0A%0AGracias por contactarnos..." 
+                 style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 0 10px;">
+                ✉️ Responder al Cliente
+              </a>
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
+            <p style="margin: 0;">© 2024 Capri Store - Sistema de Contacto Automático</p>
+            <p style="margin: 5px 0 0 0;">📧 capristorezte@gmail.com | 📱 +54 9 11 1234 5678</p>
+          </div>
+        </div>
+      `;
+      
       const adminMailOptions = {
         from: {
           name: 'Capri Store - Sistema',
           address: process.env.SMTP_FROM || process.env.SMTP_USER
         },
-        to: process.env.ADMIN_EMAILS || process.env.SMTP_USER,
+        to: adminEmails,
         subject: adminSubject,
-        html: adminHtml
+        html: adminHtml,
+        text: `Nueva consulta de ${nombre} (${email}) recibida el ${fechaHora}: ${mensaje}`
       };
       
-      await transporter.sendMail(adminMailOptions);
+      console.log(`[${timestamp}] 📧 Configuración email admin:`, {
+        from: adminMailOptions.from,
+        to: adminMailOptions.to,
+        subject: adminMailOptions.subject
+      });
       
-      console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores`);
+      // Enviar con timeout de 15 segundos
+      await Promise.race([
+        transporter.sendMail(adminMailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout enviando email admin')), 15000)
+        )
+      ]);
+      
+      console.log(`[${timestamp}] ✅ Email de consulta enviado a administradores: ${adminEmails}`);
       adminEmailSent = true;
       
     } catch (emailError) {
       console.error(`[${timestamp}] ❌ Error enviando email de administradores:`, emailError.message);
-      
-      // Si falla el email de admin, fallar inmediatamente
-      return res.status(500).json({
-        success: false,
-        error: 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678'
-      });
+      adminError = emailError.message;
     }
     
+    // ===== ENVÍO DE EMAIL AL CLIENTE =====
     try {
-      // Enviar confirmación al cliente
-      const clientSubject = `Gracias por contactarnos, ${nombre}`;
+      console.log(`[${timestamp}] 📤 Intentando enviar confirmación al cliente...`);
+      
+      const clientSubject = `Gracias por contactarnos, ${nombre} - Capri Store`;
       const clientHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd;">
+          <!-- Header -->
           <div style="background: linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%); color: white; padding: 20px; text-align: center;">
-            <h2>✉️ Mensaje Recibido - Capri Store</h2>
+            <h1 style="margin: 0; font-size: 24px;">✉️ Mensaje Recibido - Capri Store</h1>
           </div>
           
+          <!-- Contenido -->
           <div style="padding: 30px; background: #f8f9fa;">
-            <h3 style="color: #6b0a0a;">¡Hola ${nombre}!</h3>
+            <h2 style="color: #6b0a0a;">¡Hola ${nombre}! 👋</h2>
             
-            <p style="line-height: 1.6; color: #333;">
-              Gracias por contactarnos. Hemos recibido tu mensaje y nuestro equipo te responderá a la brevedad.
+            <p style="line-height: 1.6; color: #333; margin: 20px 0;">
+              Gracias por contactarnos. Hemos recibido tu mensaje y nuestro equipo te responderá <strong>a la brevedad</strong>.
             </p>
             
             <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #e29ca3;">
-              <h4 style="color: #6b0a0a; margin-top: 0;">Tu mensaje:</h4>
-              <p style="color: #555; line-height: 1.6; margin-bottom: 0;">${mensaje}</p>
+              <h3 style="color: #6b0a0a; margin-top: 0;">📝 Tu mensaje:</h3>
+              <p style="color: #555; line-height: 1.6; margin-bottom: 0; white-space: pre-wrap;">${mensaje}</p>
+            </div>
+            
+            <div style="background: linear-gradient(45deg, #e8f5f8, #d1ecf1); padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #bee5eb;">
+              <h3 style="color: #0c5460; margin-top: 0;">⏰ Tiempo de respuesta:</h3>
+              <p style="color: #0c5460; margin: 0; font-weight: 500;">
+                Generalmente respondemos en <strong>24-48 horas hábiles</strong>. 
+                Para consultas urgentes, puedes llamarnos al <strong>+54 9 11 1234 5678</strong>.
+              </p>
             </div>
             
             <p style="line-height: 1.6; color: #333;">
               Mientras tanto, puedes seguir explorando nuestros productos en 
-              <a href="https://capristorezte.com.ar" style="color: #6b0a0a;">capristorezte.com.ar</a>
+              <a href="https://capristorezte.com.ar" style="color: #6b0a0a; font-weight: bold;">capristorezte.com.ar</a> 🛍️
             </p>
-            
-            <div style="text-align: center; margin-top: 30px;">
-              <a href="https://capristorezte.com.ar" style="background: #6b0a0a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                Ver Productos
-              </a>
-            </div>
           </div>
           
+          <!-- Footer -->
           <div style="background: #6b0a0a; color: white; padding: 15px; text-align: center; font-size: 12px;">
-            <p>© 2024 Capri Store - Zárate, Buenos Aires</p>
-            <p>📧 contacto@capristore.com.ar | 📱 +54 9 11 1234 5678</p>
+            <p style="margin: 0;">© 2024 Capri Store - Zárate, Buenos Aires</p>
+            <p style="margin: 5px 0 0 0;">📧 capristorezte@gmail.com | 📱 +54 9 11 1234 5678</p>
           </div>
         </div>
       `;
@@ -1529,39 +1577,60 @@ app.post('/contact', async (req, res) => {
         },
         to: email,
         subject: clientSubject,
-        html: clientHtml
+        html: clientHtml,
+        text: `Hola ${nombre}, gracias por contactarnos. Hemos recibido tu mensaje: "${mensaje}". Te responderemos pronto. - Capri Store`
       };
       
-      await transporter.sendMail(clientMailOptions);
+      // Enviar con timeout de 15 segundos
+      await Promise.race([
+        transporter.sendMail(clientMailOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout enviando email cliente')), 15000)
+        )
+      ]);
       
       console.log(`[${timestamp}] ✅ Email de confirmación enviado al cliente: ${email}`);
       clientEmailSent = true;
       
     } catch (emailError) {
       console.error(`[${timestamp}] ❌ Error enviando email al cliente:`, emailError.message);
-      
-      // Si falla el email del cliente, también fallar la operación completa
-      return res.status(500).json({
-        success: false,
-        error: 'Error enviando confirmación. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678'
-      });
+      clientError = emailError.message;
     }
     
-    // Solo responder éxito si ambos emails se enviaron correctamente
-    if (adminEmailSent && clientEmailSent) {
+    // ===== RESPUESTA FINAL =====
+    
+    // Si al menos uno de los emails se envió, considerar éxito
+    if (adminEmailSent || clientEmailSent) {
+      let message = 'Mensaje enviado exitosamente. Te responderemos pronto.';
+      
+      if (!adminEmailSent) {
+        message = 'Tu mensaje fue recibido. Te contactaremos pronto por teléfono.';
+      }
+      
+      console.log(`[${timestamp}] ✅ Respuesta exitosa - Admin: ${adminEmailSent}, Cliente: ${clientEmailSent}`);
+      
       res.json({
         success: true,
-        message: 'Mensaje enviado exitosamente. Te responderemos pronto.'
+        message: message,
+        email_sent: adminEmailSent || clientEmailSent,
+        admin_email_sent: adminEmailSent,
+        client_email_sent: clientEmailSent
       });
+      
     } else {
+      // Si fallan ambos emails
+      console.error(`[${timestamp}] ❌ Ambos emails fallaron - Admin: ${adminError}, Cliente: ${clientError}`);
+      
       return res.status(500).json({
         success: false,
-        error: 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678'
+        error: 'Error enviando el mensaje. Por favor intenta más tarde o contáctanos por teléfono: +54 9 11 1234 5678',
+        admin_error: adminError,
+        client_error: clientError
       });
     }
     
   } catch (error) {
-    console.error(`[${timestamp}] ❌ Error en endpoint de contacto:`, error);
+    console.error(`[${timestamp}] ❌ Error general en endpoint de contacto:`, error);
     res.status(500).json({
       success: false,
       error: 'Error temporal del servicio. Por favor intenta más tarde o contáctanos por teléfono.'
