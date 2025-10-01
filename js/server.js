@@ -31,6 +31,13 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
     const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
     
+    console.log('📧 Configurando transporter con:', {
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: smtpPort,
+      secure: smtpSecure,
+      user: process.env.SMTP_USER?.substring(0, 10) + '***'
+    });
+    
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: smtpPort,
@@ -39,23 +46,38 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
       },
-      // Configuraciones adicionales para manejar conexiones lentas
-      connectionTimeout: 30000, // 30 segundos para conectar
-      greetingTimeout: 10000,   // 10 segundos para greeting
-      socketTimeout: 30000,    // 30 segundos para operaciones socket
-      pool: true,              // Usar pool de conexiones
-      maxConnections: 2,       // Máximo 2 conexiones simultáneas
-      maxMessages: 10,         // Máximo 10 mensajes por conexión
-      rateLimit: 3,           // Máximo 3 emails por segundo
-      // Configuraciones específicas para Gmail
+      // Timeouts ajustados para Render + Gmail
+      connectionTimeout: 45000,  // 45 segundos para conectar
+      greetingTimeout: 30000,    // 30 segundos para greeting
+      socketTimeout: 45000,      // 45 segundos para operaciones
+      // Pool deshabilitado para evitar problemas de conexión
+      pool: false,
+      maxConnections: 1,
+      maxMessages: 1,
+      // Configuración TLS robusta para Gmail
       tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      }
+        rejectUnauthorized: true,  // Cambiar a true para mejor seguridad
+        minVersion: 'TLSv1.2'
+      },
+      // Requerimientos para Gmail
+      requireTLS: true,
+      // Opciones adicionales de conexión
+      authMethod: 'PLAIN',  // Método de autenticación explícito
+      // Logging habilitado para debugging
+      logger: true,
+      debug: true
     });
     
-    console.log(`✅ Transporter configurado: ${process.env.SMTP_HOST}:${smtpPort} (secure: ${smtpSecure})`);
-    console.log('ℹ️  Verificación de conexión SMTP omitida para evitar timeouts');
+    console.log(`✅ Transporter configurado: ${process.env.SMTP_HOST || 'smtp.gmail.com'}:${smtpPort} (secure: ${smtpSecure})`);
+    
+    // Advertencia sobre App Password
+    if (!smtpSecure && smtpPort === 587) {
+      console.log('⚠️  IMPORTANTE: Gmail requiere "App Password" (no tu contraseña normal)');
+      console.log('ℹ️  Pasos:');
+      console.log('   1. Activa verificación en 2 pasos: https://myaccount.google.com/security');
+      console.log('   2. Crea App Password: https://myaccount.google.com/apppasswords');
+      console.log('   3. Usa esa contraseña de 16 caracteres en SMTP_PASS');
+    }
     
   } catch (configError) {
     console.error('❌ Error configurando transporter:', configError.message);
@@ -1412,6 +1434,75 @@ async function startServer() {
   }
 }
 
+// === ENDPOINT DE TEST SMTP (para debugging) ===
+app.get('/test-smtp', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🧪 Test SMTP solicitado`);
+  
+  if (!transporter) {
+    return res.json({
+      success: false,
+      error: 'Transporter no configurado',
+      config: {
+        SMTP_USER: !!process.env.SMTP_USER,
+        SMTP_PASS: !!process.env.SMTP_PASS,
+        SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+        SMTP_PORT: process.env.SMTP_PORT || 587
+      }
+    });
+  }
+  
+  try {
+    console.log(`[${timestamp}] 🔌 Intentando verificar conexión SMTP...`);
+    
+    const testStart = Date.now();
+    
+    // Intento de verificación con timeout de 10s
+    await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout verificando conexión (10s)')), 10000)
+      )
+    ]);
+    
+    const testTime = Date.now() - testStart;
+    console.log(`[${timestamp}] ✅ Verificación SMTP exitosa en ${testTime}ms`);
+    
+    res.json({
+      success: true,
+      message: 'Conexión SMTP verificada exitosamente',
+      timeMs: testTime,
+      config: {
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: process.env.SMTP_PORT || 587,
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER?.substring(0, 10) + '***'
+      }
+    });
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Test SMTP falló:`, {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      },
+      suggestion: error.message.includes('Timeout') 
+        ? 'Timeout de conexión. Verifica: 1) App Password de Gmail configurada, 2) Puerto correcto (587 o 465), 3) Firewall no está bloqueando'
+        : 'Error de autenticación. Verifica que SMTP_PASS sea una "App Password" de Google, no tu contraseña normal'
+    });
+  }
+});
+
 // === ENDPOINT DE CONTACTO MEJORADO ===
 app.post('/contact', async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -1567,7 +1658,7 @@ app.post('/contact', async (req, res) => {
           const result = await Promise.race([
             transporter.sendMail(mailOptions),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout enviando email después de 30s')), 30000)
+              setTimeout(() => reject(new Error('Timeout enviando email después de 50s')), 50000)
             )
           ]);
           const sendTime = Date.now() - sendStart;
@@ -1679,7 +1770,7 @@ app.post('/contact', async (req, res) => {
           const result = await Promise.race([
             transporter.sendMail(mailOptions),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout enviando email cliente después de 30s')), 30000)
+              setTimeout(() => reject(new Error('Timeout enviando email cliente después de 50s')), 50000)
             )
           ]);
           const sendTime = Date.now() - sendStart;
