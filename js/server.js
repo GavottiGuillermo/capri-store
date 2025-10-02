@@ -18,8 +18,8 @@ console.log('� Capri Store API iniciando...');
 let transporter = null;
 
 console.log('🔍 Verificando configuración SMTP...');
-console.log('SMTP_USER:', process.env.SMTP_USER ? 'CONFIGURADO ✅' : 'NO CONFIGURADO ❌');
-console.log('SMTP_PASS:', process.env.SMTP_PASS ? 'CONFIGURADO ✅' : 'NO CONFIGURADO ❌');
+console.log('SMTP_USER:', process.env.SMTP_USER ? `${process.env.SMTP_USER.substring(0, 8)}***@${process.env.SMTP_USER.split('@')[1] || 'domain'} ✅` : 'NO CONFIGURADO ❌');
+console.log('SMTP_PASS:', process.env.SMTP_PASS ? `${process.env.SMTP_PASS.substring(0, 4)}**** (${process.env.SMTP_PASS.length} chars) ✅` : 'NO CONFIGURADO ❌');
 console.log('SMTP_HOST:', process.env.SMTP_HOST || 'smtp.gmail.com (default)');
 console.log('SMTP_PORT:', process.env.SMTP_PORT || '587 (default)');
 console.log('SMTP_SECURE:', process.env.SMTP_SECURE || 'false (default)');
@@ -1469,6 +1469,19 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Endpoint para verificar variables SMTP (solo para debug)
+app.get('/debug-smtp', (req, res) => {
+  res.json({
+    smtp_user: process.env.SMTP_USER ? `${process.env.SMTP_USER.substring(0, 8)}***@${process.env.SMTP_USER.split('@')[1] || 'domain'}` : 'NO CONFIGURADO',
+    smtp_pass: process.env.SMTP_PASS ? `${process.env.SMTP_PASS.substring(0, 4)}**** (${process.env.SMTP_PASS.length} chars)` : 'NO CONFIGURADO',
+    smtp_host: process.env.SMTP_HOST || 'smtp.gmail.com (default)',
+    smtp_port: process.env.SMTP_PORT || '587 (default)',
+    smtp_secure: process.env.SMTP_SECURE || 'false (default)',
+    smtp_from: process.env.SMTP_FROM || 'usando SMTP_USER',
+    admin_emails: process.env.ADMIN_EMAILS || 'NO CONFIGURADO'
+  });
+});
+
 // Endpoint para probar configuración de email
 app.get('/test-email-config', async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -1689,8 +1702,8 @@ app.post('/contact', async (req, res) => {
     
     // Verificar configuración SMTP
     console.log(`[${timestamp}] 🔧 Estado transporter:`, !!transporter);
-    console.log(`[${timestamp}] 🔧 SMTP_USER:`, !!process.env.SMTP_USER);
-    console.log(`[${timestamp}] 🔧 SMTP_PASS:`, !!process.env.SMTP_PASS);
+    console.log(`[${timestamp}] 🔧 SMTP_USER:`, process.env.SMTP_USER ? `${process.env.SMTP_USER.substring(0, 10)}***@${process.env.SMTP_USER.split('@')[1] || 'domain'}` : 'NO CONFIGURADO');
+    console.log(`[${timestamp}] 🔧 SMTP_PASS:`, process.env.SMTP_PASS ? `${process.env.SMTP_PASS.substring(0, 4)}**** (${process.env.SMTP_PASS.length} chars)` : 'NO CONFIGURADO');
     console.log(`[${timestamp}] 🔧 ADMIN_EMAILS:`, process.env.ADMIN_EMAILS || 'NO CONFIGURADO');
     console.log(`[${timestamp}] 🔧 SMTP_FROM:`, process.env.SMTP_FROM || 'NO CONFIGURADO');
     
