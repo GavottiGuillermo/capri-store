@@ -8,7 +8,7 @@ const ITEMS_POR_PAGINA_PRODUCTOS = 8; // 2 filas de 4 productos
 let paginaActualNovedades = 1;
 let paginaActualProductos = 1;
 
-// Cargar productos desde productos.json del bucket
+//  Cargar productos desde productos.json del bucket
 async function cargarProductosCapri() {
   const urlJson = 'https://storage.googleapis.com/imagenes-web-capri/productos.json';
   let productos = [];
