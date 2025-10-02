@@ -42,30 +42,14 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: smtpPort,
       secure: smtpSecure,
+      requireTLS: !smtpSecure, // Solo requerir TLS si no es secure
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
       },
-      // Timeouts ajustados para Render + Gmail
-      connectionTimeout: 45000,  // 45 segundos para conectar
-      greetingTimeout: 30000,    // 30 segundos para greeting
-      socketTimeout: 45000,      // 45 segundos para operaciones
-      // Pool deshabilitado para evitar problemas de conexión
-      pool: false,
-      maxConnections: 1,
-      maxMessages: 1,
-      // Configuración TLS robusta para Gmail
-      tls: {
-        rejectUnauthorized: true,  // Cambiar a true para mejor seguridad
-        minVersion: 'TLSv1.2'
-      },
-      // Requerimientos para Gmail
-      requireTLS: true,
-      // Opciones adicionales de conexión
-      authMethod: 'PLAIN',  // Método de autenticación explícito
-      // Logging habilitado para debugging
-      logger: true,
-      debug: true
+      connectionTimeout: 10000, // 10 segundos
+      greetingTimeout: 5000,     // 5 segundos
+      socketTimeout: 15000       // 15 segundos
     });
     
     console.log(`✅ Transporter configurado: ${process.env.SMTP_HOST || 'smtp.gmail.com'}:${smtpPort} (secure: ${smtpSecure})`);
@@ -466,6 +450,173 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
   }
   
   throw lastError;
+}
+
+// ===============================
+// FUNCIÓN SIMPLIFICADA DE ENVÍO DE CORREO
+// ===============================
+async function enviarCorreoConfirmacion(datosComprador, productos, total, numeroPedido) {
+  const startTime = Date.now();
+  console.log('📧 === INICIANDO ENVÍO DE CORREO ===');
+  console.log('⏰ Timestamp:', new Date().toISOString());
+  
+  try {
+    // Verificar credenciales
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.error('❌ Credenciales de email no configuradas');
+      throw new Error('Credenciales de email no configuradas');
+    }
+
+    // Verificar si la contraseña no es la de placeholder
+    if (process.env.SMTP_PASS === 'tu_contraseña_de_aplicacion_zoho_aqui') {
+      console.error('❌ SMTP_PASS contiene valor de placeholder - necesita configuración real');
+      throw new Error('SMTP_PASS necesita ser configurado con una contraseña de aplicación válida');
+    }
+
+    // Validar datos de entrada
+    if (!datosComprador || !datosComprador.email || !datosComprador.nombre) {
+      throw new Error('Datos del comprador incompletos para envío de correo');
+    }
+
+    // Configurar transporter simplificado
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true';
+    
+    const transporterLocal = nodemailer.createTransporter({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      requireTLS: !smtpSecure, // Solo requerir TLS si no es secure
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      },
+      connectionTimeout: 10000, // 10 segundos
+      greetingTimeout: 5000,     // 5 segundos
+      socketTimeout: 15000       // 15 segundos
+    });
+
+    // Verificar conexión SMTP con timeout
+    console.log('🔍 Verificando conexión SMTP...');
+    const verifyPromise = transporterLocal.verify();
+    const verifyTimeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout verificando conexión SMTP después de 10 segundos')), 10000)
+    );
+
+    await Promise.race([verifyPromise, verifyTimeoutPromise]);
+    console.log('✅ Conexión SMTP verificada exitosamente');
+
+    // Crear resumen de productos
+    let resumenProductos = '';
+    let subtotal = 0;
+    
+    if (!productos || !Array.isArray(productos)) {
+      throw new Error('Lista de productos no válida');
+    }
+    
+    productos.forEach((producto, index) => {
+      const totalProducto = producto.cantidad * producto.precio;
+      subtotal += totalProducto;
+      resumenProductos += `${index + 1}. ${producto.nombre}`;
+      if (producto.talle) {
+        resumenProductos += ` (Talle: ${producto.talle})`;
+      }
+      resumenProductos += `\n   Cantidad: ${producto.cantidad} x $${producto.precio.toFixed(2)} = $${totalProducto.toFixed(2)}\n`;
+    });
+
+    // Determinar tipo de entrega
+    const tipoEntrega = datosComprador.tipoEntrega || 'retiro';
+    let mensajeEntrega = '';
+    if (tipoEntrega === 'envio') {
+      mensajeEntrega = 'Nos comunicaremos contigo para coordinar el envío a tu domicilio.';
+    } else {
+      mensajeEntrega = 'Podes retirarlo por Justa Lima 123, Zárate.';
+    }
+
+    // Crear contenido del email
+    const nombreCompletoSaludo = [datosComprador.nombre, datosComprador.apellido]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || datosComprador.nombre;
+
+    const emailText = `¡Hola ${nombreCompletoSaludo}!
+
+Gracias por tu compra en Capri Store. Tu pedido ha sido confirmado exitosamente.
+
+🛍️ RESUMEN DE TU COMPRA:
+${resumenProductos}
+-----------------------------------
+Subtotal: $${subtotal.toFixed(2)}
+${subtotal !== parseFloat(total) ? `Envío: $${(parseFloat(total) - subtotal).toFixed(2)}\n` : ''}Total: $${parseFloat(total).toFixed(2)}
+
+📋 NÚMERO DE PEDIDO: ${numeroPedido}
+
+📍 ENTREGA:
+${mensajeEntrega}
+
+📞 CONTACTO:
+Si tenes alguna consulta, no dudes en contactarnos.
+
+¡Gracias por elegirnos!
+
+Capri Store
+Justa Lima 123, Zárate`;
+
+    const mailOptions = {
+      from: `"Capri Store" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: datosComprador.email,
+      subject: `Confirmación de compra #${numeroPedido} - Capri Store`,
+      text: emailText
+    };
+
+    // Enviar el correo con timeout
+    console.log('🚀 === ENVIANDO EMAIL ===');
+    const emailPromise = transporterLocal.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout al enviar email después de 30 segundos')), 30000)
+    );
+
+    const info = await Promise.race([emailPromise, timeoutPromise]);
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log('🎉 === EMAIL ENVIADO EXITOSAMENTE ===');
+    console.log('⏱️ Tiempo de envío:', duration + 'ms');
+    console.log('📧 Message ID:', info.messageId);
+    console.log('✅ Email enviado a:', datosComprador.email);
+    
+    return { 
+      success: true, 
+      messageId: info.messageId,
+      duration: duration + 'ms'
+    };
+    
+  } catch (error) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.error('💥 === ERROR AL ENVIAR CORREO ===');
+    console.error('⏱️ Tiempo hasta error:', duration + 'ms');
+    console.error('Error mensaje:', error.message);
+    
+    // Clasificar tipos de errores para mejor debugging
+    if (error.message.includes('535')) {
+      console.error('🔐 Error de autenticación - Verifica SMTP_USER y SMTP_PASS en .env');
+      console.error('💡 Asegúrate de usar una contraseña de aplicación, no la contraseña normal');
+    } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+      console.error('⏰ Error de timeout - El servidor SMTP tardó demasiado en responder');
+    } else if (error.message.includes('connection')) {
+      console.error('🔌 Error de conexión - Verifica la conectividad de red y configuración SMTP');
+    }
+    
+    return { 
+      success: false, 
+      error: error.message,
+      duration: duration + 'ms'
+    };
+  }
 }
 
 // ===============================
@@ -1424,7 +1575,12 @@ async function testSMTPConnection() {
 async function startServer() {
   try {
     await initializeDatabase();
-    await testSMTPConnection(); // Probar SMTP al inicio
+    // Quitar testSMTPConnection() que puede causar problemas
+    if (transporter) {
+      console.log('✅ SMTP configurado - emails habilitados');
+    } else {
+      console.log('⚠️ SMTP no configurado - emails deshabilitados');
+    }
     server = app.listen(PORT, () => {
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
     });
