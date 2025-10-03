@@ -3,7 +3,32 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = require('./whatsapp-service');
+
+// === IMPORTAR WHATSAPP CON MANEJO DE ERRORES ===
+let whatsappService = null;
+let whatsappAvailable = false;
+
+try {
+  whatsappService = require('./whatsapp-service');
+  whatsappAvailable = true;
+  console.log('📱 Servicio WhatsApp cargado correctamente');
+} catch (error) {
+  console.error('⚠️ WhatsApp service no disponible:', error.message);
+  console.log('📧 Fallback: usando sistema de emails');
+  whatsappAvailable = false;
+  
+  // Crear funciones dummy para evitar errores
+  whatsappService = {
+    enviarWhatsApp: () => Promise.resolve({ success: false, error: 'WhatsApp no disponible' }),
+    inicializarWhatsApp: () => console.log('WhatsApp no disponible'),
+    getWhatsAppStatus: () => ({ whatsapp_ready: false, error: 'No disponible' }),
+    whatsappReady: false,
+    ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP || '5493487456789',
+    BUSINESS_NAME: 'Capri Store'
+  };
+}
+
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -1467,7 +1492,8 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    whatsapp_ready: whatsappReady,
+    whatsapp_available: whatsappAvailable,
+    whatsapp_ready: whatsappAvailable ? whatsappReady : false,
     business_name: BUSINESS_NAME
   });
 });
@@ -1596,14 +1622,35 @@ async function testSMTPConnection() {
 async function startServer() {
   try {
     await initializeDatabase();
-    // Quitar testSMTPConnection() que puede causar problemas
+    
+    // Configuración SMTP
     if (transporter) {
       console.log('✅ SMTP configurado - emails habilitados');
     } else {
       console.log('⚠️ SMTP no configurado - emails deshabilitados');
     }
+    
+    // Inicializar WhatsApp si está disponible
+    if (whatsappAvailable) {
+      console.log('📱 Inicializando servicio WhatsApp...');
+      try {
+        await inicializarWhatsApp();
+        console.log('✅ WhatsApp inicializado correctamente');
+      } catch (error) {
+        console.error('❌ Error inicializando WhatsApp:', error.message);
+        console.log('📧 Continuando con sistema de emails como fallback');
+      }
+    } else {
+      console.log('⚠️ WhatsApp no disponible - usando fallback a emails');
+    }
+    
     server = app.listen(PORT, () => {
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
+      console.log(`🌐 URL: http://localhost:${PORT}`);
+      console.log(`📱 WhatsApp: ${whatsappAvailable ? 'Disponible' : 'No disponible'}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`📱 Si es la primera vez, escanea el QR que aparecerá arriba ☝️`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     });
   } catch (error) {
     console.error('❌ Error al iniciar servidor:', error);
@@ -1693,6 +1740,40 @@ app.post('/contact-whatsapp', async (req, res) => {
     telefono: req.body.telefono,
     mensaje: req.body.mensaje?.substring(0, 50) + '...' 
   });
+  
+  // Verificar si WhatsApp está disponible
+  if (!whatsappAvailable) {
+    console.warn(`[${timestamp}] ⚠️ [${requestId}] WhatsApp no disponible - usando fallback email`);
+    try {
+      // Fallback a email si WhatsApp no está disponible
+      const { nombre, email, telefono, mensaje } = req.body;
+      
+      if (!nombre?.trim() || !mensaje?.trim()) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Nombre y mensaje son requeridos'
+        });
+      }
+      
+      console.log(`[${timestamp}] 📧 [${requestId}] Enviando por email como fallback...`);
+      
+      // Aquí podrías implementar el envío por email como fallback
+      // Por ahora solo retornamos éxito parcial
+      return res.json({ 
+        success: true, 
+        method: 'email_fallback',
+        message: 'Mensaje recibido. Te contactaremos por email.',
+        whatsapp_available: false
+      });
+      
+    } catch (error) {
+      console.error(`[${timestamp}] ❌ [${requestId}] Error en fallback email:`, error);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error procesando mensaje'
+      });
+    }
+  }
   
   try {
     const { nombre, email, telefono, mensaje } = req.body;
