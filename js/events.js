@@ -296,41 +296,58 @@ document.addEventListener('DOMContentLoaded', function() {
   // Función para validar campos y cambiar estado del botón
   function validarCamposContacto() {
     const nombreField = document.getElementById('nombre');
+    const telefonoField = document.getElementById('telefono');
     const emailField = document.getElementById('email');
     const mensajeField = document.getElementById('mensaje');
     
     const nombre = nombreField.value.trim();
+    const telefono = telefonoField.value.trim();
     const email = emailField.value.trim();
     const mensaje = mensajeField.value.trim();
     
-    // Validar email básico
+    // Validar email básico (opcional)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const emailValido = emailRegex.test(email);
+    const emailValido = !email || emailRegex.test(email); // Válido si está vacío o es correcto
+    
+    // Validar teléfono básico (opcional pero recomendado)
+    const telefonoRegex = /^[\+]?[\s\d\-\(\)]{8,}$/;
+    const telefonoValido = !telefono || telefonoRegex.test(telefono);
     
     // Aplicar estilos visuales a los campos
-    // Nombre
+    // Nombre (obligatorio)
     if (nombre) {
       nombreField.classList.remove('campo-invalido');
       nombreField.classList.add('campo-valido');
     } else {
       nombreField.classList.remove('campo-valido');
-      if (nombreField.value.length > 0) { // Solo mostrar inválido si el usuario ha empezado a escribir
+      if (nombreField.value.length > 0) {
         nombreField.classList.add('campo-invalido');
       }
     }
     
-    // Email
+    // Teléfono (opcional)
+    if (telefono && telefonoValido) {
+      telefonoField.classList.remove('campo-invalido');
+      telefonoField.classList.add('campo-valido');
+    } else if (telefono && !telefonoValido) {
+      telefonoField.classList.remove('campo-valido');
+      telefonoField.classList.add('campo-invalido');
+    } else {
+      telefonoField.classList.remove('campo-valido', 'campo-invalido');
+    }
+    
+    // Email (opcional)
     if (email && emailValido) {
       emailField.classList.remove('campo-invalido');
       emailField.classList.add('campo-valido');
-    } else {
+    } else if (email && !emailValido) {
       emailField.classList.remove('campo-valido');
-      if (emailField.value.length > 0) {
-        emailField.classList.add('campo-invalido');
-      }
+      emailField.classList.add('campo-invalido');
+    } else {
+      emailField.classList.remove('campo-valido', 'campo-invalido');
     }
     
-    // Mensaje
+    // Mensaje (obligatorio)
     if (mensaje) {
       mensajeField.classList.remove('campo-invalido');
       mensajeField.classList.add('campo-valido');
@@ -341,11 +358,13 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     
-    // Verificar si todos los campos están completos y el email es válido
-    const todosLosCarposCompletos = nombre && email && mensaje && emailValido;
+    // Verificar campos obligatorios: nombre, mensaje
+    // Y que si hay email/teléfono, sean válidos
+    const camposObligatoriosCompletos = nombre && mensaje;
+    const camposOpcionalesValidos = emailValido && telefonoValido;
     
-    if (todosLosCarposCompletos) {
-      // Habilitar botón con color vino tinto
+    if (camposObligatoriosCompletos && camposOpcionalesValidos) {
+      // Habilitar botón
       enviarContactoBtn.disabled = false;
       enviarContactoBtn.className = 'btn btn-contacto-enabled btn-block font-weight-bold py-3 btn-contacto-transition';
     } else {
@@ -357,7 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Agregar event listeners a los campos del formulario
   if (contactForm) {
-    const campos = ['nombre', 'email', 'mensaje'];
+    const campos = ['nombre', 'telefono', 'email', 'mensaje'];
     campos.forEach(campoId => {
       const campo = document.getElementById(campoId);
       if (campo) {
@@ -383,26 +402,38 @@ document.addEventListener('DOMContentLoaded', function() {
       const formData = new FormData(contactForm);
       const datos = {
         nombre: formData.get('nombre').trim(),
+        telefono: formData.get('telefono').trim(),
         email: formData.get('email').trim(),
         mensaje: formData.get('mensaje').trim()
       };
       
-      // Validación básica
-      if (!datos.nombre || !datos.email || !datos.mensaje) {
-        mostrarAlerta('Por favor completa todos los campos.', 'error');
+      // Validación básica - solo nombre y mensaje son obligatorios
+      if (!datos.nombre || !datos.mensaje) {
+        mostrarAlerta('Por favor completa al menos tu nombre y mensaje.', 'error');
         return;
       }
       
-      // Validar email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(datos.email)) {
-        mostrarAlerta('Por favor ingresa un email válido.', 'error');
-        return;
+      // Validar email si se proporciona
+      if (datos.email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(datos.email)) {
+          mostrarAlerta('Por favor ingresa un email válido o déjalo vacío.', 'error');
+          return;
+        }
+      }
+      
+      // Validar teléfono si se proporciona
+      if (datos.telefono) {
+        const telefonoRegex = /^[\+]?[\s\d\-\(\)]{8,}$/;
+        if (!telefonoRegex.test(datos.telefono)) {
+          mostrarAlerta('Por favor ingresa un teléfono válido o déjalo vacío.', 'error');
+          return;
+        }
       }
       
       // Mostrar estado de carga
       enviarContactoBtn.disabled = true;
-      enviarContactoBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Enviando...';
+      enviarContactoBtn.innerHTML = '<i class="fab fa-whatsapp fa-spin mr-2"></i>Enviando por WhatsApp...';
       
       try {
         // Determinar la URL del backend
@@ -411,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
           ? 'http://localhost:3001' 
           : 'https://capri-store.onrender.com';
         
-        const response = await fetch(`${backendUrl}/contact`, {
+        const response = await fetch(`${backendUrl}/contact-whatsapp`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -423,10 +454,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (response.ok && result.success) {
           // Éxito completo
-          mostrarAlerta(
-            '¡Mensaje enviado correctamente! Te responderemos a la brevedad.',
-            'success'
-          );
+          const mensaje = result.whatsapp_sent 
+            ? '¡Consulta enviada por WhatsApp! Te responderemos en 2-4 horas hábiles.' 
+            : 'Tu consulta fue recibida. Nos pondremos en contacto contigo pronto.';
+          
+          mostrarAlerta(mensaje, 'success');
           contactForm.reset();
           
           // Después de reset, revalidar para deshabilitar el botón
@@ -438,7 +470,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
           // Error del servidor - mostrar el mensaje específico del backend
           const errorMessage = result.error || 'Error al enviar el mensaje. Intenta nuevamente.';
-          mostrarAlerta(errorMessage, 'error');
+          const altMessage = result.alternative ? `\n\n${result.alternative}` : '';
+          mostrarAlerta(errorMessage + altMessage, 'error');
         }
         
       } catch (error) {
@@ -446,14 +479,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Error de conexión o red
         mostrarAlerta(
-          'Error de conexión. Por favor verifica tu internet e intenta nuevamente, o contáctanos por teléfono: +54 9 11 1234 5678',
+          'Error de conexión. Por favor verifica tu internet e intenta nuevamente, o contáctanos por WhatsApp: +54 9 3487 456789',
           'error'
         );
       } finally {
         // Restaurar botón
         enviarContactoBtn.disabled = true;
         enviarContactoBtn.className = 'btn btn-contacto-disabled btn-block font-weight-bold py-3 btn-contacto-transition';
-        enviarContactoBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje';
+        enviarContactoBtn.innerHTML = '<i class="fab fa-whatsapp mr-2"></i>Enviar por WhatsApp';
         
         // Re-validar campos para mantener estado correcto
         setTimeout(() => {

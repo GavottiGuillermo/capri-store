@@ -220,23 +220,32 @@
           <div class="invalid-feedback">Por favor ingresa tu nombre.</div>
         </div>
         <div class="form-group">
-          <label class="font-weight-bold" for="email">Correo Electrónico *</label>
-          <input class="form-control border-rosado" id="email" name="email" placeholder="tuemail@ejemplo.com" required type="email"/>
+          <label class="font-weight-bold" for="telefono">WhatsApp <small class="text-muted">(recomendado para respuesta rápida)</small></label>
+          <input class="form-control border-rosado" id="telefono" name="telefono" placeholder="+54 9 3487 123456" type="tel"/>
+          <small class="form-text text-muted">Te responderemos directamente por WhatsApp si proporcionas tu número</small>
+        </div>
+        <div class="form-group">
+          <label class="font-weight-bold" for="email">Email <small class="text-muted">(opcional)</small></label>
+          <input class="form-control border-rosado" id="email" name="email" placeholder="tuemail@ejemplo.com" type="email"/>
           <div class="invalid-feedback">Por favor ingresa un email válido.</div>
         </div>
         <div class="form-group">
           <label class="font-weight-bold" for="mensaje">Mensaje *</label>
-          <textarea class="form-control border-rosado" id="mensaje" name="mensaje" placeholder="Escribe tu mensaje aquí" required rows="4"></textarea>
+          <textarea class="form-control border-rosado" id="mensaje" name="mensaje" placeholder="Escribe tu consulta aquí" required rows="4"></textarea>
           <div class="invalid-feedback">Por favor escribe tu mensaje.</div>
         </div>
         <button id="enviarContacto" class="btn btn-contacto-disabled btn-block font-weight-bold py-3 btn-contacto-transition" type="submit" disabled>
-          <i class="fas fa-paper-plane mr-2"></i>Enviar Mensaje
+          <i class="fab fa-whatsapp mr-2"></i>Enviar por WhatsApp
         </button>
       </form>
       <div class="mt-4 text-center">
-        <p><i class="fas fa-phone-alt mr-2"></i>+54 9 11 1234 5678</p>
-        <p><i class="fas fa-envelope mr-2"></i>contacto@capristore.com.ar</p>
-        <p><i class="fas fa-map-marker-alt mr-2"></i>Justa Lima 123, Zárate, Buenos Aires</p>
+        <p><i class="fab fa-whatsapp mr-2 text-success"></i><strong>WhatsApp:</strong> +54 9 3487 456789</p>
+        <p><i class="fas fa-envelope mr-2"></i>capristorezte@gmail.com</p>
+        <p><i class="fas fa-map-marker-alt mr-2"></i>Zárate, Buenos Aires</p>
+        <small class="text-muted mt-2 d-block">
+          <i class="fas fa-info-circle mr-1"></i>
+          Te responderemos por WhatsApp en 2-4 horas hábiles
+        </small>
       </div>
     </div>
   </section>

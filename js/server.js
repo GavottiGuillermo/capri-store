@@ -3,6 +3,7 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = require('./whatsapp-service');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -1465,8 +1466,15 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime() 
+    uptime: process.uptime(),
+    whatsapp_ready: whatsappReady,
+    business_name: BUSINESS_NAME
   });
+});
+
+// === ESTADO DEL WHATSAPP ===
+app.get('/whatsapp-status', (req, res) => {
+  res.json(getWhatsAppStatus());
 });
 
 // Endpoint para verificar variables SMTP (solo para debug)
@@ -1668,6 +1676,114 @@ app.get('/test-smtp', async (req, res) => {
       suggestion: error.message.includes('Timeout') 
         ? 'Timeout de conexión. Verifica: 1) App Password de Gmail configurada, 2) Puerto correcto (587 o 465), 3) Firewall no está bloqueando'
         : 'Error de autenticación. Verifica que SMTP_PASS sea una "App Password" de Google, no tu contraseña normal'
+    });
+  }
+});
+
+// === ENDPOINT DE CONTACTO VIA WHATSAPP ===
+app.post('/contact-whatsapp', async (req, res) => {
+  const startTime = Date.now();
+  const timestamp = new Date().toISOString();
+  const requestId = Math.random().toString(36).substring(7);
+  
+  console.log(`[${timestamp}] 📱 CONTACTO WHATSAPP RECIBIDO [${requestId}]`);
+  console.log(`[${timestamp}] 📋 Datos:`, { 
+    nombre: req.body.nombre, 
+    email: req.body.email, 
+    telefono: req.body.telefono,
+    mensaje: req.body.mensaje?.substring(0, 50) + '...' 
+  });
+  
+  try {
+    const { nombre, email, telefono, mensaje } = req.body;
+    
+    // Validación básica
+    if (!nombre?.trim() || !mensaje?.trim()) {
+      console.error(`[${timestamp}] ❌ [${requestId}] Datos incompletos`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Nombre y mensaje son requeridos'
+      });
+    }
+    
+    console.log(`[${timestamp}] 🚀 [${requestId}] Iniciando notificación WhatsApp...`);
+    
+    // Preparar datos
+    const fechaHora = new Date().toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // Mensaje para administrador
+    const mensajeAdmin = `🛍️ *NUEVA CONSULTA - ${BUSINESS_NAME}*\n\n` +
+      `👤 *Cliente:* ${nombre}\n` +
+      `📧 *Email:* ${email || 'No proporcionado'}\n` +
+      `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
+      `📅 *Fecha:* ${fechaHora}\n\n` +
+      `💬 *Mensaje:*\n${mensaje}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🚀 *Responde directamente para contactar al cliente*\n` +
+      `💡 ID: ${requestId}`;
+    
+    let adminSent = false;
+    let whatsappError = '';
+    
+    // Enviar mensaje a administrador
+    try {
+      console.log(`[${timestamp}] 📤 [${requestId}] Enviando notificación a admin...`);
+      const resultAdmin = await enviarWhatsApp(ADMIN_WHATSAPP, mensajeAdmin);
+      adminSent = resultAdmin.success;
+      if (!adminSent) {
+        whatsappError = resultAdmin.error;
+        console.error(`[${timestamp}] ❌ [${requestId}] Error enviando a admin:`, resultAdmin.error);
+      }
+    } catch (error) {
+      console.error(`[${timestamp}] ❌ [${requestId}] Error crítico admin:`, error.message);
+      whatsappError = error.message;
+    }
+    
+    const duration = Date.now() - startTime;
+    
+    // Respuesta según los resultados
+    if (adminSent) {
+      console.log(`[${timestamp}] ✅ [${requestId}] Notificación enviada exitosamente (${duration}ms)`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Tu consulta fue recibida por WhatsApp. Te responderemos en 2-4 horas hábiles.',
+        requestId: requestId,
+        whatsapp_sent: true,
+        admin_notified: adminSent,
+        processingTime: `${duration}ms`
+      });
+      
+    } else {
+      console.error(`[${timestamp}] ❌ [${requestId}] Fallo enviando WhatsApp (${duration}ms) - ${whatsappError}`);
+      
+      res.status(503).json({ 
+        success: false, 
+        error: 'Error temporal enviando la notificación. Por favor intenta nuevamente.',
+        requestId: requestId,
+        whatsapp_ready: whatsappReady,
+        alternative: 'También puedes llamarnos directamente al +54 9 3487 456789',
+        processingTime: `${duration}ms`
+      });
+    }
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[${timestamp}] 💥 [${requestId}] Error crítico (${duration}ms):`, error.message);
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error del servidor. Te contactaremos pronto.',
+      requestId: requestId,
+      alternative: 'Para consultas urgentes: +54 9 3487 456789',
+      processingTime: `${duration}ms`
     });
   }
 });
