@@ -5,6 +5,10 @@ node_modules/
 .env
 .env.*
 
+# WhatsApp Authentication (contains sensitive session data)
+.wwebjs_auth/
+.wwebjs_cache/
+
 # Logs
 logs
 *.log

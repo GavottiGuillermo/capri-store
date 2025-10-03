@@ -34,16 +34,32 @@ whatsappClient = new Client({
 
 // Eventos de WhatsApp
 whatsappClient.on('qr', (qr) => {
-  console.log('📱 Escanea este código QR con WhatsApp:');
+  console.log('\n�🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+  console.log('�📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! 📱');
+  console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+  
+  // Generar QR en la terminal
   qrcode.generate(qr, { small: true });
-  console.log('ℹ️  1. Abre WhatsApp en tu teléfono');
-  console.log('ℹ️  2. Ve a Configuración > Dispositivos vinculados');
-  console.log('ℹ️  3. Toca "Vincular un dispositivo"');
-  console.log('ℹ️  4. Escanea el código QR de arriba');
+  
+  console.log('\n📲 INSTRUCCIONES PASO A PASO:');
+  console.log('1️⃣ Abre WhatsApp en tu teléfono');
+  console.log('2️⃣ Ve a Configuración > Dispositivos vinculados');
+  console.log('3️⃣ Toca "Vincular un dispositivo"');
+  console.log('4️⃣ Escanea el código QR de arriba ☝️');
+  console.log('5️⃣ ¡Listo! Tu tienda tendrá WhatsApp Business activo');
+  console.log('\n⏰ El QR expira en 60 segundos - escanéalo pronto');
+  console.log('🔄 Si expira, el sistema generará uno nuevo automáticamente');
+  console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
 });
 
 whatsappClient.on('ready', () => {
-  console.log('✅ WhatsApp Business conectado exitosamente!');
+  const timestamp = new Date().toLocaleString('es-AR');
+  console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
+  console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
+  console.log(`📱 Negocio: ${BUSINESS_NAME}`);
+  console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
+  console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
+  console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
   whatsappReady = true;
 });
 
