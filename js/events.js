@@ -128,18 +128,29 @@ function setupFallbackContactLinks() {
   }
 }
 
-// Smooth scroll
+// Smooth scroll - Solo para enlaces internos
 function setupSmoothScroll() {
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  // Solo seleccionar enlaces que realmente empiecen con # (enlaces internos)
+  document.querySelectorAll('a').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
-      e.preventDefault();
-      const target = document.querySelector(this.getAttribute('href'));
-      if (target) {
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
+      const href = this.getAttribute('href');
+      
+      // Solo aplicar smooth scroll a enlaces internos que comiencen con #
+      if (href && href.startsWith('#') && href.length > 1) {
+        e.preventDefault();
+        try {
+          const target = document.querySelector(href);
+          if (target) {
+            target.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+        } catch (error) {
+          console.warn('🔗 Error en smooth scroll para:', href, error.message);
+        }
       }
+      // Para enlaces externos (WhatsApp, Instagram, email) dejar que se abran normalmente
     });
   });
 }
