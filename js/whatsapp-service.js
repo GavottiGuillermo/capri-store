@@ -65,16 +65,23 @@ whatsappClient.on('qr', (qr) => {
   qrGenerated = true;
 });
 
-whatsappClient.on('ready', () => {
+whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
-  console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
-  console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
-  console.log(`📱 Negocio: ${BUSINESS_NAME}`);
-  console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
-  console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
-  console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
   whatsappReady = true;
-  qrGenerated = false;
+  
+  // Verificar estado real
+  try {
+    const state = await whatsappClient.getState();
+    console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
+    console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
+    console.log(`📱 Negocio: ${BUSINESS_NAME}`);
+    console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
+    console.log(`🔗 Estado del cliente: ${state}`);
+    console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
+    console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+  } catch (error) {
+    console.log(`✅ WhatsApp conectado pero error obteniendo estado: ${error.message}`);
+  }
 });
 
 whatsappClient.on('authenticated', () => {
@@ -112,10 +119,19 @@ async function inicializarWhatsApp() {
 // Función para enviar mensajes
 async function enviarWhatsApp(numero, mensaje) {
   try {
-    if (!whatsappReady) {
+    // Verificar múltiples condiciones de estado
+    const clientState = await whatsappClient.getState();
+    const isReady = whatsappReady && clientState === 'CONNECTED';
+    
+    if (!isReady) {
+      console.error('❌ WhatsApp no listo:', { 
+        whatsappReady, 
+        clientState,
+        timestamp: new Date().toISOString()
+      });
       return { 
         success: false, 
-        error: 'WhatsApp no está listo. Verifica la conexión.' 
+        error: `WhatsApp no está listo. Estado: ${clientState || 'UNKNOWN'}` 
       };
     }
 
@@ -141,13 +157,30 @@ async function enviarWhatsApp(numero, mensaje) {
 }
 
 // Función para obtener estado
-function getWhatsAppStatus() {
-  return {
-    whatsapp_ready: whatsappReady,
-    business_name: BUSINESS_NAME,
-    admin_whatsapp: ADMIN_WHATSAPP,
-    timestamp: new Date().toISOString()
-  };
+async function getWhatsAppStatus() {
+  try {
+    const clientState = await whatsappClient.getState();
+    const isReady = whatsappReady && clientState === 'CONNECTED';
+    
+    return {
+      whatsapp_ready: isReady,
+      client_state: clientState,
+      flag_ready: whatsappReady,
+      business_name: BUSINESS_NAME,
+      admin_whatsapp: ADMIN_WHATSAPP,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      whatsapp_ready: false,
+      client_state: 'ERROR',
+      flag_ready: whatsappReady,
+      error: error.message,
+      business_name: BUSINESS_NAME,
+      admin_whatsapp: ADMIN_WHATSAPP,
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
 module.exports = {

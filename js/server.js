@@ -62,6 +62,8 @@ app.use(cors({
       'http://localhost:10000',
       'https://capri-store.onrender.com',
       'https://capri-store-web.onrender.com',
+      'https://www.capristorezte.com.ar',
+      'https://capristorezte.com.ar',
       // Permitir Render y otros deployments
       /\.onrender\.com$/,
       /\.herokuapp\.com$/,
