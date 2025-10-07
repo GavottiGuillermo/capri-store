@@ -107,24 +107,35 @@ async function setupContactLinks() {
 }
 
 function setupFallbackContactLinks() {
-  console.log('⚠️ Usando links de contacto por defecto');
+  console.log('⚠️ Error cargando información de contacto del servidor');
+  console.log('❌ Los enlaces de contacto no estarán disponibles');
   
-  // WhatsApp por defecto
+  // Deshabilitar enlaces si no hay información del servidor
   const whatsappLink = document.getElementById('whatsappLink');
   if (whatsappLink) {
-    whatsappLink.href = 'https://wa.me/5493487456789?text=¡Hola! Me interesa conocer más sobre sus productos.';
+    whatsappLink.href = '#';
+    whatsappLink.onclick = () => {
+      alert('Error: No se puede obtener información de contacto del servidor');
+      return false;
+    };
   }
   
-  // Instagram por defecto
   const instagramLink = document.getElementById('instagramLink');
   if (instagramLink) {
-    instagramLink.href = 'https://instagram.com/capristorezte';
+    instagramLink.href = '#';
+    instagramLink.onclick = () => {
+      alert('Error: No se puede obtener información de contacto del servidor');
+      return false;
+    };
   }
   
-  // Email por defecto
   const emailLink = document.getElementById('emailLink');
   if (emailLink) {
-    emailLink.href = 'mailto:capristorezte@gmail.com?subject=Consulta desde Capri Store&body=Hola, me gustaría hacer una consulta sobre...';
+    emailLink.href = '#';
+    emailLink.onclick = () => {
+      alert('Error: No se puede obtener información de contacto del servidor');
+      return false;
+    };
   }
 }
 

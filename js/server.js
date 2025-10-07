@@ -22,7 +22,7 @@ try {
     inicializarWhatsApp: () => console.log('WhatsApp no disponible'),
     getWhatsAppStatus: () => ({ whatsapp_ready: false, error: 'No disponible' }),
     whatsappReady: false,
-    ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP || '5493487456789',
+    ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP,
     BUSINESS_NAME: 'Capri Store'
   };
 }
@@ -237,9 +237,9 @@ app.get('/whatsapp-status', (req, res) => {
 // === INFORMACIÓN DE CONTACTO ===
 app.get('/contact-info', (req, res) => {
   res.json({
-    whatsapp: process.env.ADMIN_WHATSAPP || '5493487456789',
-    instagram: process.env.ADMIN_INSTAGRAM || 'https://instagram.com/capristorezte',
-    email: process.env.ADMIN_EMAIL || 'capristorezte@gmail.com',
+    whatsapp: process.env.ADMIN_WHATSAPP,
+    instagram: process.env.ADMIN_INSTAGRAM,
+    email: process.env.ADMIN_EMAIL,
     business_name: BUSINESS_NAME,
     location: 'Zárate, Buenos Aires, Argentina'
   });

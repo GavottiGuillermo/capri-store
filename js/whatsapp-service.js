@@ -3,7 +3,7 @@ const qrcode = require('qrcode-terminal');
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
-const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '5493487456789'; // Número del admin
+const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP; // Número del admin
 
 let whatsappReady = false;
 let qrGenerated = false;
