@@ -1,21 +1,20 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
-// ===============================
-// CONFIGURACIÓN DE WHATSAPP BUSINESS
-// ===============================
-let whatsappClient = null;
-let whatsappReady = false;
+// Configuración del negocio
+const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
+const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '5493487456789'; // Número del admin
 
-const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '5493487456789';
-const BUSINESS_NAME = 'Capri Store';
+let whatsappReady = false;
+let qrGenerated = false;
 
 console.log('📱 Configurando WhatsApp Business...');
 
-// Configurar cliente WhatsApp
-whatsappClient = new Client({
+// Configurar cliente WhatsApp con configuraciones optimizadas
+const whatsappClient = new Client({
   authStrategy: new LocalAuth({
-    name: 'capri-store-session'
+    clientId: 'capri-store-session',
+    dataPath: './.wwebjs_auth/'
   }),
   puppeteer: {
     headless: true,
@@ -27,29 +26,43 @@ whatsappClient = new Client({
       '--no-first-run',
       '--no-zygote',
       '--single-process',
-      '--disable-gpu'
-    ]
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor'
+    ],
+    timeout: 60000 // Timeout más largo para conexiones lentas
   }
 });
 
 // Eventos de WhatsApp
 whatsappClient.on('qr', (qr) => {
-  console.log('\n�🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
-  console.log('�📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! 📱');
+  if (qrGenerated) {
+    console.log('\n⚠️ QR anterior expiró, generando nuevo código...\n');
+  }
+  
+  console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+  console.log('📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! 📱');
   console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
   
   // Generar QR en la terminal
   qrcode.generate(qr, { small: true });
   
-  console.log('\n📲 INSTRUCCIONES PASO A PASO:');
+  console.log('\n📲 INSTRUCCIONES PARA EVITAR "NO SE PUDO CONECTAR":');
   console.log('1️⃣ Abre WhatsApp en tu teléfono');
-  console.log('2️⃣ Ve a Configuración > Dispositivos vinculados');
-  console.log('3️⃣ Toca "Vincular un dispositivo"');
-  console.log('4️⃣ Escanea el código QR de arriba ☝️');
-  console.log('5️⃣ ¡Listo! Tu tienda tendrá WhatsApp Business activo');
-  console.log('\n⏰ El QR expira en 60 segundos - escanéalo pronto');
-  console.log('🔄 Si expira, el sistema generará uno nuevo automáticamente');
-  console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+  console.log('2️⃣ Asegúrate de tener BUENA conexión WiFi/datos');
+  console.log('3️⃣ Ve a Configuración > Dispositivos vinculados');
+  console.log('4️⃣ Toca "Vincular un dispositivo"');
+  console.log('5️⃣ Escanea LENTAMENTE el QR de arriba ☝️');
+  console.log('6️⃣ ¡ESPERA hasta ver "CONECTADO" sin cerrar nada!');
+  console.log('\n⚠️ TIPS IMPORTANTES:');
+  console.log('• NO cierres WhatsApp mientras escaneas');
+  console.log('• NO salgas de la pantalla de escaneo');
+  console.log('• Espera 10-15 segundos después de escanear');
+  console.log('• Si falla, espera 2 minutos antes de reintentar');
+  console.log('\n⏰ Tienes 60 segundos para escanearlo');
+  console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+  
+  qrGenerated = true;
 });
 
 whatsappClient.on('ready', () => {
@@ -61,6 +74,7 @@ whatsappClient.on('ready', () => {
   console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
   console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
   whatsappReady = true;
+  qrGenerated = false;
 });
 
 whatsappClient.on('authenticated', () => {
@@ -68,65 +82,80 @@ whatsappClient.on('authenticated', () => {
 });
 
 whatsappClient.on('auth_failure', (msg) => {
-  console.error('❌ Fallo de autenticación WhatsApp:', msg);
+  console.error('❌ Error de autenticación WhatsApp:', msg);
+  console.log('🔄 Solucion: Elimina la carpeta .wwebjs_auth y reinicia');
   whatsappReady = false;
+  qrGenerated = false;
 });
 
 whatsappClient.on('disconnected', (reason) => {
-  console.log('📱 WhatsApp desconectado:', reason);
+  console.log('⚠️ WhatsApp desconectado:', reason);
   whatsappReady = false;
+  qrGenerated = false;
 });
 
-// Función para enviar mensajes WhatsApp
-const enviarWhatsApp = async (numero, mensaje) => {
+whatsappClient.on('loading_screen', (percent, message) => {
+  console.log('📱 Cargando WhatsApp:', percent + '%', message);
+});
+
+// Función para inicializar WhatsApp
+async function inicializarWhatsApp() {
+  try {
+    console.log('🚀 Inicializando WhatsApp Business...');
+    await whatsappClient.initialize();
+  } catch (error) {
+    console.error('❌ Error inicializando WhatsApp:', error);
+    throw error;
+  }
+}
+
+// Función para enviar mensajes
+async function enviarWhatsApp(numero, mensaje) {
   try {
     if (!whatsappReady) {
-      console.warn('⚠️ WhatsApp no está listo - mensaje no enviado');
-      return { success: false, error: 'WhatsApp no conectado' };
+      return { 
+        success: false, 
+        error: 'WhatsApp no está listo. Verifica la conexión.' 
+      };
     }
-    
-    // Formatear número (quitar espacios, guiones, etc.)
-    const numeroLimpio = numero.replace(/[^0-9]/g, '');
-    const numeroFormateado = numeroLimpio.startsWith('54') ? `${numeroLimpio}@c.us` : `54${numeroLimpio}@c.us`;
-    
-    console.log(`📱 Enviando WhatsApp a: ${numeroFormateado}`);
-    
-    await whatsappClient.sendMessage(numeroFormateado, mensaje);
-    console.log('✅ Mensaje WhatsApp enviado exitosamente');
-    
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Error enviando WhatsApp:', error.message);
-    return { success: false, error: error.message };
-  }
-};
 
-// Inicializar WhatsApp
-const inicializarWhatsApp = () => {
-  try {
-    whatsappClient.initialize();
-    console.log('🚀 Inicializando WhatsApp Business...');
+    // Formatear número (agregar @c.us si no lo tiene)
+    const numeroFormateado = numero.includes('@') ? numero : `${numero}@c.us`;
+    
+    // Enviar mensaje
+    const chat = await whatsappClient.getChatById(numeroFormateado);
+    await chat.sendMessage(mensaje);
+    
+    return { 
+      success: true, 
+      message: 'Mensaje enviado correctamente' 
+    };
+    
   } catch (error) {
-    console.error('❌ Error inicializando WhatsApp:', error.message);
+    console.error('❌ Error enviando WhatsApp:', error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
   }
-};
+}
 
 // Función para obtener estado
-const getWhatsAppStatus = () => {
+function getWhatsAppStatus() {
   return {
     whatsapp_ready: whatsappReady,
-    client_initialized: !!whatsappClient,
-    admin_number: ADMIN_WHATSAPP ? `+${ADMIN_WHATSAPP.substring(0, 5)}****${ADMIN_WHATSAPP.slice(-4)}` : 'NO CONFIGURADO',
-    business_name: BUSINESS_NAME
+    business_name: BUSINESS_NAME,
+    admin_whatsapp: ADMIN_WHATSAPP,
+    timestamp: new Date().toISOString()
   };
-};
+}
 
 module.exports = {
-  enviarWhatsApp,
-  inicializarWhatsApp,
-  getWhatsAppStatus,
   whatsappClient,
-  get whatsappReady() { return whatsappReady; },
+  inicializarWhatsApp,
+  enviarWhatsApp,
+  getWhatsAppStatus,
+  whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
 };

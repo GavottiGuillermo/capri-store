@@ -52,23 +52,41 @@ const webhookNotifications = new Map();
 const PORT = process.env.PORT || 3000;
 let server;
 
-// Configuración de CORS
+// Configuración de CORS más permisiva para producción
 app.use(cors({
   origin: function (origin, callback) {
+    // Lista de dominios permitidos
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:8080',
+      'http://localhost:10000',
       'https://capri-store.onrender.com',
-      // Agregar dominios de Render u otros deployments
+      'https://capri-store-web.onrender.com',
+      // Permitir Render y otros deployments
+      /\.onrender\.com$/,
+      /\.herokuapp\.com$/,
+      /\.vercel\.app$/,
+      /\.netlify\.app$/
     ];
     
-    // Permitir requests sin origen (mobile apps, Postman, etc)
+    // Permitir requests sin origen (mobile apps, Postman, WhatsApp, etc)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    // Verificar si el origen está permitido
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error('No permitido por CORS'), false);
+      console.warn(`⚠️ CORS bloqueado para origen: ${origin}`);
+      callback(null, true); // Permitir temporalmente para debug
     }
   },
   credentials: true,
