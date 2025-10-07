@@ -74,11 +74,28 @@ async function setupContactLinks() {
   try {
     console.log('🔄 Cargando información de contacto del servidor...');
     
-    // Obtener información de contacto del servidor
-    const response = await fetch('/contact-info');
+    // Intentar con diferentes URLs en caso de problemas de routing
+    const urls = ['/contact-info', '/api/contact-info', './contact-info'];
+    let response = null;
+    let lastError = null;
     
-    if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+    for (const url of urls) {
+      try {
+        console.log(`🔄 Intentando URL: ${url}`);
+        response = await fetch(url);
+        if (response.ok) {
+          console.log(`✅ URL exitosa: ${url}`);
+          break;
+        }
+        console.log(`❌ URL falló: ${url} - ${response.status}`);
+      } catch (error) {
+        console.log(`❌ Error en URL ${url}:`, error.message);
+        lastError = error;
+      }
+    }
+    
+    if (!response || !response.ok) {
+      throw new Error(`Error HTTP: ${response?.status || 'NETWORK'} - ${response?.statusText || lastError?.message || 'No se pudo conectar al servidor'}`);
     }
     
     const contactInfo = await response.json();

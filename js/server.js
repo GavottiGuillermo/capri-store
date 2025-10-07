@@ -225,13 +225,42 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     whatsapp_available: whatsappAvailable,
     whatsapp_ready: whatsappAvailable ? whatsappReady : false,
-    business_name: BUSINESS_NAME
+    business_name: BUSINESS_NAME,
+    env_vars: {
+      admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
+      admin_instagram: !!process.env.ADMIN_INSTAGRAM,
+      admin_email: !!process.env.ADMIN_EMAIL,
+      mercadopago_token: !!process.env.MERCADOPAGO_ACCESS_TOKEN
+    }
   });
 });
 
 // === ESTADO DEL WHATSAPP ===
 app.get('/whatsapp-status', (req, res) => {
   res.json(getWhatsAppStatus());
+});
+
+// === ENDPOINT DE DEBUG ===
+app.get('/debug', (req, res) => {
+  res.json({
+    server_status: 'RUNNING',
+    node_env: process.env.NODE_ENV,
+    port: PORT,
+    timestamp: new Date().toISOString(),
+    variables_configuradas: {
+      ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP ? 'CONFIGURADO' : 'NO CONFIGURADO',
+      ADMIN_INSTAGRAM: process.env.ADMIN_INSTAGRAM ? 'CONFIGURADO' : 'NO CONFIGURADO', 
+      ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'CONFIGURADO' : 'NO CONFIGURADO',
+      MERCADOPAGO_ACCESS_TOKEN: process.env.MERCADOPAGO_ACCESS_TOKEN ? 'CONFIGURADO' : 'NO CONFIGURADO',
+      DATABASE_URL: process.env.DATABASE_URL ? 'CONFIGURADO' : 'NO CONFIGURADO'
+    },
+    endpoints_disponibles: [
+      '/health',
+      '/debug', 
+      '/contact-info',
+      '/whatsapp-status'
+    ]
+  });
 });
 
 // === INFORMACIÓN DE CONTACTO ===
