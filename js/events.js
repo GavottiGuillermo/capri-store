@@ -72,16 +72,58 @@ function preloadImages() {
 // Configurar links de contacto dinámicos
 async function setupContactLinks() {
   try {
+    console.log('🔄 Cargando información de contacto del servidor...');
+    
     // Obtener información de contacto del servidor
     const response = await fetch('/contact-info');
+    
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+    }
+    
     const contactInfo = await response.json();
+    console.log('📄 Información de contacto recibida:', contactInfo);
+    
+    // Validar que la respuesta tenga los datos esperados
+    if (!contactInfo || typeof contactInfo !== 'object') {
+      throw new Error('Respuesta del servidor inválida');
+    }
     
     // WhatsApp
     const whatsappLink = document.getElementById('whatsappLink');
-    if (whatsappLink && contactInfo.whatsapp) {
-      const whatsappUrl = `https://wa.me/${contactInfo.whatsapp.replace(/[^0-9]/g, '')}?text=¡Hola! Me interesa conocer más sobre sus productos.`;
-      whatsappLink.href = whatsappUrl;
-      console.log('✅ WhatsApp link configurado:', whatsappUrl);
+    if (whatsappLink) {
+      if (contactInfo.whatsapp) {
+        // Limpiar el número y validar formato
+        let cleanNumber = contactInfo.whatsapp.toString().replace(/[^0-9]/g, '');
+        
+        console.log('📱 Número original:', contactInfo.whatsapp);
+        console.log('📱 Número limpio:', cleanNumber);
+        console.log('📱 Longitud del número:', cleanNumber.length);
+        
+        // Validar que el número tenga al menos 10 dígitos y máximo 15
+        if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
+          const message = encodeURIComponent('¡Hola! Me interesa conocer más sobre sus productos.');
+          const whatsappUrl = `https://wa.me/${cleanNumber}?text=${message}`;
+          whatsappLink.href = whatsappUrl;
+          console.log('✅ WhatsApp link configurado:', whatsappUrl);
+        } else {
+          console.error('❌ Número de WhatsApp inválido (longitud):', cleanNumber, 'Longitud:', cleanNumber.length);
+          whatsappLink.href = '#';
+          whatsappLink.onclick = () => {
+            alert(`Error: Número de WhatsApp no válido. Recibido: "${contactInfo.whatsapp}" (limpio: "${cleanNumber}")`);
+            return false;
+          };
+        }
+      } else {
+        console.error('❌ No se recibió número de WhatsApp del servidor');
+        whatsappLink.href = '#';
+        whatsappLink.onclick = () => {
+          alert('Error: No hay número de WhatsApp configurado en el servidor');
+          return false;
+        };
+      }
+    } else {
+      console.error('❌ Elemento whatsappLink no encontrado en el DOM');
     }
     
     // Instagram  
@@ -101,21 +143,29 @@ async function setupContactLinks() {
     
   } catch (error) {
     console.error('❌ Error cargando información de contacto:', error);
-    // Fallback con valores por defecto
-    setupFallbackContactLinks();
+    
+    // Mostrar error específico si la respuesta del servidor tiene información
+    if (error.message.includes('HTTP: 500')) {
+      console.error('🔥 Error del servidor - Probablemente variables de entorno no configuradas');
+    }
+    
+    setupFallbackContactLinks(error);
   }
 }
 
-function setupFallbackContactLinks() {
-  console.log('⚠️ Error cargando información de contacto del servidor');
-  console.log('❌ Los enlaces de contacto no estarán disponibles');
+function setupFallbackContactLinks(error = null) {
+  console.log('⚠️ Configurando enlaces de contacto en modo fallback');
+  
+  const errorMessage = error ? 
+    `Error del servidor: ${error.message}. Verifica que las variables de entorno estén configuradas.` :
+    'No se puede obtener información de contacto del servidor';
   
   // Deshabilitar enlaces si no hay información del servidor
   const whatsappLink = document.getElementById('whatsappLink');
   if (whatsappLink) {
     whatsappLink.href = '#';
     whatsappLink.onclick = () => {
-      alert('Error: No se puede obtener información de contacto del servidor');
+      alert(errorMessage);
       return false;
     };
   }
@@ -124,7 +174,7 @@ function setupFallbackContactLinks() {
   if (instagramLink) {
     instagramLink.href = '#';
     instagramLink.onclick = () => {
-      alert('Error: No se puede obtener información de contacto del servidor');
+      alert(errorMessage);
       return false;
     };
   }
@@ -133,7 +183,7 @@ function setupFallbackContactLinks() {
   if (emailLink) {
     emailLink.href = '#';
     emailLink.onclick = () => {
-      alert('Error: No se puede obtener información de contacto del servidor');
+      alert(errorMessage);
       return false;
     };
   }

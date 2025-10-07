@@ -236,13 +236,39 @@ app.get('/whatsapp-status', (req, res) => {
 
 // === INFORMACIÓN DE CONTACTO ===
 app.get('/contact-info', (req, res) => {
-  res.json({
-    whatsapp: process.env.ADMIN_WHATSAPP,
-    instagram: process.env.ADMIN_INSTAGRAM,
-    email: process.env.ADMIN_EMAIL,
-    business_name: BUSINESS_NAME,
-    location: 'Zárate, Buenos Aires, Argentina'
-  });
+  try {
+    const contactInfo = {
+      whatsapp: process.env.ADMIN_WHATSAPP,
+      instagram: process.env.ADMIN_INSTAGRAM,
+      email: process.env.ADMIN_EMAIL,
+      business_name: BUSINESS_NAME,
+      location: 'Zárate, Buenos Aires, Argentina'
+    };
+    
+    // Log para debugging
+    console.log('📄 Enviando información de contacto:', {
+      whatsapp: contactInfo.whatsapp ? `${contactInfo.whatsapp.substring(0, 4)}****` : 'NO CONFIGURADO',
+      instagram: contactInfo.instagram ? 'CONFIGURADO' : 'NO CONFIGURADO',
+      email: contactInfo.email ? 'CONFIGURADO' : 'NO CONFIGURADO'
+    });
+    
+    // Validar que al menos uno de los contactos esté configurado
+    if (!contactInfo.whatsapp && !contactInfo.instagram && !contactInfo.email) {
+      console.warn('⚠️ Ninguna variable de contacto está configurada');
+      return res.status(500).json({
+        error: 'No hay información de contacto configurada',
+        message: 'Variables de entorno ADMIN_WHATSAPP, ADMIN_INSTAGRAM, ADMIN_EMAIL no están configuradas'
+      });
+    }
+    
+    res.json(contactInfo);
+  } catch (error) {
+    console.error('❌ Error en endpoint /contact-info:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      message: error.message
+    });
+  }
 });
 
 // ===============================
