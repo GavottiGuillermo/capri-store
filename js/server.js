@@ -234,49 +234,35 @@ app.get('/whatsapp-status', (req, res) => {
   res.json(getWhatsAppStatus());
 });
 
+// === INFORMACIÓN DE CONTACTO ===
+app.get('/contact-info', (req, res) => {
+  res.json({
+    whatsapp: process.env.ADMIN_WHATSAPP || '5493487456789',
+    instagram: process.env.ADMIN_INSTAGRAM || 'https://instagram.com/capristorezte',
+    email: process.env.ADMIN_EMAIL || 'capristorezte@gmail.com',
+    business_name: BUSINESS_NAME,
+    location: 'Zárate, Buenos Aires, Argentina'
+  });
+});
+
 // ===============================
 // ENDPOINTS PRINCIPALES
 // ===============================
+// FUNCIONES PARA NOTIFICACIONES DE COMPRA
+// ===============================
 
-// === ENDPOINT DE CONTACTO VIA WHATSAPP ===
-app.post('/contact-whatsapp', async (req, res) => {
-  const startTime = Date.now();
-  const timestamp = new Date().toISOString();
-  const requestId = Math.random().toString(36).substring(7);
-  
-  console.log(`[${timestamp}] 📱 CONTACTO WHATSAPP RECIBIDO [${requestId}]`);
-  console.log(`[${timestamp}] 📋 Datos:`, { 
-    nombre: req.body.nombre, 
-    email: req.body.email, 
-    telefono: req.body.telefono,
-    mensaje: req.body.mensaje?.substring(0, 50) + '...' 
-  });
-  
-  // Verificar si WhatsApp está disponible
-  if (!whatsappAvailable) {
-    console.warn(`[${timestamp}] ⚠️ [${requestId}] WhatsApp no disponible`);
-    return res.status(503).json({ 
-      success: false, 
-      error: 'Servicio WhatsApp no disponible temporalmente',
-      whatsapp_available: false
-    });
+// Función para enviar notificación de compra por WhatsApp
+async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
+  if (!whatsappAvailable || !whatsappReady) {
+    console.warn('⚠️ WhatsApp no disponible para notificación de compra');
+    return { success: false, error: 'WhatsApp no disponible' };
   }
-  
+
   try {
-    const { nombre, email, telefono, mensaje } = req.body;
+    const { nombre, apellido, email, telefono } = customerData;
+    const { numeroDisplay, idPedidoCompleto } = orderData;
+    const { transaction_amount, id: paymentId } = paymentInfo;
     
-    // Validación básica
-    if (!nombre?.trim() || !mensaje?.trim()) {
-      console.error(`[${timestamp}] ❌ [${requestId}] Datos incompletos`);
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Nombre y mensaje son requeridos'
-      });
-    }
-    
-    console.log(`[${timestamp}] 🚀 [${requestId}] Iniciando notificación WhatsApp...`);
-    
-    // Preparar datos
     const fechaHora = new Date().toLocaleString('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
       year: 'numeric',
@@ -286,67 +272,46 @@ app.post('/contact-whatsapp', async (req, res) => {
       minute: '2-digit'
     });
     
+    // Obtener productos del payment info
+    const items = paymentInfo.additional_info?.items || [];
+    let productosTexto = '';
+    
+    if (items.length > 0) {
+      productosTexto = items.map(item => 
+        `• ${item.title || 'Producto'} x${item.quantity || 1} - $${(item.unit_price || 0).toLocaleString('es-AR')}`
+      ).join('\n');
+    } else {
+      productosTexto = '• Productos no especificados';
+    }
+    
     // Mensaje para administrador
-    const mensajeAdmin = `🛍️ *NUEVA CONSULTA - ${BUSINESS_NAME}*\n\n` +
-      `👤 *Cliente:* ${nombre}\n` +
+    const mensajeAdmin = `� *NUEVA COMPRA - ${BUSINESS_NAME}* 🛒\n\n` +
+      `👤 *Cliente:* ${nombre} ${apellido}\n` +
       `📧 *Email:* ${email || 'No proporcionado'}\n` +
       `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
-      `💬 *Mensaje:*\n${mensaje}\n\n` +
+      `�️ *Productos:*\n${productosTexto}\n\n` +
+      `� *Total:* $${transaction_amount.toLocaleString('es-AR')}\n` +
+      `🆔 *Pedido:* ${numeroDisplay || idPedidoCompleto}\n` +
+      `💳 *Pago ID:* ${paymentId}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `🚀 *Responde directamente para contactar al cliente*\n` +
-      `💡 ID: ${requestId}`;
+      `✅ *¡Pago confirmado! Proceder con el envío*`;
     
-    let adminSent = false;
-    let whatsappError = '';
+    const result = await enviarWhatsApp(ADMIN_WHATSAPP, mensajeAdmin);
     
-    // Enviar mensaje a administrador
-    try {
-      console.log(`[${timestamp}] 📤 [${requestId}] Enviando notificación a admin...`);
-      const resultAdmin = await enviarWhatsApp(ADMIN_WHATSAPP, mensajeAdmin);
-      adminSent = resultAdmin.success;
-      if (!adminSent) {
-        whatsappError = resultAdmin.error;
-        console.error(`[${timestamp}] ❌ [${requestId}] Error enviando a admin:`, resultAdmin.error);
-      }
-    } catch (error) {
-      console.error(`[${timestamp}] ❌ [${requestId}] Error enviando WhatsApp a admin:`, error);
-      whatsappError = error.message;
-    }
-    
-    const duration = Date.now() - startTime;
-    console.log(`[${timestamp}] ✅ [${requestId}] Proceso completado en ${duration}ms`);
-    
-    if (adminSent) {
-      res.json({ 
-        success: true, 
-        message: 'Mensaje enviado correctamente por WhatsApp',
-        method: 'whatsapp',
-        admin_notified: true,
-        duration_ms: duration,
-        request_id: requestId
-      });
+    if (result.success) {
+      console.log('✅ Notificación de compra enviada por WhatsApp');
     } else {
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error enviando notificación por WhatsApp',
-        details: whatsappError,
-        duration_ms: duration,
-        request_id: requestId
-      });
+      console.error('❌ Error enviando notificación de compra:', result.error);
     }
+    
+    return result;
     
   } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`[${timestamp}] ❌ [${requestId}] Error procesando contacto:`, error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error procesando mensaje de contacto',
-      duration_ms: duration,
-      request_id: requestId
-    });
+    console.error('❌ Error en enviarNotificacionCompra:', error);
+    return { success: false, error: error.message };
   }
-});
+}
 
 // Inicializar la aplicación
 async function startServer() {
