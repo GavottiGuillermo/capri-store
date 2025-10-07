@@ -35,6 +35,14 @@ const crypto = require('crypto');
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+// Logging inicial para debugging
+console.log('🔧 Variables de entorno cargadas:');
+console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log('- PORT:', process.env.PORT);
+console.log('- ADMIN_WHATSAPP:', process.env.ADMIN_WHATSAPP ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
+console.log('- ADMIN_INSTAGRAM:', process.env.ADMIN_INSTAGRAM ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
+console.log('- ADMIN_EMAIL:', process.env.ADMIN_EMAIL ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
+
 // ===============================
 // CONFIGURACIÓN DEL SERVIDOR
 // ===============================
