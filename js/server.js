@@ -106,16 +106,27 @@ app.use((req, res, next) => {
   res.header('X-Frame-Options', 'DENY');
   res.header('X-XSS-Protection', '1; mode=block');
   
-  // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/') {
-    return res.sendStatus(200);
+// Middleware básico para health check sin autenticación
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info') {
+    return next();
   }
   
+  // Para otros endpoints, continuar normalmente
   next();
 });
 
 // Servir archivos estáticos desde la carpeta raíz
 app.use(express.static(path.join(__dirname, '..')));
+
+// Endpoint básico de prueba
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
+
+// Endpoint de texto plano para verificar que el servidor funciona
+app.get('/test', (req, res) => {
+  res.send('Servidor funcionando correctamente!');
+});
 
 // ===============================
 // CONFIGURACIÓN DE BASE DE DATOS
@@ -371,7 +382,14 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
 // Inicializar la aplicación
 async function startServer() {
   try {
-    await initializeDatabase();
+    // Intentar inicializar la base de datos, pero no fallar si no está disponible
+    try {
+      await initializeDatabase();
+      console.log('✅ Base de datos conectada');
+    } catch (error) {
+      console.warn('⚠️ Base de datos no disponible:', error.message);
+      console.log('🔄 Continuando sin base de datos (solo modo estático)');
+    }
     
     // Inicializar WhatsApp si está disponible
     if (whatsappAvailable) {
@@ -387,10 +405,12 @@ async function startServer() {
       console.log('⚠️ WhatsApp no disponible');
     }
     
+    // Iniciar servidor siempre, independientemente de otros servicios
     server = app.listen(PORT, () => {
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
       console.log(`🌐 URL: http://localhost:${PORT}`);
       console.log(`📱 WhatsApp: ${whatsappAvailable ? 'Disponible' : 'No disponible'}`);
+      console.log(`🗄️ Base de datos: ${pool ? 'Conectada' : 'No disponible'}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       if (whatsappAvailable) {
         console.log(`📱 BUSCA EL CÓDIGO QR ARRIBA ☝️ PARA ESCANEAR`);
@@ -398,9 +418,20 @@ async function startServer() {
       }
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     });
+    
   } catch (error) {
-    console.error('❌ Error al iniciar servidor:', error);
-    process.exit(1);
+    console.error('❌ Error crítico al iniciar servidor:', error);
+    
+    // Intentar iniciar servidor básico aunque haya errores
+    try {
+      server = app.listen(PORT, () => {
+        console.log(`🚨 Servidor en modo de emergencia en puerto ${PORT}`);
+        console.log(`⚠️ Algunos servicios pueden no estar disponibles`);
+      });
+    } catch (criticalError) {
+      console.error('💥 Error crítico - No se puede iniciar el servidor:', criticalError);
+      process.exit(1);
+    }
   }
 }
 
