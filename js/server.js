@@ -13,7 +13,7 @@ try {
   console.log('📱 Servicio WhatsApp cargado correctamente');
 } catch (error) {
   console.error('⚠️ WhatsApp service no disponible:', error.message);
-  console.log('📧 Fallback: usando sistema de emails');
+  console.log('� Modo básico: WhatsApp no estará disponible para notificaciones');
   whatsappAvailable = false;
   
   // Crear funciones dummy para evitar errores

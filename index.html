@@ -210,42 +210,67 @@
     <div class="container max-w-3xl">
       <h2 class="display-5 font-weight-bold mb-5 text-center">Contacto</h2>
       
-      <!-- Mensajes de éxito y error -->
-      <div id="contactAlert" style="display: none;"></div>
-      
-      <form id="contactForm" class="bg-white rounded-lg p-4 text-vino-tinto shadow-lg" method="POST" novalidate>
-        <div class="form-group">
-          <label class="font-weight-bold" for="nombre">Nombre *</label>
-          <input class="form-control border-rosado" id="nombre" name="nombre" placeholder="Tu nombre" required type="text"/>
-          <div class="invalid-feedback">Por favor ingresa tu nombre.</div>
+      <div class="text-center">
+        <p class="lead mb-5">¡Comunícate con nosotros directamente!</p>
+        
+        <!-- Botones de contacto directo -->
+        <div class="row justify-content-center">
+          
+          <!-- WhatsApp -->
+          <div class="col-md-4 mb-4">
+            <a href="#" id="whatsappLink" class="btn btn-success btn-lg btn-block py-3 text-decoration-none" 
+               target="_blank" rel="noopener noreferrer">
+              <i class="fab fa-whatsapp fa-2x mb-2"></i>
+              <div class="font-weight-bold">WhatsApp</div>
+              <small>Respuesta inmediata</small>
+            </a>
+          </div>
+          
+          <!-- Instagram -->
+          <div class="col-md-4 mb-4">
+            <a href="#" id="instagramLink" class="btn btn-lg btn-block py-3 text-decoration-none" 
+               style="background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%); color: white;"
+               target="_blank" rel="noopener noreferrer">
+              <i class="fab fa-instagram fa-2x mb-2"></i>
+              <div class="font-weight-bold">Instagram</div>
+              <small>Síguenos y escríbenos</small>
+            </a>
+          </div>
+          
+          <!-- Email -->
+          <div class="col-md-4 mb-4">
+            <a href="#" id="emailLink" class="btn btn-info btn-lg btn-block py-3 text-decoration-none"
+               target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-envelope fa-2x mb-2"></i>
+              <div class="font-weight-bold">Email</div>
+              <small>Consultas detalladas</small>
+            </a>
+          </div>
+          
         </div>
-        <div class="form-group">
-          <label class="font-weight-bold" for="telefono">WhatsApp <small class="text-muted">(recomendado para respuesta rápida)</small></label>
-          <input class="form-control border-rosado" id="telefono" name="telefono" placeholder="+54 9 3487 123456" type="tel"/>
-          <small class="form-text text-muted">Te responderemos directamente por WhatsApp si proporcionas tu número</small>
+        
+        <!-- Información adicional -->
+        <div class="mt-5 pt-4 border-top border-secondary">
+          <div class="row">
+            <div class="col-md-6">
+              <h5><i class="fas fa-clock mr-2"></i>Horarios de Atención</h5>
+              <p class="mb-2">Lunes a Viernes: 9:00 - 18:00</p>
+              <p class="mb-0">Sábados: 9:00 - 13:00</p>
+            </div>
+            <div class="col-md-6">
+              <h5><i class="fas fa-map-marker-alt mr-2"></i>Ubicación</h5>
+              <p class="mb-0">Zárate, Buenos Aires</p>
+              <p class="mb-0">Argentina</p>
+            </div>
+          </div>
+          
+          <div class="mt-4">
+            <small class="text-muted">
+              <i class="fas fa-info-circle mr-1"></i>
+              WhatsApp es nuestro canal preferido para una respuesta rápida
+            </small>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="font-weight-bold" for="email">Email <small class="text-muted">(opcional)</small></label>
-          <input class="form-control border-rosado" id="email" name="email" placeholder="tuemail@ejemplo.com" type="email"/>
-          <div class="invalid-feedback">Por favor ingresa un email válido.</div>
-        </div>
-        <div class="form-group">
-          <label class="font-weight-bold" for="mensaje">Mensaje *</label>
-          <textarea class="form-control border-rosado" id="mensaje" name="mensaje" placeholder="Escribe tu consulta aquí" required rows="4"></textarea>
-          <div class="invalid-feedback">Por favor escribe tu mensaje.</div>
-        </div>
-        <button id="enviarContacto" class="btn btn-contacto-disabled btn-block font-weight-bold py-3 btn-contacto-transition" type="submit" disabled>
-          <i class="fab fa-whatsapp mr-2"></i>Enviar por WhatsApp
-        </button>
-      </form>
-      <div class="mt-4 text-center">
-        <p><i class="fab fa-whatsapp mr-2 text-success"></i><strong>WhatsApp:</strong> +54 9 3487 456789</p>
-        <p><i class="fas fa-envelope mr-2"></i>capristorezte@gmail.com</p>
-        <p><i class="fas fa-map-marker-alt mr-2"></i>Zárate, Buenos Aires</p>
-        <small class="text-muted mt-2 d-block">
-          <i class="fas fa-info-circle mr-1"></i>
-          Te responderemos por WhatsApp en 2-4 horas hábiles
-        </small>
       </div>
     </div>
   </section>

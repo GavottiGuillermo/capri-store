@@ -1,14 +1,14 @@
 # Capri Store - E-commerce
 
 ## Descripción
-Este proyecto contiene una página web de comercio electrónico creada con Bootstrap, HTML5, CSS3 y JavaScript, con integración completa de Mercado Pago, sistema de contacto con envío automático de correos y gestión de stock.
+Este proyecto contiene una página web de comercio electrónico creada con Bootstrap, HTML5, CSS3 y JavaScript, con integración completa de Mercado Pago, sistema de contacto directo por WhatsApp y notificaciones automáticas de compras.
 
 ## Características principales
 - ✅ Carrito de compras con persistencia en localStorage
 - ✅ Integración real con Mercado Pago
 - ✅ Cálculo de envío con Andreani API
-- ✅ **Sistema de contacto con correos automáticos**
-- ✅ **Confirmación de pedidos por email**
+- ✅ **Sistema de contacto directo por WhatsApp, Instagram y Email**
+- ✅ **Notificaciones automáticas de compras por WhatsApp Business**
 - ✅ Animaciones y transiciones suaves
 - ✅ Diseño responsive
 - ✅ Backend Express con PostgreSQL
@@ -22,23 +22,13 @@ Copia el archivo `.env.example` como `.env` y configura tus valores:
 cp .env.example .env
 ```
 
-### 2. Configurar Zoho Mail para correos automáticos
+### 2. Configurar información de contacto
 ```env
-# Email principal de Capri Store
-SMTP_USER=contacto@capristore.com.ar
-
-# Contraseña de aplicación de Zoho (NO tu contraseña normal)
-SMTP_PASS=tu_contraseña_de_aplicacion_zoho
-
-# Emails administrativos que recibirán consultas
-ADMIN_EMAILS=gavottiguillermo@gmail.com,luisinaolivieri.lo@gmail.com
+# Información de contacto directo
+ADMIN_WHATSAPP=5493415123456
+ADMIN_INSTAGRAM=capri_store_oficial
+ADMIN_EMAIL=contacto@capristore.com.ar
 ```
-
-**⚠️ IMPORTANTE**: Para `SMTP_PASS` debes usar una **contraseña específica de aplicación**:
-1. Ve a [Zoho Mail](https://mail.zoho.com) → Configuración → Seguridad
-2. Busca "Contraseñas de aplicación" o "App Passwords"
-3. Genera una nueva contraseña para "Aplicación de correo"
-4. Usa esa contraseña generada en `SMTP_PASS`
 
 ### 3. Configurar Mercado Pago
 ```env
@@ -74,25 +64,25 @@ MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_produccion
    http://localhost:3001
    ```
 
-## Sistema de Contacto con Correos Automáticos
+## Sistema de Contacto Directo
 
-### Funcionalidades del formulario de contacto:
-1. **Validación en tiempo real** de todos los campos
-2. **Correo de confirmación automático** al usuario
-3. **Notificación inmediata** a los administradores
-4. **Interfaz responsive** con feedback visual
+### Funcionalidades de contacto:
+1. **Contacto directo por WhatsApp** - Enlace que abre WhatsApp con mensaje predefinido
+2. **Contacto por Instagram** - Enlace directo al perfil de Instagram
+3. **Contacto por Email** - Enlace que abre el cliente de email con datos prellenados
+4. **Interfaz responsive** con botones claros y accesibles
 
-### Flujo de correos:
-1. **Usuario completa formulario** → Valida datos
-2. **Se envía correo de confirmación** al usuario con mensaje de agradecimiento
-3. **Se notifica a administradores** con todos los datos de contacto
-4. **Administradores pueden responder directamente** al email del cliente
+### Sistema de notificaciones WhatsApp Business:
+1. **Configuración automática** - QR code para conectar dispositivo
+2. **Notificaciones de compras** - Envío automático cuando se realiza una compra
+3. **Información detallada** - Datos del cliente, productos y totales
+4. **Conexión robusta** - Manejo automático de reconexiones
 
-### Configuración de correos administrativos:
-```env
-# Los emails que recibirán las consultas
-ADMIN_EMAILS=gavottiguillermo@gmail.com,luisinaolivieri.lo@gmail.com
-```
+### Primera configuración de WhatsApp Business:
+1. Ejecutar `npm start` para iniciar el servidor
+2. Escanear el código QR que aparece en consola con WhatsApp Web
+3. El sistema quedará conectado automáticamente
+4. Las notificaciones se enviarán al número configurado en `ADMIN_WHATSAPP`
 
 ## Integración de Mercado Pago
 
@@ -113,7 +103,7 @@ ADMIN_EMAILS=gavottiguillermo@gmail.com,luisinaolivieri.lo@gmail.com
 ## Estructura del proyecto
 ```
 /
-├── index.html              # Página principal con formulario de contacto
+├── index.html              # Página principal con contacto directo
 ├── detalle.html           # Página de detalles del producto
 ├── checkout.html          # Página de checkout
 ├── success.html           # Página de pago exitoso
@@ -125,21 +115,21 @@ ADMIN_EMAILS=gavottiguillermo@gmail.com,luisinaolivieri.lo@gmail.com
 │   └── styles.css         # Estilos personalizados
 ├── js/
 │   ├── scripts.js         # JavaScript del frontend
+│   ├── events.js          # Manejo de eventos y contacto
 │   ├── server.js          # Servidor Express (backend)
+│   ├── whatsapp-service.js # Servicio de WhatsApp Business
 │   └── andreani-api.js    # Integración con Andreani
 └── assets/
-    ├── img/               # Imágenes del sitio
-    └── mail/              # Scripts de contacto (legacy)
+    └── img/               # Imágenes del sitio
 ```
 
 ## Tecnologías utilizadas
 - **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 4.5
 - **Backend**: Node.js, Express
 - **Base de datos**: PostgreSQL
-- **Correos**: Nodemailer con Zoho Mail
+- **Notificaciones**: WhatsApp Business API (whatsapp-web.js)
 - **Pagos**: Mercado Pago SDK v2.7.0
 - **Envíos**: Andreani API
-- **Email**: Nodemailer con Zoho Mail
 
 ## Deploy en producción
 - El proyecto está configurado para deploy automático en Render
@@ -151,9 +141,10 @@ ADMIN_EMAILS=gavottiguillermo@gmail.com,luisinaolivieri.lo@gmail.com
 2. **Checkout completo**: Formulario con validación
 3. **Cálculo de envío**: Integración con Andreani API
 4. **Pago real**: Integración completa con Mercado Pago
-5. **Confirmación por email**: Envío automático de confirmaciones
-6. **Responsive**: Funciona en todos los dispositivos
-7. **Animaciones**: Transiciones suaves y efectos visuales
+5. **Contacto directo**: Enlaces a WhatsApp, Instagram y Email
+6. **Notificaciones WhatsApp**: Confirmaciones automáticas de compras
+7. **Responsive**: Funciona en todos los dispositivos
+8. **Animaciones**: Transiciones suaves y efectos visuales
 
 ## Notas importantes
 - El access token incluido es de TEST, solo para pruebas
