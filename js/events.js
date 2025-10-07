@@ -74,8 +74,26 @@ async function setupContactLinks() {
   try {
     console.log('🔄 Cargando información de contacto del servidor...');
     
-    // Intentar con diferentes URLs en caso de problemas de routing
-    const urls = ['/contact-info', '/api/contact-info', './contact-info'];
+    // Determinar la URL base del API
+    let apiBaseUrl = '';
+    
+    if (window.location.hostname === 'capristorezte.com.ar' || window.location.hostname === 'www.capristorezte.com.ar') {
+      // En producción, usar la URL del backend en Render
+      apiBaseUrl = 'https://capri-store.onrender.com';
+      console.log('🌐 Modo producción: usando backend en Render');
+    } else {
+      // En desarrollo o localhost, usar rutas relativas
+      apiBaseUrl = '';
+      console.log('🔧 Modo desarrollo: usando rutas relativas');
+    }
+    
+    // Intentar con diferentes URLs
+    const urls = [
+      `${apiBaseUrl}/contact-info`,
+      `${apiBaseUrl}/api/contact-info`,
+      '/contact-info'
+    ];
+    
     let response = null;
     let lastError = null;
     
