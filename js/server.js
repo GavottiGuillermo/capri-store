@@ -115,7 +115,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia') {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia' || req.path === '/webhook' || req.path.startsWith('/numero-pedido/')) {
     return next();
   }
   
@@ -281,7 +281,9 @@ app.get('/debug', (req, res) => {
       '/stock-agotado',
       '/stock-producto/:id',
       '/validar-stock-carrito (POST)',
-      '/crear-preferencia (POST)'
+      '/crear-preferencia (POST)',
+      '/webhook (POST)',
+      '/numero-pedido/:paymentId'
     ]
   });
 });
@@ -602,6 +604,24 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
 });
 
 // ===============================
+// FUNCIONES AUXILIARES PARA BD
+// ===============================
+
+// Función para reintentar queries con backoff exponencial
+async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await pool.query(query, params);
+    } catch (error) {
+      console.error(`❌ Query falló (intento ${attempt}/${maxRetries}):`, error.message);
+      if (attempt === maxRetries) throw error;
+      // Esperar antes de reintentar (backoff exponencial)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+}
+
+// ===============================
 // ENDPOINTS PRINCIPALES
 // ===============================
 // FUNCIONES PARA NOTIFICACIONES DE COMPRA
@@ -668,6 +688,297 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     return { success: false, error: error.message };
   }
 }
+
+// ===============================
+// ENDPOINT: WEBHOOK DE MERCADO PAGO
+// ===============================
+app.post('/webhook', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  let paymentId = null;
+  let shouldProcess = false;
+
+  console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO:`);
+  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`[${timestamp}] Body:`, JSON.stringify(req.body, null, 2));
+
+  try {
+    const { type, data, action, topic, resource } = req.body;
+    
+    // Detectar el payment ID desde diferentes formatos de webhook
+    if (type === 'payment' && data?.id) {
+      paymentId = data.id;
+      shouldProcess = true;
+      console.log(`[${timestamp}] ✅ Webhook tipo 'payment' con ID: ${paymentId}`);
+    } else if (action === 'payment.created' && data?.id) {
+      paymentId = data.id;
+      shouldProcess = true;
+      console.log(`[${timestamp}] ✅ Webhook action 'payment.created' con ID: ${paymentId}`);
+    } else if (topic === 'payment' && resource) {
+      paymentId = resource;
+      shouldProcess = true;
+      console.log(`[${timestamp}] ✅ Webhook topic 'payment' con resource: ${paymentId}`);
+    } else {
+      console.log(`[${timestamp}] ⚠️ Webhook ignorado - type: ${type}, action: ${action}, topic: ${topic}, resource: ${resource}`);
+      return res.status(200).send('OK - Ignored (not payment)');
+    }
+
+    if (shouldProcess && paymentId) {
+      // Verificar si ya existe el pedido en BD
+      let pedidoExistente = null;
+      try {
+        const checkPedido = await executeQueryWithRetry(
+          pool,
+          `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' LIMIT 1`,
+          [paymentId, paymentId.toString()],
+          2
+        );
+        if (checkPedido && checkPedido.rows && checkPedido.rows.length > 0) {
+          pedidoExistente = checkPedido.rows[0].id_pedido;
+          console.log(`[${timestamp}] ✅ Pago ${paymentId} ya tiene pedido en BD: ${pedidoExistente} - Ignorado`);
+          return res.status(200).send('OK - Already processed');
+        }
+      } catch (err) {
+        console.error(`[${timestamp}] ⚠️ Error al verificar pedido existente:`, err.message);
+      }
+
+      // Verificar en memoria si ya se procesó
+      if (webhookNotifications.has(paymentId)) {
+        console.log(`[${timestamp}] ⚠️ Pago ${paymentId} ya procesado en memoria - Ignorado`);
+        return res.status(200).send('OK - Already processed (memory)');
+      }
+
+      // Marcar como procesado en memoria
+      webhookNotifications.set(paymentId, true);
+
+      // Obtener información completa del pago de MercadoPago
+      const payment = new Payment(client);
+      const paymentInfo = await payment.get({ id: paymentId });
+
+      console.log(`[${timestamp}] 💳 Estado del pago: ${paymentInfo.status}`);
+
+      if (paymentInfo.status === 'approved') {
+        // Extraer datos del comprador desde metadata o payer
+        let customerData = {};
+        try {
+          if (paymentInfo.metadata) {
+            customerData = {
+              nombre: paymentInfo.payer?.first_name || '',
+              apellido: paymentInfo.payer?.last_name || '',
+              email: paymentInfo.payer?.email || '',
+              telefono: paymentInfo.metadata.telefono || paymentInfo.payer?.phone?.number || ''
+            };
+          }
+        } catch (error) {
+          console.error(`[${timestamp}] ⚠️ Error extrayendo customer data:`, error.message);
+        }
+
+        // Extraer IDs de productos
+        let productIds = '';
+        const items = paymentInfo.additional_info?.items || [];
+        if (items.length > 0) {
+          productIds = items.map(item => item.id).filter(Boolean).join(',');
+        }
+        if (!productIds) productIds = 'MANUAL';
+
+        console.log(`[${timestamp}] 📦 Productos: ${productIds}`);
+
+        // Verificar stock de productos
+        let idsArray = [];
+        if (productIds !== 'MANUAL') {
+          idsArray = productIds.split(',').map(id => id.trim()).filter(Boolean);
+        }
+
+        let faltantes = [];
+        if (idsArray.length > 0 && pool) {
+          try {
+            const placeholders = idsArray.map((_, i) => `$${i + 1}`).join(',');
+            const query = `SELECT id_articulo FROM productos WHERE id_articulo IN (${placeholders}) AND estado != 'Disponible'`;
+            const result = await executeQueryWithRetry(pool, query, idsArray, 2);
+            faltantes = result.rows.map(row => row.id_articulo);
+          } catch (error) {
+            console.error(`[${timestamp}] ⚠️ Error verificando stock:`, error.message);
+            // En caso de error, asumir que todos están disponibles para no perder la venta
+          }
+        }
+
+        if (faltantes.length > 0) {
+          console.log(`[${timestamp}] ⚠️ Productos sin stock: ${faltantes.join(', ')}`);
+          // Enviar notificación de productos no disponibles
+          if (whatsappAvailable && whatsappReady && ADMIN_WHATSAPP) {
+            try {
+              const mensaje = `⚠️ *PROBLEMA CON COMPRA*\n\n` +
+                `💳 Pago ID: ${paymentId}\n` +
+                `💰 Monto: $${paymentInfo.transaction_amount}\n` +
+                `📦 Productos sin stock: ${faltantes.join(', ')}\n\n` +
+                `👤 Cliente: ${customerData.nombre} ${customerData.apellido}\n` +
+                `📧 Email: ${customerData.email}\n` +
+                `📱 Tel: ${customerData.telefono}\n\n` +
+                `⚠️ No se creó el pedido automáticamente. Revisar y contactar al cliente.`;
+              
+              await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
+            } catch (whatsappError) {
+              console.error(`[${timestamp}] ❌ Error enviando WhatsApp:`, whatsappError.message);
+            }
+          }
+        } else {
+          // Crear pedido en la base de datos
+          console.log(`[${timestamp}] 📝 Creando pedido en BD...`);
+          
+          try {
+            // Llamar al stored procedure para crear el pedido
+            await executeQueryWithRetry(
+              pool,
+              'CALL sp_crear_pedido_web($1, $2, $3, $4, $5, $6, $7, $8)',
+              [
+                productIds,
+                paymentInfo.transaction_amount,
+                paymentInfo.payer?.first_name || 'Cliente Web',
+                customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
+                customerData.telefono || paymentInfo.payer?.phone?.number || '',
+                'MercadoPago',
+                'Retiro', // Tipo de entrega por defecto
+                paymentId
+              ],
+              2
+            );
+
+            // Obtener el ID del pedido creado
+            const pedidoResult = await executeQueryWithRetry(
+              pool,
+              `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
+              [paymentId, paymentId.toString()],
+              2
+            );
+
+            if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
+              const idPedidoCompleto = pedidoResult.rows[0].id_pedido;
+              const numeroDisplay = idPedidoCompleto && idPedidoCompleto.length >= 2 ? 
+                idPedidoCompleto.slice(-2) : idPedidoCompleto;
+
+              console.log(`[${timestamp}] ✅ Pedido creado exitosamente: ${idPedidoCompleto} (Display: ${numeroDisplay})`);
+
+              // Enviar notificación de compra por WhatsApp
+              if (whatsappAvailable && whatsappReady) {
+                try {
+                  await enviarNotificacionCompra(
+                    customerData,
+                    { numeroDisplay, idPedidoCompleto },
+                    paymentInfo
+                  );
+                } catch (whatsappError) {
+                  console.error(`[${timestamp}] ⚠️ Error enviando notificación WhatsApp:`, whatsappError.message);
+                }
+              }
+            } else {
+              console.error(`[${timestamp}] ⚠️ Pedido no encontrado después de crearlo`);
+            }
+
+          } catch (error) {
+            console.error(`[${timestamp}] ❌ Error creando pedido:`, error.message);
+            console.error(`[${timestamp}] Stack:`, error.stack);
+          }
+        }
+      } else {
+        console.log(`[${timestamp}] ⚠️ Pago ${paymentId} no aprobado (estado: ${paymentInfo.status})`);
+      }
+    } else {
+      console.log(`[${timestamp}] ⚠️ Webhook recibido sin paymentId válido`);
+    }
+
+    res.status(200).send('OK');
+
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en webhook:`, error.message);
+    console.error(`[${timestamp}] Stack:`, error.stack);
+    res.status(500).send('Error interno del servidor');
+  }
+});
+
+// ===============================
+// ENDPOINT: CONSULTAR NÚMERO DE PEDIDO POR PAYMENT ID
+// ===============================
+app.get('/numero-pedido/:paymentId', async (req, res) => {
+  const { paymentId } = req.params;
+  console.log(`🔍 Consultando número de pedido para payment ID: ${paymentId}`);
+
+  // Configuración de reintentos
+  const MAX_TRIES = 5;
+  const RETRY_DELAY_MS = 2000; // 2 segundos
+  let intento = 0;
+  let pedidoEncontrado = null;
+
+  try {
+    while (intento < MAX_TRIES && !pedidoEncontrado) {
+      intento++;
+      console.log(`🔄 Intento ${intento}/${MAX_TRIES} para payment ID: ${paymentId}`);
+
+      try {
+        const pedidoResult = await executeQueryWithRetry(
+          pool,
+          `SELECT p.id_pedido, p.pedido_fecha, p.pedido_nombre_cliente, p.pedido_monto_total, p.mp_payment_id 
+           FROM productos p 
+           WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2) 
+           AND p.id_pedido IS NOT NULL 
+           AND p.id_pedido != '' 
+           ORDER BY p.pedido_fecha DESC 
+           LIMIT 1`,
+          [paymentId, paymentId.toString()],
+          2
+        );
+
+        if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
+          pedidoEncontrado = pedidoResult.rows[0];
+          break;
+        }
+      } catch (err) {
+        console.error(`❌ Error al consultar pedido (intento ${intento}):`, err.message);
+      }
+
+      // Si no se encontró y quedan intentos, esperar antes de reintentar
+      if (!pedidoEncontrado && intento < MAX_TRIES) {
+        console.log(`⏳ Esperando ${RETRY_DELAY_MS}ms antes del siguiente intento...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      }
+    }
+
+    if (pedidoEncontrado) {
+      const numeroDisplay = pedidoEncontrado.id_pedido && pedidoEncontrado.id_pedido.length >= 2 ?
+        pedidoEncontrado.id_pedido.slice(-2) : pedidoEncontrado.id_pedido;
+
+      console.log(`✅ Pedido encontrado: ${pedidoEncontrado.id_pedido} (Display: ${numeroDisplay})`);
+
+      res.json({
+        success: true,
+        pedido_encontrado: true,
+        numero_pedido: pedidoEncontrado.id_pedido,
+        numero_display: numeroDisplay,
+        fecha: pedidoEncontrado.pedido_fecha,
+        cliente: pedidoEncontrado.pedido_nombre_cliente,
+        monto: pedidoEncontrado.pedido_monto_total,
+        payment_id: paymentId
+      });
+    } else {
+      console.warn(`⚠️ Pedido no encontrado para payment_id: ${paymentId} después de ${MAX_TRIES} intentos`);
+      
+      res.json({
+        success: false,
+        pedido_encontrado: false,
+        numero_pedido: null,
+        message: 'Pedido no encontrado. Es posible que aún se esté procesando.',
+        payment_id: paymentId,
+        intentos_realizados: MAX_TRIES
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error en /numero-pedido:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor',
+      message: error.message,
+      payment_id: paymentId
+    });
+  }
+});
 
 // Inicializar la aplicación
 async function startServer() {
