@@ -115,7 +115,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info') {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado') {
     return next();
   }
   
@@ -277,7 +277,8 @@ app.get('/debug', (req, res) => {
       '/health',
       '/debug', 
       '/contact-info',
-      '/whatsapp-status'
+      '/whatsapp-status',
+      '/stock-agotado'
     ]
   });
 });
@@ -316,6 +317,41 @@ app.get('/contact-info', (req, res) => {
       error: 'Error interno del servidor',
       message: error.message
     });
+  }
+});
+
+// === STOCK AGOTADO ===
+app.get('/stock-agotado', async (req, res) => {
+  try {
+    console.log('📦 Solicitando stock agotado...');
+    
+    // Si no hay base de datos, retornar array vacío
+    if (!pool) {
+      console.warn('⚠️ Base de datos no disponible - retornando stock vacío');
+      return res.json({ ids: [] });
+    }
+    
+    // Consultar productos que NO están disponibles
+    // Según la estructura de la tabla: estado != 'Disponible' significa agotado/vendido/reservado
+    const result = await pool.query(`
+      SELECT id_articulo 
+      FROM productos 
+      WHERE estado IS NULL OR estado != 'Disponible'
+      ORDER BY id_articulo
+    `);
+    
+    const ids = result.rows.map(row => row.id_articulo);
+    
+    console.log(`✅ Stock agotado: ${ids.length} productos no disponibles`);
+    
+    res.json({ ids });
+    
+  } catch (error) {
+    console.error('❌ Error obteniendo stock agotado:', error.message);
+    console.error('Stack trace:', error.stack);
+    
+    // En caso de error, retornar array vacío en lugar de fallar
+    res.json({ ids: [] });
   }
 });
 
