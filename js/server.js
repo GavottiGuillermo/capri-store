@@ -115,7 +115,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado') {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/')) {
     return next();
   }
   
@@ -278,7 +278,8 @@ app.get('/debug', (req, res) => {
       '/debug', 
       '/contact-info',
       '/whatsapp-status',
-      '/stock-agotado'
+      '/stock-agotado',
+      '/stock-producto/:id'
     ]
   });
 });
@@ -352,6 +353,77 @@ app.get('/stock-agotado', async (req, res) => {
     
     // En caso de error, retornar array vacío en lugar de fallar
     res.json({ ids: [] });
+  }
+});
+
+// === STOCK DE PRODUCTO ESPECÍFICO ===
+app.get('/stock-producto/:id', async (req, res) => {
+  try {
+    const idArticulo = parseInt(req.params.id, 10);
+    console.log(`📦 Consultando stock del producto ID: ${idArticulo}`);
+    
+    // Validar que el ID sea un número válido
+    if (isNaN(idArticulo)) {
+      console.error('❌ ID de artículo inválido:', req.params.id);
+      return res.status(400).json({ 
+        error: 'ID de artículo inválido',
+        disponible: false,
+        stock: 0 
+      });
+    }
+    
+    // Si no hay base de datos, asumir que está disponible (modo degradado)
+    if (!pool) {
+      console.warn('⚠️ Base de datos no disponible - retornando disponible por defecto');
+      return res.json({ 
+        disponible: true, 
+        stock: 1,
+        estado: 'Disponible (sin verificación)'
+      });
+    }
+    
+    // Consultar el producto específico
+    const result = await pool.query(`
+      SELECT id_articulo, estado, publicado_en_web
+      FROM productos 
+      WHERE id_articulo = $1
+    `, [idArticulo]);
+    
+    if (result.rows.length === 0) {
+      console.log(`⚠️ Producto no encontrado en BD: ${idArticulo}`);
+      return res.json({ 
+        disponible: false, 
+        stock: 0,
+        estado: 'No encontrado'
+      });
+    }
+    
+    const producto = result.rows[0];
+    const estadoDisponible = producto.estado === 'Disponible';
+    const publicado = producto.publicado_en_web === 'True' || producto.publicado_en_web === true;
+    
+    // El producto está disponible si su estado es "Disponible"
+    const disponible = estadoDisponible && publicado;
+    const stock = disponible ? 1 : 0; // Asumimos stock de 1 unidad si está disponible
+    
+    console.log(`✅ Producto ${idArticulo} - Estado: ${producto.estado}, Publicado: ${publicado}, Disponible: ${disponible}`);
+    
+    res.json({ 
+      disponible, 
+      stock,
+      estado: producto.estado
+    });
+    
+  } catch (error) {
+    console.error('❌ Error consultando stock del producto:', error.message);
+    console.error('Stack trace:', error.stack);
+    
+    // En caso de error, retornar no disponible por seguridad
+    res.status(500).json({ 
+      disponible: false, 
+      stock: 0,
+      error: 'Error al consultar stock'
+    });
   }
 });
 

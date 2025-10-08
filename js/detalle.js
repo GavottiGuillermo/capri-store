@@ -267,8 +267,9 @@ document.addEventListener('DOMContentLoaded', function() {
     selectTalle.value = talleOriginal;
     inputCantidad.value = 1;
     btnAgregar.disabled = false;
-    btnAgregar.classList.remove('bg-rosado', 'opacity-50');
-    btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+    btnAgregar.classList.remove('btn-secondary');
+    btnAgregar.classList.add('btn-vino-tinto');
+    
     function validarFormulario() {
       const talleValido = selectTalle.value !== "";
       const cantidadInput = parseInt(inputCantidad.value) || 0;
@@ -298,7 +299,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (maxStock === 0) {
         btnAgregar.disabled = true;
         btnAgregar.textContent = 'Sin stock';
-        btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
+        btnAgregar.classList.remove('btn-vino-tinto');
         btnAgregar.classList.add('btn-secondary');
         console.log('❌ Botón deshabilitado - SIN STOCK');
         return;
@@ -307,13 +308,13 @@ document.addEventListener('DOMContentLoaded', function() {
       if (talleValido && cantidadValida && stockValido) {
         btnAgregar.disabled = false;
         btnAgregar.textContent = 'Agregar al carrito';
-        btnAgregar.classList.remove('bg-rosado', 'opacity-50', 'btn-secondary');
-        btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+        btnAgregar.classList.remove('btn-secondary');
+        btnAgregar.classList.add('btn-vino-tinto');
         console.log('✅ Botón habilitado - Stock:', maxStock);
       } else {
         btnAgregar.disabled = true;
-        btnAgregar.classList.remove('bg-vino-tinto', 'hover:bg-rosado');
-        btnAgregar.classList.add('bg-rosado', 'opacity-50');
+        btnAgregar.classList.remove('btn-vino-tinto');
+        btnAgregar.classList.add('btn-secondary');
         console.log('❌ Botón deshabilitado - stockValido:', stockValido, 'maxStock:', maxStock, 'cantidad:', cantidadInput);
       }
     }
@@ -546,8 +547,8 @@ document.addEventListener('DOMContentLoaded', function() {
       selectTalle.value = talleOriginal;
       inputCantidad.value = 1;
       btnAgregar.disabled = false;
-      btnAgregar.classList.remove('bg-rosado', 'opacity-50');
-      btnAgregar.classList.add('bg-vino-tinto', 'hover:bg-rosado');
+      btnAgregar.classList.remove('btn-secondary');
+      btnAgregar.classList.add('btn-vino-tinto');
       validarFormulario();
     });
   }
