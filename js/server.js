@@ -115,7 +115,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito') {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia') {
     return next();
   }
   
@@ -280,7 +280,8 @@ app.get('/debug', (req, res) => {
       '/whatsapp-status',
       '/stock-agotado',
       '/stock-producto/:id',
-      '/validar-stock-carrito (POST)'
+      '/validar-stock-carrito (POST)',
+      '/crear-preferencia (POST)'
     ]
   });
 });
@@ -497,6 +498,105 @@ app.post('/validar-stock-carrito', express.json(), async (req, res) => {
       ok: true,
       faltantes: [],
       error: 'Error al validar stock, asumiendo disponibilidad'
+    });
+  }
+});
+
+// === CREAR PREFERENCIA DE MERCADOPAGO ===
+app.post('/crear-preferencia', express.json(), async (req, res) => {
+  try {
+    const { items, datosComprador } = req.body;
+    console.log('💳 Creando preferencia de MercadoPago');
+    console.log('Items:', items?.length || 0, 'productos');
+    console.log('Comprador:', datosComprador?.nombre, datosComprador?.email);
+    
+    // Validar que haya items
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      console.error('❌ No hay items en la preferencia');
+      return res.status(400).json({ 
+        error: 'No hay productos en el carrito' 
+      });
+    }
+    
+    // Validar que MercadoPago esté configurado
+    if (!client) {
+      console.error('❌ MercadoPago no está configurado');
+      return res.status(500).json({ 
+        error: 'Sistema de pagos no disponible' 
+      });
+    }
+    
+    // Validar datos del comprador
+    if (!datosComprador || !datosComprador.email || !datosComprador.telefono) {
+      console.error('❌ Datos del comprador incompletos');
+      return res.status(400).json({ 
+        error: 'Datos del comprador incompletos' 
+      });
+    }
+    
+    // Determinar URLs de retorno según el ambiente
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://capristorezte.com.ar'
+      : 'http://localhost:3000';
+    
+    console.log('🌐 URLs de retorno configuradas para:', baseUrl);
+    
+    // Crear la preferencia de MercadoPago
+    const preference = new Preference(client);
+    
+    const preferenceData = {
+      items: items.map(item => ({
+        id: String(item.id || 'producto'),
+        title: item.title || item.nombre || 'Producto',
+        quantity: Number(item.quantity || item.cantidad || 1),
+        currency_id: 'ARS',
+        unit_price: Number(item.unit_price || item.precio || 0)
+      })),
+      payer: {
+        name: datosComprador.nombre || '',
+        surname: datosComprador.apellido || '',
+        email: datosComprador.email,
+        phone: {
+          area_code: '',
+          number: String(datosComprador.telefono || '')
+        }
+      },
+      back_urls: {
+        success: `${baseUrl}/success.html`,
+        failure: `${baseUrl}/failure.html`,
+        pending: `${baseUrl}/pending.html`
+      },
+      auto_return: 'approved',
+      notification_url: `https://capri-store.onrender.com/webhook`,
+      metadata: {
+        tipo_entrega: datosComprador.tipoEntrega || 'retiro',
+        costo_envio: datosComprador.costoEnvio || 0,
+        datos_envio: JSON.stringify(datosComprador.datosEnvio || {}),
+        telefono: datosComprador.telefono,
+        timestamp: new Date().toISOString()
+      }
+    };
+    
+    console.log('📋 Creando preferencia con', items.length, 'items');
+    
+    const result = await preference.create({ body: preferenceData });
+    
+    console.log('✅ Preferencia creada:', result.id);
+    console.log('🔗 Init point:', result.init_point);
+    
+    res.json({ 
+      id: result.id,
+      init_point: result.init_point,
+      sandbox_init_point: result.sandbox_init_point
+    });
+    
+  } catch (error) {
+    console.error('❌ Error creando preferencia:', error.message);
+    console.error('Stack trace:', error.stack);
+    
+    res.status(500).json({ 
+      error: 'Error al crear preferencia de pago',
+      details: error.message
     });
   }
 });
