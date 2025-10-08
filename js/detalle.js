@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             const stockResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
             if (stockResp.ok) {
               const stockData = await stockResp.json();
-              if (stockData.ok) {
+              if (stockData && typeof stockData.stock !== 'undefined') {
                 stockDisponible = stockData.stock || 0;
                 console.log('📊 Stock obtenido del servidor:', stockDisponible);
                 
@@ -393,7 +393,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (stockResp.ok) {
           const stockData = await stockResp.json();
           
-          if (stockData.ok) {
+          // Validar que la respuesta tenga los datos necesarios
+          if (stockData && typeof stockData.stock !== 'undefined') {
             const stockActual = stockData.stock || 0;
             const stockDisponible = stockActual - cantidadEnCarrito;
             console.log('📊 Stock total:', stockActual, 'En carrito:', cantidadEnCarrito, 'Disponible:', stockDisponible, 'Solicitando:', quantity);
@@ -419,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('✅ Validación de stock exitosa - Procediendo a agregar al carrito');
           } else {
-            console.log('❌ Error en respuesta del servidor de stock');
+            console.error('❌ Respuesta del servidor inválida:', stockData);
             alert('Error al verificar stock. Por favor, recarga la página.');
             location.reload();
             return;
@@ -452,7 +453,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (stockFinalResp.ok) {
           const stockFinalData = await stockFinalResp.json();
           
-          if (stockFinalData.ok) {
+          if (stockFinalData && typeof stockFinalData.stock !== 'undefined') {
             const stockFinalActual = stockFinalData.stock || 0;
             
             // VALIDACIÓN FINAL CON CARRITO EN TIEMPO REAL
