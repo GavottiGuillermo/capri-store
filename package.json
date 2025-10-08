@@ -8,8 +8,7 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "start": "node js/server-simple.js",
-    "start-full": "node js/server.js",
+    "start": "node js/server.js",
     "dev": "node js/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
