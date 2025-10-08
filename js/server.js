@@ -115,7 +115,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/')) {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito') {
     return next();
   }
   
@@ -279,7 +279,8 @@ app.get('/debug', (req, res) => {
       '/contact-info',
       '/whatsapp-status',
       '/stock-agotado',
-      '/stock-producto/:id'
+      '/stock-producto/:id',
+      '/validar-stock-carrito (POST)'
     ]
   });
 });
@@ -423,6 +424,79 @@ app.get('/stock-producto/:id', async (req, res) => {
       disponible: false, 
       stock: 0,
       error: 'Error al consultar stock'
+    });
+  }
+});
+
+// === VALIDAR STOCK DE CARRITO (MÚLTIPLES PRODUCTOS) ===
+app.post('/validar-stock-carrito', express.json(), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    console.log(`🛒 Validando stock de carrito para ${ids?.length || 0} productos`);
+    
+    // Validar que ids sea un array válido
+    if (!Array.isArray(ids) || ids.length === 0) {
+      console.error('❌ IDs inválidos:', ids);
+      return res.json({ 
+        ok: false,
+        error: 'IDs de productos inválidos',
+        faltantes: []
+      });
+    }
+    
+    // Si no hay base de datos, asumir que todo está disponible (modo degradado)
+    if (!pool) {
+      console.warn('⚠️ Base de datos no disponible - asumiendo disponibilidad');
+      return res.json({ 
+        ok: true, 
+        faltantes: [],
+        mensaje: 'Validación en modo degradado'
+      });
+    }
+    
+    // Consultar productos en la base de datos
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const query = `
+      SELECT id_articulo, estado, publicado_en_web
+      FROM productos 
+      WHERE id_articulo IN (${placeholders})
+    `;
+    
+    const result = await pool.query(query, ids);
+    
+    // Productos que NO están disponibles
+    const productosNoDisponibles = result.rows.filter(p => 
+      p.estado !== 'Disponible' || p.publicado_en_web !== 'True'
+    );
+    
+    // IDs de productos en la BD que NO están disponibles
+    const idsNoDisponibles = productosNoDisponibles.map(p => p.id_articulo);
+    
+    // IDs que no se encontraron en la BD (también sin stock)
+    const idsEncontrados = result.rows.map(p => p.id_articulo);
+    const idsNoEncontrados = ids.filter(id => !idsEncontrados.includes(parseInt(id)));
+    
+    // Combinar: no disponibles + no encontrados
+    const faltantes = [...idsNoDisponibles, ...idsNoEncontrados];
+    
+    console.log(`✅ Validación de carrito: ${ids.length} solicitados, ${faltantes.length} sin stock`);
+    
+    res.json({ 
+      ok: true, 
+      faltantes,
+      total_validados: ids.length,
+      sin_stock: faltantes.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error validando stock del carrito:', error.message);
+    console.error('Stack trace:', error.stack);
+    
+    // En caso de error, retornar ok pero sin faltantes para no bloquear compras
+    res.json({ 
+      ok: true,
+      faltantes: [],
+      error: 'Error al validar stock, asumiendo disponibilidad'
     });
   }
 });
