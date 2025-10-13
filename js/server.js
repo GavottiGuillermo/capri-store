@@ -1059,26 +1059,76 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     const adminNormalizado = normalizePhoneNumber(ADMIN_WHATSAPP);
     console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
     
-    const result = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
+    // 1. ENVIAR NOTIFICACIÓN AL ADMINISTRADOR
+    const resultAdmin = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
     
     // Logging seguro del resultado para evitar [object Object]
-    const safeMessageId = result.messageId && typeof result.messageId === 'object' 
-      ? (result.messageId._serialized || JSON.stringify(result.messageId))
-      : result.messageId;
+    const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
+      ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
+      : resultAdmin.messageId;
       
-    console.log(`[${timestamp}] 📡 Resultado del envío:`, {
-      success: result.success,
-      error: result.error,
+    console.log(`[${timestamp}] 📡 Resultado del envío al ADMIN:`, {
+      success: resultAdmin.success,
+      error: resultAdmin.error,
       messageId: safeMessageId
     });
     
-    if (result.success) {
-      console.log(`[${timestamp}] ✅ Notificación de compra enviada por WhatsApp exitosamente`);
+    if (resultAdmin.success) {
+      console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente`);
     } else {
-      console.error(`[${timestamp}] ❌ FALLO enviando notificación de compra:`, result.error);
+      console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador:`, resultAdmin.error);
     }
     
-    return result;
+    // 2. ENVIAR CONFIRMACIÓN AL CLIENTE
+    let resultCliente = { success: false, error: 'No se intentó enviar' };
+    
+    if (telefono && telefono.trim()) {
+      console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
+      
+      // Mensaje para el cliente
+      const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
+        `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
+        `📋 *Detalles de tu pedido:*\n` +
+        `🆔 *Número:* ${numeroDisplay || idPedidoCompleto}\n` +
+        `📅 *Fecha:* ${fechaHora}\n` +
+        `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
+        `🛍️ *Productos:*\n${productosTexto}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📞 *Te contactaremos pronto para coordinar la entrega*\n\n` +
+        `¡Gracias por elegirnos! 💜`;
+      
+      // Normalizar teléfono del cliente
+      const clienteNormalizado = normalizePhoneNumber(telefono);
+      console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
+      
+      if (clienteNormalizado) {
+        resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
+        
+        console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE:`, {
+          success: resultCliente.success,
+          error: resultCliente.error
+        });
+        
+        if (resultCliente.success) {
+          console.log(`[${timestamp}] ✅ Confirmación al CLIENTE enviada exitosamente`);
+        } else {
+          console.error(`[${timestamp}] ❌ FALLO enviando confirmación al cliente:`, resultCliente.error);
+        }
+      } else {
+        console.error(`[${timestamp}] ❌ No se pudo normalizar teléfono del cliente: ${telefono}`);
+        resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
+      }
+    } else {
+      console.warn(`[${timestamp}] ⚠️ No hay teléfono del cliente para enviar confirmación`);
+    }
+    
+    // Retornar resultado combinado
+    return {
+      success: resultAdmin.success,
+      admin_result: resultAdmin,
+      cliente_result: resultCliente,
+      both_sent: resultAdmin.success && resultCliente.success
+    };
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ ERROR CRÍTICO en enviarNotificacionCompra:`, error.message);
