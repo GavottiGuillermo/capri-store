@@ -19,23 +19,43 @@ console.log(`🗄️ Estrategia de autenticación: ${usePostgresAuth ? 'PostgreS
 
 // Configurar estrategia de autenticación
 let authStrategy;
-if (usePostgresAuth) {
-  console.log('🔐 Configurando autenticación PostgreSQL...');
-  authStrategy = new PostgresAuthStrategy({
-    clientId: 'capri-store-main',
-    dataPath: './temp-auth/'
-  });
-} else {
-  console.log('⚠️ No se encontró DATABASE_URL, usando autenticación local');
+try {
+  if (usePostgresAuth) {
+    console.log('🔐 Configurando autenticación PostgreSQL...');
+    authStrategy = new PostgresAuthStrategy({
+      clientId: 'capri-store-main',
+      dataPath: './temp-auth/'
+    });
+    console.log('✅ PostgresAuthStrategy creado exitosamente');
+  } else {
+    console.log('⚠️ No se encontró DATABASE_URL, usando autenticación local');
+    const { LocalAuth } = require('whatsapp-web.js');
+    const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
+    console.log(`📁 Usando directorio de autenticación: ${authPath}`);
+    
+    authStrategy = new LocalAuth({
+      clientId: 'capri-store-session',
+      dataPath: authPath
+    });
+    console.log('✅ LocalAuth creado exitosamente');
+  }
+} catch (authError) {
+  console.error('❌ ERROR creando AuthStrategy:', authError.message);
+  console.log('🔄 Fallback a LocalAuth...');
+  
+  // Fallback a LocalAuth si PostgreSQL falla
   const { LocalAuth } = require('whatsapp-web.js');
   const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
-  console.log(`📁 Usando directorio de autenticación: ${authPath}`);
+  console.log(`📁 Fallback - Usando directorio: ${authPath}`);
   
   authStrategy = new LocalAuth({
-    clientId: 'capri-store-session',
+    clientId: 'capri-store-fallback',
     dataPath: authPath
   });
+  console.log('✅ Fallback LocalAuth creado exitosamente');
 }
+
+console.log('🔧 Creando cliente WhatsApp...');
 
 const whatsappClient = new Client({
   authStrategy: authStrategy,
@@ -78,6 +98,8 @@ const whatsappClient = new Client({
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
   }
 });
+
+console.log('✅ Cliente WhatsApp creado exitosamente');
 
 // Eventos de WhatsApp
 whatsappClient.on('qr', (qr) => {
