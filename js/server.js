@@ -506,7 +506,7 @@ app.post('/whatsapp-clean-session', async (req, res) => {
 // === REINICIO COMPLETO DE WHATSAPP ===
 app.post('/whatsapp-full-reset', async (req, res) => {
   try {
-    console.log('🔄 REINICIO COMPLETO de WhatsApp solicitado...');
+    console.log('🔄 REINICIO COMPLETO de WhatsApp solicitado... [v2]');
     
     if (!whatsappAvailable) {
       return res.status(500).json({
