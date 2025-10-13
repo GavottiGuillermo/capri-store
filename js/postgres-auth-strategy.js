@@ -7,7 +7,14 @@ const { Pool } = require('pg');
  */
 class PostgresAuthStrategy extends RemoteAuth {
   constructor(options = {}) {
-    super(options);
+    // RemoteAuth requiere backupSyncIntervalMs mínimo de 60000ms (1 minuto)
+    const remoteAuthOptions = {
+      ...options,
+      backupSyncIntervalMs: 300000, // 5 minutos
+      dataPath: options.dataPath || './temp-auth/'
+    };
+    
+    super(remoteAuthOptions);
     
     this.clientId = options.clientId || 'default';
     this.dataPath = options.dataPath || './';
