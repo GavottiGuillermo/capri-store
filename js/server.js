@@ -27,7 +27,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -307,6 +307,60 @@ app.post('/test-whatsapp', express.json(), async (req, res) => {
   }
 });
 
+// === FORZAR RECONEXIÓN DE WHATSAPP ===
+app.post('/whatsapp-reconnect', async (req, res) => {
+  try {
+    console.log('🔄 Forzando reconexión de WhatsApp solicitada desde API...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    const result = await forzarReconexion();
+    
+    console.log('🔄 Resultado de reconexión forzada:', result);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ Error forzando reconexión:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === LIMPIAR SESIÓN CORRUPTA ===
+app.post('/whatsapp-clean-session', async (req, res) => {
+  try {
+    console.log('🧹 Limpieza de sesión WhatsApp solicitada desde API...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    const result = await limpiarSesionCorrupta();
+    
+    console.log('🧹 Resultado de limpieza de sesión:', result);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ Error limpiando sesión:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === ENDPOINT DE DEBUG ===
 app.get('/debug', (req, res) => {
   res.json({
@@ -327,6 +381,8 @@ app.get('/debug', (req, res) => {
       '/contact-info',
       '/whatsapp-status',
       '/test-whatsapp (POST)',
+      '/whatsapp-reconnect (POST)',
+      '/whatsapp-clean-session (POST)',
       '/stock-agotado',
       '/stock-producto/:id',
       '/validar-stock-carrito (POST)',

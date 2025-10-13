@@ -108,6 +108,28 @@ whatsappClient.on('disconnected', (reason) => {
   if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
     console.log(`[${timestamp}] ⚠️ Sesión perdida - Se necesitará escanear QR nuevamente`);
   }
+  
+  // NUEVO: Intentar reconexión automática después de 30 segundos
+  console.log(`[${timestamp}] 🔄 Programando reconexión automática en 30 segundos...`);
+  setTimeout(async () => {
+    try {
+      console.log(`[${new Date().toISOString()}] 🔄 Intentando reconexión automática...`);
+      
+      // Verificar si la carpeta de sesión existe
+      const fs = require('fs');
+      const path = require('path');
+      const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+      
+      if (fs.existsSync(authPath)) {
+        console.log(`[${new Date().toISOString()}] ✅ Sesión guardada existe, intentando reconectar...`);
+        await whatsappClient.initialize();
+      } else {
+        console.log(`[${new Date().toISOString()}] ❌ No hay sesión guardada, se necesitará QR`);
+      }
+    } catch (reconnectError) {
+      console.error(`[${new Date().toISOString()}] ❌ Error en reconexión automática:`, reconnectError.message);
+    }
+  }, 30000);
 });
 
 whatsappClient.on('loading_screen', (percent, message) => {
@@ -210,13 +232,35 @@ async function getWhatsAppStatus() {
   
   try {
     let clientState;
+    let stateError = null;
+    let clientInfo = null;
+    
     try {
       clientState = await whatsappClient.getState();
-    } catch (stateError) {
-      clientState = `ERROR: ${stateError.message}`;
+      console.log(`[DEBUG] getState() devolvió: ${clientState}`);
+      
+      // Intentar obtener info del cliente también
+      try {
+        clientInfo = whatsappClient.info;
+        console.log(`[DEBUG] client.info:`, clientInfo ? 'Disponible' : 'null');
+      } catch (infoError) {
+        console.log(`[DEBUG] Error obteniendo client.info:`, infoError.message);
+      }
+      
+    } catch (error) {
+      stateError = error.message;
+      clientState = null;
+      console.error(`[DEBUG] Error en getState():`, error.message);
     }
     
     const isReady = whatsappReady && clientState === 'CONNECTED';
+    
+    console.log(`[DEBUG] Estado calculado:`, {
+      whatsappReady,
+      clientState,
+      isReady,
+      hasStateError: !!stateError
+    });
     
     // Verificar si existe la carpeta de autenticación
     const authPath = path.join(__dirname, '..', '.wwebjs_auth');
@@ -239,16 +283,24 @@ async function getWhatsAppStatus() {
       qr_generated: qrGenerated,
       business_name: BUSINESS_NAME,
       admin_whatsapp: ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO',
+      client_info: clientInfo ? {
+        platform: clientInfo.platform,
+        phone: clientInfo.wid ? clientInfo.wid.user : 'unknown'
+      } : null,
       auth_folder: {
         exists: authFolderExists,
         path: authPath,
         contents_count: authFolderContents.length,
-        has_session: authFolderContents.some(file => file.includes('session'))
+        has_session: authFolderContents.some(file => file.includes('session')),
+        files: authFolderContents
       },
       diagnostics: {
         should_show_qr: !isReady && !authFolderExists,
         session_should_persist: authFolderExists && authFolderContents.length > 0,
-        needs_rescan: authFolderExists && !isReady && qrGenerated
+        needs_rescan: authFolderExists && !isReady && qrGenerated,
+        state_error: stateError,
+        problem_identified: clientState === null && authFolderExists && authFolderContents.length > 0,
+        suggested_action: clientState === null && authFolderExists ? 'FORCE_RECONNECT' : 'WAIT_OR_SCAN'
       },
       timestamp: new Date().toISOString()
     };
@@ -261,7 +313,99 @@ async function getWhatsAppStatus() {
       error: error.message,
       business_name: BUSINESS_NAME,
       admin_whatsapp: ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO',
+      diagnostics: {
+        problem_identified: true,
+        suggested_action: 'CHECK_SERVER_LOGS',
+        state_error: error.message
+      },
       timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// Función para forzar reconexión
+async function forzarReconexion() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🔄 FORZANDO RECONEXIÓN de WhatsApp...`);
+  
+  try {
+    // Resetear flags
+    whatsappReady = false;
+    qrGenerated = false;
+    
+    console.log(`[${timestamp}] 1️⃣ Destruyendo cliente actual...`);
+    await whatsappClient.destroy();
+    
+    console.log(`[${timestamp}] 2️⃣ Esperando 3 segundos...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    console.log(`[${timestamp}] 3️⃣ Reinicializando cliente...`);
+    await whatsappClient.initialize();
+    
+    console.log(`[${timestamp}] ✅ Reconexión iniciada correctamente`);
+    return {
+      success: true,
+      message: 'Reconexión forzada iniciada',
+      timestamp
+    };
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en reconexión forzada:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      timestamp
+    };
+  }
+}
+
+// Función para limpiar sesión corrupta
+async function limpiarSesionCorrupta() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🧹 LIMPIANDO SESIÓN CORRUPTA...`);
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Destruir cliente primero
+    whatsappReady = false;
+    qrGenerated = false;
+    
+    try {
+      await whatsappClient.destroy();
+    } catch (destroyError) {
+      console.log(`[${timestamp}] ⚠️ Error destruyendo cliente:`, destroyError.message);
+    }
+    
+    // Eliminar carpeta de autenticación
+    const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+    
+    if (fs.existsSync(authPath)) {
+      console.log(`[${timestamp}] 🗑️ Eliminando carpeta de autenticación...`);
+      fs.rmSync(authPath, { recursive: true, force: true });
+      console.log(`[${timestamp}] ✅ Carpeta eliminada`);
+    }
+    
+    // Esperar un poco y reinicializar
+    console.log(`[${timestamp}] ⏳ Esperando 5 segundos antes de reinicializar...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    console.log(`[${timestamp}] 🚀 Reinicializando con sesión limpia...`);
+    await whatsappClient.initialize();
+    
+    return {
+      success: true,
+      message: 'Sesión limpiada y reinicializada - Se necesitará escanear QR',
+      timestamp
+    };
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error limpiando sesión:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      timestamp
     };
   }
 }
@@ -271,6 +415,8 @@ module.exports = {
   inicializarWhatsApp,
   enviarWhatsApp,
   getWhatsAppStatus,
+  forzarReconexion,
+  limpiarSesionCorrupta,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
