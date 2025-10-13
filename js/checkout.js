@@ -41,7 +41,21 @@ function manejarTipoEntrega() {
   }
 }
 // === RESUMEN DE COMPRA ===
+// Variable para evitar múltiples ejecuciones
+let isLoadingResumen = false;
+let lastResumenLoad = 0;
+
 function cargarResumenCompra() {
+  // Evitar múltiples llamadas en menos de 100ms
+  const now = Date.now();
+  if (isLoadingResumen || (now - lastResumenLoad) < 100) {
+    console.log('⏭️ Saltando carga duplicada de resumen');
+    return;
+  }
+  
+  isLoadingResumen = true;
+  lastResumenLoad = now;
+  
   console.log('📊 Cargando resumen de compra...');
   
   const checkoutItems = document.getElementById('checkout-items');
@@ -123,6 +137,9 @@ function cargarResumenCompra() {
   
   // Validar stock de manera asíncrona (sin bloquear la UI)
   validarStockAsync(cartItems);
+  
+  // Liberar flag de carga
+  isLoadingResumen = false;
 }
 
 // === VALIDACIÓN DE STOCK ASÍNCRONA ===
@@ -356,9 +373,15 @@ document.addEventListener('DOMContentLoaded', function() {
   // Remover clase no-js para activar animaciones
   document.documentElement.classList.remove('no-js');
   
-  // PREVENIR DOBLE CARGA - Inicializar datos primero
+  // Inicializar animaciones primero
+  console.log('🎭 Inicializando animaciones...');
+  initializeAnimations();
+  
+  // PREVENIR DOBLE CARGA - Inicializar datos después de las animaciones
   console.log('📊 Cargando resumen de compra inicial...');
-  cargarResumenCompra();
+  setTimeout(() => {
+    cargarResumenCompra();
+  }, 200);
   
   console.log('🚛 Configurando tipo de entrega...');
   manejarTipoEntrega();
@@ -443,6 +466,19 @@ function mostrarPopup(mensaje, tipo = 'success') {
   } else {
     alert(mensaje);
   }
+}
+
+// === ANIMACIONES Y EFECTOS VISUALES ===
+function initializeAnimations() {
+  // Activar animaciones después de un pequeño delay
+  setTimeout(() => {
+    const elements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right, .section-title, .checkout-section');
+    elements.forEach((element, index) => {
+      setTimeout(() => {
+        element.classList.add('visible');
+      }, index * 100); // Escalonar las animaciones
+    });
+  }, 150);
 }
 
 // Hacer disponibles globalmente
