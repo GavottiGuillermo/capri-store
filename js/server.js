@@ -41,7 +41,6 @@ console.log('- NODE_ENV:', process.env.NODE_ENV);
 console.log('- PORT:', process.env.PORT);
 console.log('- ADMIN_WHATSAPP:', process.env.ADMIN_WHATSAPP ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
 console.log('- ADMIN_INSTAGRAM:', process.env.ADMIN_INSTAGRAM ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
-console.log('- ADMIN_EMAIL:', process.env.ADMIN_EMAIL ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
 
 // ===============================
 // CONFIGURACIÓN DEL SERVIDOR
@@ -224,10 +223,7 @@ function validateCustomerData(data) {
   if (!data.apellido?.trim()) errors.push('Apellido es requerido');
   if (!data.telefono?.trim()) errors.push('Teléfono es requerido');
   
-  // Validar email si se proporciona
-  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-    errors.push('Email no válido');
-  }
+
   
   return errors;
 }
@@ -248,7 +244,6 @@ app.get('/health', (req, res) => {
     env_vars: {
       admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
       admin_instagram: !!process.env.ADMIN_INSTAGRAM,
-      admin_email: !!process.env.ADMIN_EMAIL,
       mercadopago_token: !!process.env.MERCADOPAGO_ACCESS_TOKEN
     }
   });
@@ -411,8 +406,7 @@ app.get('/debug', (req, res) => {
     timestamp: new Date().toISOString(),
     variables_configuradas: {
       ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP ? 'CONFIGURADO' : 'NO CONFIGURADO',
-      ADMIN_INSTAGRAM: process.env.ADMIN_INSTAGRAM ? 'CONFIGURADO' : 'NO CONFIGURADO', 
-      ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'CONFIGURADO' : 'NO CONFIGURADO',
+      ADMIN_INSTAGRAM: process.env.ADMIN_INSTAGRAM ? 'CONFIGURADO' : 'NO CONFIGURADO',
       MERCADOPAGO_ACCESS_TOKEN: process.env.MERCADOPAGO_ACCESS_TOKEN ? 'CONFIGURADO' : 'NO CONFIGURADO',
       DATABASE_URL: process.env.DATABASE_URL ? 'CONFIGURADO' : 'NO CONFIGURADO'
     },
@@ -446,7 +440,6 @@ app.get('/contact-info', (req, res) => {
     const contactInfo = {
       whatsapp: process.env.ADMIN_WHATSAPP,
       instagram: process.env.ADMIN_INSTAGRAM,
-      email: process.env.ADMIN_EMAIL,
       business_name: BUSINESS_NAME,
       location: 'Zárate, Buenos Aires, Argentina'
     };
@@ -454,16 +447,15 @@ app.get('/contact-info', (req, res) => {
     // Log para debugging
     console.log('📄 Enviando información de contacto:', {
       whatsapp: contactInfo.whatsapp ? `${contactInfo.whatsapp.substring(0, 4)}****` : 'NO CONFIGURADO',
-      instagram: contactInfo.instagram ? 'CONFIGURADO' : 'NO CONFIGURADO',
-      email: contactInfo.email ? 'CONFIGURADO' : 'NO CONFIGURADO'
+      instagram: contactInfo.instagram ? 'CONFIGURADO' : 'NO CONFIGURADO'
     });
     
     // Validar que al menos uno de los contactos esté configurado
-    if (!contactInfo.whatsapp && !contactInfo.instagram && !contactInfo.email) {
+    if (!contactInfo.whatsapp && !contactInfo.instagram) {
       console.warn('⚠️ Ninguna variable de contacto está configurada');
       return res.status(500).json({
         error: 'No hay información de contacto configurada',
-        message: 'Variables de entorno ADMIN_WHATSAPP, ADMIN_INSTAGRAM, ADMIN_EMAIL no están configuradas'
+        message: 'Variables de entorno ADMIN_WHATSAPP, ADMIN_INSTAGRAM no están configuradas'
       });
     }
     
@@ -662,7 +654,7 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
     const { items, datosComprador } = req.body;
     console.log('💳 Creando preferencia de MercadoPago');
     console.log('Items:', items?.length || 0, 'productos');
-    console.log('Comprador:', datosComprador?.nombre, datosComprador?.email);
+    console.log('Comprador:', datosComprador?.nombre, datosComprador?.telefono);
     
     // Validar que haya items
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -681,10 +673,10 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
     }
     
     // Validar datos del comprador
-    if (!datosComprador || !datosComprador.email || !datosComprador.telefono) {
+    if (!datosComprador || !datosComprador.telefono) {
       console.error('❌ Datos del comprador incompletos');
       return res.status(400).json({ 
-        error: 'Datos del comprador incompletos' 
+        error: 'Datos del comprador incompletos - Se requiere teléfono' 
       });
     }
     
@@ -709,7 +701,7 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       payer: {
         name: datosComprador.nombre || '',
         surname: datosComprador.apellido || '',
-        email: datosComprador.email,
+        email: `${datosComprador.telefono}@whatsapp.temp`, // Email temporal generado del teléfono
         phone: {
           area_code: '',
           number: String(datosComprador.telefono || '')
@@ -807,12 +799,11 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
 
   try {
     console.log(`[${timestamp}] 📋 Datos de la compra:`);
-    const { nombre, apellido, email, telefono } = customerData;
+    const { nombre, apellido, telefono } = customerData;
     const { numeroDisplay, idPedidoCompleto } = orderData;
     const { transaction_amount, id: paymentId } = paymentInfo;
     
     console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
-    console.log(`[${timestamp}] - Email: ${email || 'No proporcionado'}`);
     console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
     console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
     console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
@@ -845,8 +836,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     // Mensaje para administrador
     const mensajeAdmin = `🛒 *NUEVA COMPRA - ${BUSINESS_NAME}* 🛒\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
-      `📧 *Email:* ${email || 'No proporcionado'}\n` +
-      `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
+      ` *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
       `🛍️ *Productos:*\n${productosTexto}\n\n` +
       `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n` +
@@ -956,7 +946,6 @@ app.post('/webhook', async (req, res) => {
             customerData = {
               nombre: paymentInfo.payer?.first_name || '',
               apellido: paymentInfo.payer?.last_name || '',
-              email: paymentInfo.payer?.email || '',
               telefono: paymentInfo.metadata.telefono || paymentInfo.payer?.phone?.number || ''
             };
           }
@@ -1003,8 +992,7 @@ app.post('/webhook', async (req, res) => {
                 `💰 Monto: $${paymentInfo.transaction_amount}\n` +
                 `📦 Productos sin stock: ${faltantes.join(', ')}\n\n` +
                 `👤 Cliente: ${customerData.nombre} ${customerData.apellido}\n` +
-                `📧 Email: ${customerData.email}\n` +
-                `📱 Tel: ${customerData.telefono}\n\n` +
+                ` Tel: ${customerData.telefono}\n\n` +
                 `⚠️ No se creó el pedido automáticamente. Revisar y contactar al cliente.`;
               
               await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
@@ -1025,7 +1013,7 @@ app.post('/webhook', async (req, res) => {
                 productIds,
                 paymentInfo.transaction_amount,
                 paymentInfo.payer?.first_name || 'Cliente Web',
-                customerData.email || paymentInfo.payer?.email || 'cliente@web.com',
+                'cliente@whatsapp.temp', // Email temporal ya que no usamos email
                 customerData.telefono || paymentInfo.payer?.phone?.number || '',
                 'MercadoPago',
                 'Retiro', // Tipo de entrega por defecto

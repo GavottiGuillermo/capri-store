@@ -168,13 +168,7 @@ async function setupContactLinks() {
       console.log('✅ Instagram link configurado:', contactInfo.instagram);
     }
     
-    // Email
-    const emailLink = document.getElementById('emailLink');
-    if (emailLink && contactInfo.email) {
-      const emailUrl = `mailto:${contactInfo.email}?subject=Consulta desde Capri Store&body=Hola, me gustaría hacer una consulta sobre...`;
-      emailLink.href = emailUrl;
-      console.log('✅ Email link configurado:', emailUrl);
-    }
+    // Email - ELIMINADO (no se usa)
     
   } catch (error) {
     console.error('❌ Error cargando información de contacto:', error);
@@ -214,14 +208,7 @@ function setupFallbackContactLinks(error = null) {
     };
   }
   
-  const emailLink = document.getElementById('emailLink');
-  if (emailLink) {
-    emailLink.href = '#';
-    emailLink.onclick = () => {
-      alert(errorMessage);
-      return false;
-    };
-  }
+  // Email link - ELIMINADO (no se usa)
 }
 
 // Smooth scroll - Solo para enlaces internos
@@ -246,7 +233,7 @@ function setupSmoothScroll() {
           console.warn('🔗 Error en smooth scroll para:', href, error.message);
         }
       }
-      // Para enlaces externos (WhatsApp, Instagram, email) dejar que se abran normalmente
+      // Para enlaces externos (WhatsApp, Instagram) dejar que se abran normalmente
     });
   });
 }

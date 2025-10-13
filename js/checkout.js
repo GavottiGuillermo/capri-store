@@ -300,7 +300,6 @@ async function iniciarProcesoPago() {
   const checkoutData = {
     nombre: formData.get('nombre'),
     apellido: formData.get('apellido'),
-    email: formData.get('email'),
     telefono: formData.get('telefono'),
     tipoEntrega: tipoEntrega,
     datosEnvio: datosEnvio,
