@@ -278,23 +278,19 @@ function hideLoadingScreen() {
   }
 }
 
-// Mobile menu
+// Mobile menu - Solo cerrar menú al hacer click en enlaces internos
 function setupMobileMenu() {
-  const navbarToggler = document.querySelector('.navbar-toggler');
-  const navbarCollapse = document.querySelector('.navbar-collapse');
-  
-  if (navbarToggler && navbarCollapse) {
-    navbarToggler.addEventListener('click', () => {
-      navbarCollapse.classList.toggle('show');
+  // Solo manejar el cierre automático para enlaces internos
+  document.querySelectorAll('.navbar-nav .nav-link.js-scroll-trigger').forEach(link => {
+    link.addEventListener('click', () => {
+      // Usar Bootstrap para cerrar el menú
+      const navbarCollapse = document.querySelector('.navbar-collapse');
+      if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+        // Usar el método de Bootstrap para cerrar
+        $('.navbar-collapse').collapse('hide');
+      }
     });
-    
-    // Cerrar menú al hacer click en un link
-    document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
-      link.addEventListener('click', () => {
-        navbarCollapse.classList.remove('show');
-      });
-    });
-  }
+  });
 }
 
 // Back to top button

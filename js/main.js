@@ -624,6 +624,13 @@ document.addEventListener('click', function(e) {
     return;
   }
   
+  // Manejar click en botón "Refrescar stock"
+  if (e.target.id === 'link-refrescar' || e.target.closest('#link-refrescar')) {
+    e.preventDefault();
+    refrescarStock();
+    return;
+  }
+  
   // Manejar click en botones "Ver más"
   if (e.target.getAttribute('data-accion') === 'cargarMasNovedades') {
     e.preventDefault();
