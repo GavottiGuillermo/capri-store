@@ -776,16 +776,33 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] 🔔 === INICIANDO NOTIFICACIÓN DE COMPRA ===`);
   
-  // Log de estado de WhatsApp
-  console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
-  console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-  console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
-  console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
+  try {
+    // Validación de parámetros críticos
+    if (!customerData || typeof customerData !== 'object') {
+      console.error(`[${timestamp}] ❌ customerData inválido:`, customerData);
+      return { success: false, error: 'Datos de cliente inválidos' };
+    }
+    
+    if (!orderData || typeof orderData !== 'object') {
+      console.error(`[${timestamp}] ❌ orderData inválido:`, orderData);
+      return { success: false, error: 'Datos de pedido inválidos' };
+    }
+    
+    if (!paymentInfo || typeof paymentInfo !== 'object') {
+      console.error(`[${timestamp}] ❌ paymentInfo inválido:`, paymentInfo);
+      return { success: false, error: 'Información de pago inválida' };
+    }
   
-  if (!whatsappAvailable) {
-    console.error(`[${timestamp}] ❌ WhatsApp service no está disponible (no se pudo cargar el módulo)`);
-    return { success: false, error: 'WhatsApp service no disponible' };
-  }
+    // Log de estado de WhatsApp
+    console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
+    console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
+    console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
+    console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
+    
+    if (!whatsappAvailable) {
+      console.error(`[${timestamp}] ❌ WhatsApp service no está disponible (no se pudo cargar el módulo)`);
+      return { success: false, error: 'WhatsApp service no disponible' };
+    }
 
   // NUEVA VERIFICACIÓN: Comprobar estado real del cliente independientemente del flag
   let realClientState = null;
@@ -818,11 +835,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     return { success: false, error: 'Número de administrador no configurado' };
   }
 
-  try {
-    console.log(`[${timestamp}] 📋 Datos de la compra:`);
-    const { nombre, apellido, telefono } = customerData;
-    const { numeroDisplay, idPedidoCompleto } = orderData;
-    const { transaction_amount, id: paymentId } = paymentInfo;
+  console.log(`[${timestamp}] 📋 Datos de la compra:`);
+    
+    // Extraer datos con valores por defecto seguros
+    const { nombre = '', apellido = '', telefono = '' } = customerData || {};
+    const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
+    const { transaction_amount = 0, id: paymentId = 'N/A' } = paymentInfo || {};
     
     console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
     console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
@@ -839,23 +857,31 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
       minute: '2-digit'
     });
     
-    // Obtener productos del payment info
-    const items = paymentInfo.additional_info?.items || [];
+    // Obtener productos del payment info con validación robusta
+    const items = (paymentInfo && paymentInfo.additional_info && paymentInfo.additional_info.items) 
+      ? paymentInfo.additional_info.items 
+      : [];
+      
     console.log(`[${timestamp}] 📦 Items de la compra: ${items.length} productos`);
     
     let productosTexto = '';
-    if (items.length > 0) {
+    if (Array.isArray(items) && items.length > 0) {
       productosTexto = items.map((item, index) => {
-        console.log(`[${timestamp}] - Item ${index + 1}: ${item.title} x${item.quantity} - $${item.unit_price}`);
-        return `• ${item.title || 'Producto'} x${item.quantity || 1} - $${(item.unit_price || 0).toLocaleString('es-AR')}`;
+        const title = item?.title || 'Producto sin nombre';
+        const quantity = item?.quantity || 1;
+        const unit_price = item?.unit_price || 0;
+        
+        console.log(`[${timestamp}] - Item ${index + 1}: ${title} x${quantity} - $${unit_price}`);
+        return `• ${title} x${quantity} - $${unit_price.toLocaleString('es-AR')}`;
       }).join('\n');
     } else {
-      console.log(`[${timestamp}] ⚠️ No se encontraron items en paymentInfo.additional_info.items`);
-      productosTexto = '• Productos no especificados';
+      console.log(`[${timestamp}] ⚠️ No se encontraron items válidos en paymentInfo`);
+      productosTexto = '• Información de productos no disponible';
     }
     
     // Mensaje para administrador
-    const mensajeAdmin = `🛒 *NUEVA COMPRA - ${BUSINESS_NAME}* 🛒\n\n` +
+    const businessName = BUSINESS_NAME || 'Tienda Online';
+    const mensajeAdmin = `🛒 *NUEVA COMPRA - ${businessName}* 🛒\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
       ` *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
@@ -871,10 +897,15 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     
     const result = await enviarWhatsApp(ADMIN_WHATSAPP, mensajeAdmin);
     
+    // Logging seguro del resultado para evitar [object Object]
+    const safeMessageId = result.messageId && typeof result.messageId === 'object' 
+      ? (result.messageId._serialized || JSON.stringify(result.messageId))
+      : result.messageId;
+      
     console.log(`[${timestamp}] 📡 Resultado del envío:`, {
       success: result.success,
       error: result.error,
-      messageId: result.messageId
+      messageId: safeMessageId
     });
     
     if (result.success) {

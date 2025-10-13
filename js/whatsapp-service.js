@@ -237,7 +237,17 @@ async function enviarWhatsApp(numero, mensaje) {
     
     const messageResult = await chat.sendMessage(mensaje);
     console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
-    console.log(`[${timestamp}] 📨 Message ID: ${messageResult.id || 'N/A'}`);
+    
+    // Mejorar el logging del messageId para evitar [object Object]
+    let messageIdStr = 'N/A';
+    if (messageResult && messageResult.id) {
+      if (typeof messageResult.id === 'string') {
+        messageIdStr = messageResult.id;
+      } else if (typeof messageResult.id === 'object') {
+        messageIdStr = messageResult.id._serialized || JSON.stringify(messageResult.id);
+      }
+    }
+    console.log(`[${timestamp}] 📨 Message ID: ${messageIdStr}`);
     
     return { 
       success: true, 
