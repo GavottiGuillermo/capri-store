@@ -779,7 +779,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
   // Log de estado de WhatsApp
   console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
   console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-  console.log(`[${timestamp}] - whatsappReady: ${whatsappReady}`);
+  console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
   console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
   
   if (!whatsappAvailable) {
@@ -787,9 +787,30 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     return { success: false, error: 'WhatsApp service no disponible' };
   }
 
-  if (!whatsappReady) {
-    console.error(`[${timestamp}] ❌ WhatsApp no está listo (cliente no conectado)`);
-    return { success: false, error: 'WhatsApp cliente no está listo' };
+  // NUEVA VERIFICACIÓN: Comprobar estado real del cliente independientemente del flag
+  let realClientState = null;
+  let clientReady = whatsappReady;
+  
+  try {
+    const statusCheck = await getWhatsAppStatus();
+    realClientState = statusCheck.client_state;
+    clientReady = statusCheck.whatsapp_ready || realClientState === 'CONNECTED';
+    
+    console.log(`[${timestamp}] 🔍 Verificación estado en enviarNotificacionCompra:`);
+    console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
+    console.log(`[${timestamp}] - Estado real del cliente: ${realClientState}`);
+    console.log(`[${timestamp}] - Cliente listo calculado: ${clientReady}`);
+    
+  } catch (statusError) {
+    console.warn(`[${timestamp}] ⚠️ No se pudo verificar estado real, usando flag: ${statusError.message}`);
+  }
+
+  if (!clientReady) {
+    console.error(`[${timestamp}] ❌ WhatsApp no está listo para envío:`);
+    console.error(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
+    console.error(`[${timestamp}] - Estado real cliente: ${realClientState}`);
+    console.error(`[${timestamp}] - Cliente listo calculado: ${clientReady}`);
+    return { success: false, error: `WhatsApp no está listo. Flag: ${whatsappReady}, Estado: ${realClientState}` };
   }
 
   if (!ADMIN_WHATSAPP) {
@@ -1040,10 +1061,31 @@ app.post('/webhook', async (req, res) => {
               // Enviar notificación de compra por WhatsApp
               console.log(`[${timestamp}] 📱 Intentando enviar notificación WhatsApp...`);
               console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-              console.log(`[${timestamp}] - whatsappReady: ${whatsappReady}`);
+              console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
               
-              if (whatsappAvailable && whatsappReady) {
-                console.log(`[${timestamp}] ✅ Condiciones WhatsApp OK, enviando notificación...`);
+              // NUEVO: Verificar estado real del cliente, no solo el flag
+              let realClientState = null;
+              let canSendWhatsApp = false;
+              
+              if (whatsappAvailable) {
+                try {
+                  const statusCheck = await getWhatsAppStatus();
+                  realClientState = statusCheck.client_state;
+                  canSendWhatsApp = statusCheck.whatsapp_ready || realClientState === 'CONNECTED';
+                  
+                  console.log(`[${timestamp}] 🔍 Verificación estado real:`);
+                  console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
+                  console.log(`[${timestamp}] - Estado real cliente: ${realClientState}`);
+                  console.log(`[${timestamp}] - Puede enviar: ${canSendWhatsApp}`);
+                  
+                } catch (statusError) {
+                  console.error(`[${timestamp}] ❌ Error verificando estado real:`, statusError.message);
+                  canSendWhatsApp = whatsappReady; // Fallback al flag original
+                }
+              }
+              
+              if (whatsappAvailable && canSendWhatsApp) {
+                console.log(`[${timestamp}] ✅ WhatsApp disponible, enviando notificación...`);
                 try {
                   const notificationResult = await enviarNotificacionCompra(
                     customerData,
@@ -1063,7 +1105,24 @@ app.post('/webhook', async (req, res) => {
               } else {
                 console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible para notificación:`);
                 console.warn(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-                console.warn(`[${timestamp}] - whatsappReady: ${whatsappReady}`);
+                console.warn(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
+                console.warn(`[${timestamp}] - Estado real cliente: ${realClientState}`);
+                console.warn(`[${timestamp}] - Puede enviar calculado: ${canSendWhatsApp}`);
+                
+                // Intentar envío forzado si el cliente está CONNECTED pero el flag es false
+                if (whatsappAvailable && realClientState === 'CONNECTED' && !whatsappReady) {
+                  console.log(`[${timestamp}] 🔄 INTENTO FORZADO: Cliente CONNECTED pero flag false`);
+                  try {
+                    const forceResult = await enviarNotificacionCompra(
+                      customerData,
+                      { numeroDisplay, idPedidoCompleto },
+                      paymentInfo
+                    );
+                    console.log(`[${timestamp}] 🚀 Resultado envío forzado:`, forceResult);
+                  } catch (forceError) {
+                    console.error(`[${timestamp}] ❌ Error en envío forzado:`, forceError.message);
+                  }
+                }
               }
             } else {
               console.error(`[${timestamp}] ⚠️ Pedido no encontrado después de crearlo`);
