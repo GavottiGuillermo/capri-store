@@ -11,10 +11,14 @@ let qrGenerated = false;
 console.log('📱 Configurando WhatsApp Business...');
 
 // Configurar cliente WhatsApp con configuraciones optimizadas
+// Usar directorio temporal persistente para Render
+const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
+console.log(`📁 Usando directorio de autenticación: ${authPath}`);
+
 const whatsappClient = new Client({
   authStrategy: new LocalAuth({
     clientId: 'capri-store-session',
-    dataPath: './.wwebjs_auth/'
+    dataPath: authPath
   }),
   puppeteer: {
     headless: true,
@@ -86,8 +90,28 @@ whatsappClient.on('ready', async () => {
     console.log(`📱 Negocio: ${BUSINESS_NAME}`);
     console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
     console.log(`🔗 Estado del cliente: ${state}`);
+    console.log(`📁 Directorio auth: ${authPath}`);
     console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
     console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+    
+    // En Render, programar verificación periódica para mantener sesión viva
+    if (process.env.RENDER) {
+      console.log('🔄 Render detectado - Programando verificaciones de sesión cada 10 minutos');
+      setInterval(async () => {
+        try {
+          const currentState = await whatsappClient.getState();
+          console.log(`⏰ Verificación periódica - Estado: ${currentState || 'null'}`);
+          if (!currentState || currentState !== 'CONNECTED') {
+            console.log('⚠️ Estado perdido - Marcando como no listo');
+            whatsappReady = false;
+          }
+        } catch (error) {
+          console.log(`⚠️ Error en verificación periódica: ${error.message}`);
+          whatsappReady = false;
+        }
+      }, 10 * 60 * 1000); // 10 minutos
+    }
+    
   } catch (error) {
     console.log(`✅ WhatsApp conectado pero error obteniendo estado: ${error.message}`);
   }
@@ -127,7 +151,7 @@ whatsappClient.on('disconnected', (reason) => {
       // Verificar si la carpeta de sesión existe
       const fs = require('fs');
       const path = require('path');
-      const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+      const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
       
       if (fs.existsSync(authPath)) {
         console.log(`[${new Date().toISOString()}] ✅ Sesión guardada existe, intentando reconectar...`);
@@ -272,14 +296,14 @@ async function getWhatsAppStatus() {
     });
     
     // Verificar si existe la carpeta de autenticación
-    const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+    const authDirPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
     let authFolderExists = false;
     let authFolderContents = [];
     
     try {
-      authFolderExists = fs.existsSync(authPath);
+      authFolderExists = fs.existsSync(authDirPath);
       if (authFolderExists) {
-        authFolderContents = fs.readdirSync(authPath);
+        authFolderContents = fs.readdirSync(authDirPath);
       }
     } catch (fsError) {
       console.error('Error verificando carpeta auth:', fsError.message);
@@ -298,7 +322,7 @@ async function getWhatsAppStatus() {
       } : null,
       auth_folder: {
         exists: authFolderExists,
-        path: authPath,
+        path: authDirPath,
         contents_count: authFolderContents.length,
         has_session: authFolderContents.some(file => file.includes('session')),
         files: authFolderContents
@@ -388,7 +412,7 @@ async function limpiarSesionCorrupta() {
     }
     
     // Eliminar carpeta de autenticación
-    const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+    const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
     
     if (fs.existsSync(authPath)) {
       console.log(`[${timestamp}] 🗑️ Eliminando carpeta de autenticación...`);
