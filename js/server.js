@@ -302,6 +302,57 @@ app.post('/test-whatsapp', express.json(), async (req, res) => {
   }
 });
 
+// === TEST DE NOTIFICACIÓN COMPLETA ===
+app.post('/test-notification', express.json(), async (req, res) => {
+  console.log('🧪 TEST NOTIFICATION: Probando notificación completa');
+  
+  try {
+    // Datos de prueba
+    const testCustomerData = {
+      nombre: 'Cliente',
+      apellido: 'Prueba',
+      telefono: '+5493487610270'
+    };
+    
+    const testOrderData = {
+      numeroDisplay: '99',
+      idPedidoCompleto: 'TEST001'
+    };
+    
+    const testPaymentInfo = {
+      transaction_amount: 1000,
+      id: 'TEST_PAYMENT_123',
+      additional_info: {
+        items: [
+          {
+            title: 'Producto de Prueba',
+            quantity: 1,
+            unit_price: 1000
+          }
+        ]
+      }
+    };
+    
+    console.log('🧪 Enviando notificación de prueba...');
+    const result = await enviarNotificacionCompra(testCustomerData, testOrderData, testPaymentInfo);
+    
+    res.json({
+      success: true,
+      notification_result: result,
+      test_data: { testCustomerData, testOrderData, testPaymentInfo },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('🧪 TEST NOTIFICATION ERROR:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === FORZAR RECONEXIÓN DE WHATSAPP ===
 app.post('/whatsapp-reconnect', async (req, res) => {
   try {
