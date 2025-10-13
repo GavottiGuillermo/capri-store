@@ -208,6 +208,56 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // FUNCIONES AUXILIARES
 // ===============================
 
+// Normalizar números de teléfono para WhatsApp (formato argentino)
+function normalizePhoneNumber(phone) {
+  if (!phone || typeof phone !== 'string') {
+    console.log('🔍 Número inválido:', phone);
+    return null;
+  }
+  
+  // Remover todos los caracteres no numéricos
+  let cleanNumber = phone.replace(/\D/g, '');
+  console.log('🔍 Número limpio:', cleanNumber);
+  
+  // Si empieza con 54 (Argentina), mantenerlo
+  if (cleanNumber.startsWith('54')) {
+    // Si tiene 13 dígitos (549xxxxxxxxx), está correcto
+    if (cleanNumber.length === 13) {
+      console.log('✅ Número argentino completo:', cleanNumber);
+      return cleanNumber;
+    }
+    // Si tiene 12 dígitos (54xxxxxxxxxx), agregar el 9
+    if (cleanNumber.length === 12) {
+      const normalized = '549' + cleanNumber.substring(2);
+      console.log('✅ Número argentino normalizado (agregado 9):', normalized);
+      return normalized;
+    }
+  }
+  
+  // Si empieza solo con 9 (formato local argentino 9xxxxxxxxxx)
+  if (cleanNumber.startsWith('9') && cleanNumber.length === 11) {
+    const normalized = '54' + cleanNumber;
+    console.log('✅ Número local argentino normalizado:', normalized);
+    return normalized;
+  }
+  
+  // Si es número local sin 9 (xxxxxxxxxx - 10 dígitos)
+  if (cleanNumber.length === 10) {
+    const normalized = '549' + cleanNumber;
+    console.log('✅ Número local sin 9 normalizado:', normalized);
+    return normalized;
+  }
+  
+  // Si ya tiene 13 dígitos pero no empieza con 54, puede ser otro formato
+  if (cleanNumber.length === 13) {
+    console.log('⚠️ Número de 13 dígitos no argentino:', cleanNumber);
+    return cleanNumber; // Devolver tal como está
+  }
+  
+  console.log('❌ Formato de número no reconocido:', cleanNumber);
+  return cleanNumber; // Devolver lo que se pueda
+}
+
 // Generar ID único para pedidos
 function generateOrderId() {
   const timestamp = Date.now().toString();
@@ -223,7 +273,16 @@ function validateCustomerData(data) {
   if (!data.apellido?.trim()) errors.push('Apellido es requerido');
   if (!data.telefono?.trim()) errors.push('Teléfono es requerido');
   
-
+  // Normalizar el teléfono si está presente
+  if (data.telefono?.trim()) {
+    const normalizedPhone = normalizePhoneNumber(data.telefono);
+    if (normalizedPhone) {
+      data.telefono = normalizedPhone; // Actualizar el teléfono con el formato normalizado
+      console.log(`📱 Teléfono normalizado: ${data.telefono}`);
+    } else {
+      errors.push('Formato de teléfono inválido');
+    }
+  }
   
   return errors;
 }
@@ -294,6 +353,43 @@ app.post('/test-whatsapp', express.json(), async (req, res) => {
     
   } catch (error) {
     console.error('❌ Error en test de WhatsApp:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === TEST DE NORMALIZACIÓN DE TELÉFONOS ===
+app.post('/test-phone', express.json(), async (req, res) => {
+  console.log('🧪 TEST PHONE: Probando normalización de teléfonos');
+  
+  try {
+    const { phone } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parámetro phone requerido'
+      });
+    }
+    
+    console.log('📱 Teléfono original:', phone);
+    const normalized = normalizePhoneNumber(phone);
+    console.log('📱 Teléfono normalizado:', normalized);
+    
+    res.json({
+      success: true,
+      original: phone,
+      normalized: normalized,
+      admin_current: ADMIN_WHATSAPP,
+      admin_normalized: normalizePhoneNumber(ADMIN_WHATSAPP),
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('🧪 TEST PHONE ERROR:', error.message);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -731,6 +827,19 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       });
     }
     
+    // Normalizar teléfono del comprador
+    const telefonoNormalizado = normalizePhoneNumber(datosComprador.telefono);
+    if (!telefonoNormalizado) {
+      console.error('❌ Formato de teléfono inválido:', datosComprador.telefono);
+      return res.status(400).json({ 
+        error: 'Formato de teléfono inválido' 
+      });
+    }
+    
+    // Actualizar datos del comprador con teléfono normalizado
+    datosComprador.telefono = telefonoNormalizado;
+    console.log('📱 Teléfono comprador normalizado:', telefonoNormalizado);
+    
     // Determinar URLs de retorno según el ambiente
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://capristorezte.com.ar'
@@ -946,7 +1055,11 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
     console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
     
-    const result = await enviarWhatsApp(ADMIN_WHATSAPP, mensajeAdmin);
+    // Normalizar número del administrador antes de enviar
+    const adminNormalizado = normalizePhoneNumber(ADMIN_WHATSAPP);
+    console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
+    
+    const result = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
     
     // Logging seguro del resultado para evitar [object Object]
     const safeMessageId = result.messageId && typeof result.messageId === 'object' 
