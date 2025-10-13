@@ -90,15 +90,24 @@ whatsappClient.on('authenticated', () => {
 
 whatsappClient.on('auth_failure', (msg) => {
   console.error('❌ Error de autenticación WhatsApp:', msg);
-  console.log('🔄 Solucion: Elimina la carpeta .wwebjs_auth y reinicia');
+  console.log('🔄 La sesión guardada puede estar corrupta');
+  console.log('💡 Solución: Elimina la carpeta .wwebjs_auth/ y reinicia el servidor');
+  console.log('📱 Después tendrás que escanear el QR una vez más');
   whatsappReady = false;
   qrGenerated = false;
 });
 
 whatsappClient.on('disconnected', (reason) => {
-  console.log('⚠️ WhatsApp desconectado:', reason);
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ⚠️ WhatsApp desconectado - Razón: ${reason}`);
+  console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
   whatsappReady = false;
   qrGenerated = false;
+  
+  // Si la desconexión es por sesión inválida, avisar
+  if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
+    console.log(`[${timestamp}] ⚠️ Sesión perdida - Se necesitará escanear QR nuevamente`);
+  }
 });
 
 whatsappClient.on('loading_screen', (percent, message) => {
@@ -118,56 +127,129 @@ async function inicializarWhatsApp() {
 
 // Función para enviar mensajes
 async function enviarWhatsApp(numero, mensaje) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 📤 INICIANDO ENVÍO DE WHATSAPP`);
+  console.log(`[${timestamp}] 📱 Número destino: ${numero}`);
+  console.log(`[${timestamp}] 📝 Mensaje (primeros 100 chars): ${mensaje.substring(0, 100)}...`);
+  
   try {
     // Verificar múltiples condiciones de estado
-    const clientState = await whatsappClient.getState();
+    console.log(`[${timestamp}] 🔍 Verificando estado de WhatsApp...`);
+    console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
+    
+    let clientState;
+    try {
+      clientState = await whatsappClient.getState();
+      console.log(`[${timestamp}] - clientState: ${clientState}`);
+    } catch (stateError) {
+      console.error(`[${timestamp}] ❌ Error obteniendo estado del client:`, stateError.message);
+      clientState = 'ERROR_GETTING_STATE';
+    }
+    
     const isReady = whatsappReady && clientState === 'CONNECTED';
+    console.log(`[${timestamp}] - isReady calculado: ${isReady}`);
     
     if (!isReady) {
-      console.error('❌ WhatsApp no listo:', { 
+      console.error(`[${timestamp}] ❌ WhatsApp no listo para envío:`, { 
         whatsappReady, 
         clientState,
-        timestamp: new Date().toISOString()
+        isReady,
+        timestamp
       });
       return { 
         success: false, 
-        error: `WhatsApp no está listo. Estado: ${clientState || 'UNKNOWN'}` 
+        error: `WhatsApp no está listo. Estado: ${clientState || 'UNKNOWN'}, Flag: ${whatsappReady}` 
+      };
+    }
+
+    // Validar número de destino
+    if (!numero || numero.trim() === '') {
+      console.error(`[${timestamp}] ❌ Número de destino vacío o inválido`);
+      return { 
+        success: false, 
+        error: 'Número de destino no válido' 
       };
     }
 
     // Formatear número (agregar @c.us si no lo tiene)
     const numeroFormateado = numero.includes('@') ? numero : `${numero}@c.us`;
+    console.log(`[${timestamp}] 📱 Número formateado: ${numeroFormateado}`);
     
     // Enviar mensaje
+    console.log(`[${timestamp}] 🚀 Obteniendo chat y enviando mensaje...`);
     const chat = await whatsappClient.getChatById(numeroFormateado);
-    await chat.sendMessage(mensaje);
+    console.log(`[${timestamp}] ✅ Chat obtenido, enviando mensaje...`);
+    
+    const messageResult = await chat.sendMessage(mensaje);
+    console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
+    console.log(`[${timestamp}] 📨 Message ID: ${messageResult.id || 'N/A'}`);
     
     return { 
       success: true, 
-      message: 'Mensaje enviado correctamente' 
+      message: 'Mensaje enviado correctamente',
+      messageId: messageResult.id,
+      timestamp
     };
     
   } catch (error) {
-    console.error('❌ Error enviando WhatsApp:', error);
+    console.error(`[${timestamp}] ❌ ERROR CRÍTICO enviando WhatsApp:`, error.message);
+    console.error(`[${timestamp}] Stack trace:`, error.stack);
     return { 
       success: false, 
-      error: error.message 
+      error: error.message,
+      stack: error.stack,
+      timestamp
     };
   }
 }
 
 // Función para obtener estado
 async function getWhatsAppStatus() {
+  const fs = require('fs');
+  const path = require('path');
+  
   try {
-    const clientState = await whatsappClient.getState();
+    let clientState;
+    try {
+      clientState = await whatsappClient.getState();
+    } catch (stateError) {
+      clientState = `ERROR: ${stateError.message}`;
+    }
+    
     const isReady = whatsappReady && clientState === 'CONNECTED';
+    
+    // Verificar si existe la carpeta de autenticación
+    const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+    let authFolderExists = false;
+    let authFolderContents = [];
+    
+    try {
+      authFolderExists = fs.existsSync(authPath);
+      if (authFolderExists) {
+        authFolderContents = fs.readdirSync(authPath);
+      }
+    } catch (fsError) {
+      console.error('Error verificando carpeta auth:', fsError.message);
+    }
     
     return {
       whatsapp_ready: isReady,
       client_state: clientState,
       flag_ready: whatsappReady,
+      qr_generated: qrGenerated,
       business_name: BUSINESS_NAME,
-      admin_whatsapp: ADMIN_WHATSAPP,
+      admin_whatsapp: ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO',
+      auth_folder: {
+        exists: authFolderExists,
+        path: authPath,
+        contents_count: authFolderContents.length,
+        has_session: authFolderContents.some(file => file.includes('session'))
+      },
+      diagnostics: {
+        should_show_qr: !isReady && !authFolderExists,
+        session_should_persist: authFolderExists && authFolderContents.length > 0,
+        needs_rescan: authFolderExists && !isReady && qrGenerated
+      },
       timestamp: new Date().toISOString()
     };
   } catch (error) {
@@ -175,9 +257,10 @@ async function getWhatsAppStatus() {
       whatsapp_ready: false,
       client_state: 'ERROR',
       flag_ready: whatsappReady,
+      qr_generated: qrGenerated,
       error: error.message,
       business_name: BUSINESS_NAME,
-      admin_whatsapp: ADMIN_WHATSAPP,
+      admin_whatsapp: ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO',
       timestamp: new Date().toISOString()
     };
   }

@@ -255,8 +255,56 @@ app.get('/health', (req, res) => {
 });
 
 // === ESTADO DEL WHATSAPP ===
-app.get('/whatsapp-status', (req, res) => {
-  res.json(getWhatsAppStatus());
+app.get('/whatsapp-status', async (req, res) => {
+  try {
+    const status = await getWhatsAppStatus();
+    console.log('📊 Estado WhatsApp consultado:', status);
+    res.json(status);
+  } catch (error) {
+    console.error('❌ Error obteniendo estado WhatsApp:', error);
+    res.json({
+      whatsapp_ready: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === TEST DE WHATSAPP (para debugging) ===
+app.post('/test-whatsapp', express.json(), async (req, res) => {
+  try {
+    const { numero, mensaje } = req.body;
+    
+    if (!numero || !mensaje) {
+      return res.status(400).json({
+        success: false,
+        error: 'Faltan parámetros: numero y mensaje requeridos'
+      });
+    }
+    
+    console.log('🧪 TEST WhatsApp solicitado:');
+    console.log('- Número:', numero);
+    console.log('- Mensaje:', mensaje.substring(0, 50) + '...');
+    
+    const result = await enviarWhatsApp(numero, mensaje);
+    
+    console.log('🧪 Resultado del test:', result);
+    
+    res.json({
+      success: result.success,
+      error: result.error,
+      details: result,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en test de WhatsApp:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // === ENDPOINT DE DEBUG ===
@@ -278,13 +326,19 @@ app.get('/debug', (req, res) => {
       '/debug', 
       '/contact-info',
       '/whatsapp-status',
+      '/test-whatsapp (POST)',
       '/stock-agotado',
       '/stock-producto/:id',
       '/validar-stock-carrito (POST)',
       '/crear-preferencia (POST)',
       '/webhook (POST)',
       '/numero-pedido/:paymentId'
-    ]
+    ],
+    whatsapp_info: {
+      service_available: whatsappAvailable,
+      client_ready: whatsappAvailable ? whatsappReady : false,
+      admin_configured: !!process.env.ADMIN_WHATSAPP
+    }
   });
 });
 
@@ -629,15 +683,42 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 
 // Función para enviar notificación de compra por WhatsApp
 async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
-  if (!whatsappAvailable || !whatsappReady) {
-    console.warn('⚠️ WhatsApp no disponible para notificación de compra');
-    return { success: false, error: 'WhatsApp no disponible' };
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🔔 === INICIANDO NOTIFICACIÓN DE COMPRA ===`);
+  
+  // Log de estado de WhatsApp
+  console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
+  console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
+  console.log(`[${timestamp}] - whatsappReady: ${whatsappReady}`);
+  console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
+  
+  if (!whatsappAvailable) {
+    console.error(`[${timestamp}] ❌ WhatsApp service no está disponible (no se pudo cargar el módulo)`);
+    return { success: false, error: 'WhatsApp service no disponible' };
+  }
+
+  if (!whatsappReady) {
+    console.error(`[${timestamp}] ❌ WhatsApp no está listo (cliente no conectado)`);
+    return { success: false, error: 'WhatsApp cliente no está listo' };
+  }
+
+  if (!ADMIN_WHATSAPP) {
+    console.error(`[${timestamp}] ❌ ADMIN_WHATSAPP no está configurado en variables de entorno`);
+    return { success: false, error: 'Número de administrador no configurado' };
   }
 
   try {
+    console.log(`[${timestamp}] 📋 Datos de la compra:`);
     const { nombre, apellido, email, telefono } = customerData;
     const { numeroDisplay, idPedidoCompleto } = orderData;
     const { transaction_amount, id: paymentId } = paymentInfo;
+    
+    console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
+    console.log(`[${timestamp}] - Email: ${email || 'No proporcionado'}`);
+    console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
+    console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
+    console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
+    console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
     
     const fechaHora = new Date().toLocaleString('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
@@ -650,42 +731,55 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     
     // Obtener productos del payment info
     const items = paymentInfo.additional_info?.items || [];
-    let productosTexto = '';
+    console.log(`[${timestamp}] 📦 Items de la compra: ${items.length} productos`);
     
+    let productosTexto = '';
     if (items.length > 0) {
-      productosTexto = items.map(item => 
-        `• ${item.title || 'Producto'} x${item.quantity || 1} - $${(item.unit_price || 0).toLocaleString('es-AR')}`
-      ).join('\n');
+      productosTexto = items.map((item, index) => {
+        console.log(`[${timestamp}] - Item ${index + 1}: ${item.title} x${item.quantity} - $${item.unit_price}`);
+        return `• ${item.title || 'Producto'} x${item.quantity || 1} - $${(item.unit_price || 0).toLocaleString('es-AR')}`;
+      }).join('\n');
     } else {
+      console.log(`[${timestamp}] ⚠️ No se encontraron items en paymentInfo.additional_info.items`);
       productosTexto = '• Productos no especificados';
     }
     
     // Mensaje para administrador
-    const mensajeAdmin = `� *NUEVA COMPRA - ${BUSINESS_NAME}* 🛒\n\n` +
+    const mensajeAdmin = `🛒 *NUEVA COMPRA - ${BUSINESS_NAME}* 🛒\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
       `📧 *Email:* ${email || 'No proporcionado'}\n` +
       `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
-      `�️ *Productos:*\n${productosTexto}\n\n` +
-      `� *Total:* $${transaction_amount.toLocaleString('es-AR')}\n` +
+      `🛍️ *Productos:*\n${productosTexto}\n\n` +
+      `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n` +
       `🆔 *Pedido:* ${numeroDisplay || idPedidoCompleto}\n` +
       `💳 *Pago ID:* ${paymentId}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `✅ *¡Pago confirmado! Proceder con el envío*`;
     
+    console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
+    console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
+    
     const result = await enviarWhatsApp(ADMIN_WHATSAPP, mensajeAdmin);
     
+    console.log(`[${timestamp}] 📡 Resultado del envío:`, {
+      success: result.success,
+      error: result.error,
+      messageId: result.messageId
+    });
+    
     if (result.success) {
-      console.log('✅ Notificación de compra enviada por WhatsApp');
+      console.log(`[${timestamp}] ✅ Notificación de compra enviada por WhatsApp exitosamente`);
     } else {
-      console.error('❌ Error enviando notificación de compra:', result.error);
+      console.error(`[${timestamp}] ❌ FALLO enviando notificación de compra:`, result.error);
     }
     
     return result;
     
   } catch (error) {
-    console.error('❌ Error en enviarNotificacionCompra:', error);
-    return { success: false, error: error.message };
+    console.error(`[${timestamp}] ❌ ERROR CRÍTICO en enviarNotificacionCompra:`, error.message);
+    console.error(`[${timestamp}] Stack trace:`, error.stack);
+    return { success: false, error: error.message, stack: error.stack };
   }
 }
 
@@ -858,16 +952,32 @@ app.post('/webhook', async (req, res) => {
               console.log(`[${timestamp}] ✅ Pedido creado exitosamente: ${idPedidoCompleto} (Display: ${numeroDisplay})`);
 
               // Enviar notificación de compra por WhatsApp
+              console.log(`[${timestamp}] 📱 Intentando enviar notificación WhatsApp...`);
+              console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
+              console.log(`[${timestamp}] - whatsappReady: ${whatsappReady}`);
+              
               if (whatsappAvailable && whatsappReady) {
+                console.log(`[${timestamp}] ✅ Condiciones WhatsApp OK, enviando notificación...`);
                 try {
-                  await enviarNotificacionCompra(
+                  const notificationResult = await enviarNotificacionCompra(
                     customerData,
                     { numeroDisplay, idPedidoCompleto },
                     paymentInfo
                   );
+                  
+                  console.log(`[${timestamp}] 📨 Resultado notificación:`, {
+                    success: notificationResult.success,
+                    error: notificationResult.error
+                  });
+                  
                 } catch (whatsappError) {
-                  console.error(`[${timestamp}] ⚠️ Error enviando notificación WhatsApp:`, whatsappError.message);
+                  console.error(`[${timestamp}] ❌ EXCEPCIÓN enviando notificación WhatsApp:`, whatsappError.message);
+                  console.error(`[${timestamp}] Stack trace:`, whatsappError.stack);
                 }
+              } else {
+                console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible para notificación:`);
+                console.warn(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
+                console.warn(`[${timestamp}] - whatsappReady: ${whatsappReady}`);
               }
             } else {
               console.error(`[${timestamp}] ⚠️ Pedido no encontrado después de crearlo`);
