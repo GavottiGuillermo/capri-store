@@ -8,6 +8,8 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP; // Número del admin
 
 let whatsappReady = false;
 let qrGenerated = false;
+let qrAttempts = 0;
+const MAX_QR_ATTEMPTS = 5; // Máximo 5 intentos de QR
 
 console.log('📱 Configurando WhatsApp Business...');
 
@@ -50,9 +52,26 @@ const whatsappClient = new Client({
       '--disable-gpu',
       '--disable-web-security',
       '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-default-apps',
+      '--disable-sync',
+      '--disable-translate',
+      '--disable-background-networking',
+      '--memory-pressure-off',
+      '--max-memory-usage=128',
+      '--aggressive-cache-discard',
       '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ],
-    timeout: 60000 // Timeout más largo para conexiones lentas
+    timeout: 60000,
+    // Configuraciones adicionales para reducir memoria
+    executablePath: undefined,
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false
   },
   webVersionCache: {
     type: 'remote',
@@ -62,15 +81,24 @@ const whatsappClient = new Client({
 
 // Eventos de WhatsApp
 whatsappClient.on('qr', (qr) => {
+  qrAttempts++;
+  
+  if (qrAttempts > MAX_QR_ATTEMPTS) {
+    console.error(`\n❌ DEMASIADOS INTENTOS DE QR (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
+    console.error('🛑 DETENIENDO PARA EVITAR CONSUMO EXCESIVO DE MEMORIA');
+    console.error('💡 Solución: Reinicia el servidor o usa /whatsapp-clean-session\n');
+    return;
+  }
+  
   if (qrGenerated) {
-    console.log('\n⚠️ QR anterior expiró, generando nuevo código...\n');
+    console.log(`\n⚠️ QR anterior expiró, generando nuevo código (intento ${qrAttempts}/${MAX_QR_ATTEMPTS})...\n`);
   }
   
   const authType = usePostgresAuth ? 'PostgreSQL (se guardará permanentemente)' : 'Local (temporal)';
   console.log(`\n🔐 Autenticación: ${authType}\n`);
   
   console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
-  console.log('📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! 📱');
+  console.log(`📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! (${qrAttempts}/${MAX_QR_ATTEMPTS}) 📱`);
   console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
   
   // Generar QR en la terminal
@@ -131,9 +159,11 @@ whatsappClient.on('ready', async () => {
       console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
     }
     
-    // En Render, programar verificación periódica para mantener sesión viva
+    // En Render, programar verificación periódica y limpieza de memoria
     if (process.env.RENDER) {
-      console.log('🔄 Render detectado - Programando verificaciones de sesión cada 10 minutos');
+      console.log('🔄 Render detectado - Programando verificaciones cada 10 min y limpieza de memoria cada 15 min');
+      
+      // Verificación de estado cada 10 minutos
       setInterval(async () => {
         try {
           const currentState = await whatsappClient.getState();
@@ -146,7 +176,35 @@ whatsappClient.on('ready', async () => {
           console.log(`⚠️ Error en verificación periódica: ${error.message}`);
           whatsappReady = false;
         }
-      }, 10 * 60 * 1000); // 10 minutos
+      }, 10 * 60 * 1000);
+      
+      // Limpieza de memoria agresiva cada 15 minutos
+      setInterval(() => {
+        try {
+          console.log('🧹 Iniciando limpieza de memoria...');
+          
+          // Forzar garbage collection si está disponible
+          if (global.gc) {
+            global.gc();
+            console.log('✅ Garbage collection ejecutado');
+          }
+          
+          // Log de uso de memoria
+          const memUsage = process.memoryUsage();
+          const mbUsed = Math.round(memUsage.heapUsed / 1024 / 1024);
+          const mbTotal = Math.round(memUsage.heapTotal / 1024 / 1024);
+          const mbRss = Math.round(memUsage.rss / 1024 / 1024);
+          console.log(`📊 Memoria: ${mbUsed}MB heap de ${mbTotal}MB total, ${mbRss}MB RSS`);
+          
+          // Si la memoria está muy alta (>200MB), alertar
+          if (mbUsed > 200) {
+            console.warn(`⚠️ MEMORIA ALTA: ${mbUsed}MB - Cerca del límite de Render (512MB)`);
+          }
+          
+        } catch (error) {
+          console.error('❌ Error en limpieza de memoria:', error.message);
+        }
+      }, 15 * 60 * 1000); // 15 minutos
     }
     
   } catch (error) {

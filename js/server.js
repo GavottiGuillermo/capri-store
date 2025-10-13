@@ -577,6 +577,48 @@ app.post('/whatsapp-clean-postgres', async (req, res) => {
   }
 });
 
+// === MONITOR DE MEMORIA ===
+app.get('/memory-status', (req, res) => {
+  try {
+    const memUsage = process.memoryUsage();
+    const mbUsed = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const mbTotal = Math.round(memUsage.heapTotal / 1024 / 1024);
+    const mbRss = Math.round(memUsage.rss / 1024 / 1024);
+    const mbExternal = Math.round(memUsage.external / 1024 / 1024);
+    
+    // Render free tier tiene 512MB de límite
+    const renderLimit = 512;
+    const usagePercent = Math.round((mbRss / renderLimit) * 100);
+    
+    const status = {
+      memory_usage: {
+        heap_used_mb: mbUsed,
+        heap_total_mb: mbTotal,
+        rss_mb: mbRss,
+        external_mb: mbExternal
+      },
+      render_info: {
+        limit_mb: renderLimit,
+        usage_percent: usagePercent,
+        available_mb: renderLimit - mbRss,
+        status: usagePercent > 90 ? 'CRITICAL' : usagePercent > 70 ? 'HIGH' : 'OK'
+      },
+      uptime_seconds: process.uptime(),
+      node_version: process.version,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`📊 Memoria consultada: ${mbRss}MB/${renderLimit}MB (${usagePercent}%)`);
+    
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === ENDPOINT DE DEBUG ===
 app.get('/debug', (req, res) => {
   res.json({
