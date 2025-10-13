@@ -27,7 +27,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, resetearContadorQR, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, resetearContadorQR, sincronizarEstadoWhatsApp, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -683,6 +683,44 @@ app.post('/whatsapp-reset-qr-counter', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Error reseteando contador QR:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === SINCRONIZAR ESTADO WHATSAPP ===
+app.post('/whatsapp-sync-state', async (req, res) => {
+  try {
+    console.log('🔄 Sincronización de estado WhatsApp solicitada desde API...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    const result = await sincronizarEstadoWhatsApp();
+    
+    console.log('🔄 Resultado sincronización estado:', result);
+    res.json({
+      success: result.success,
+      action: result.action || 'unknown',
+      message: result.action === 'flag_updated' ? 
+        `Estado sincronizado: ${result.previous} -> ${result.current}` :
+        'Estado ya estaba sincronizado',
+      previous_flag: result.previous,
+      current_flag: result.current,
+      client_state: result.state,
+      error: result.error,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error sincronizando estado:', error);
     res.status(500).json({
       success: false,
       error: error.message,

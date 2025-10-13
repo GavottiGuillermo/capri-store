@@ -648,6 +648,73 @@ function resetearContadorQR() {
   return { success: true, anterior: anteriorQrAttempts, actual: 0 };
 }
 
+// Función para sincronizar flag de estado con estado real del cliente
+async function sincronizarEstadoWhatsApp() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🔄 Sincronizando estado de WhatsApp...`);
+  
+  try {
+    if (!whatsappClient) {
+      console.log(`[${timestamp}] ❌ Cliente WhatsApp no disponible`);
+      return { success: false, error: 'Cliente no disponible' };
+    }
+    
+    // Obtener estado real del cliente
+    const state = await whatsappClient.getState();
+    const isConnected = state === 'CONNECTED';
+    const flagAnterior = whatsappReady;
+    
+    console.log(`[${timestamp}] 📊 Estado real cliente: ${state}`);
+    console.log(`[${timestamp}] 📊 Flag anterior: ${flagAnterior}`);
+    console.log(`[${timestamp}] 📊 ¿Debería estar ready?: ${isConnected}`);
+    
+    // Actualizar flag si es necesario
+    if (isConnected && !whatsappReady) {
+      whatsappReady = true;
+      console.log(`[${timestamp}] ✅ Flag actualizado: false -> true`);
+      
+      // Disparar lógica de conexión exitosa
+      try {
+        const info = await whatsappClient.info;
+        console.log(`[${timestamp}] 📱 Información del cliente sincronizada: ${info?.wid?.user || 'N/A'}`);
+      } catch (err) {
+        console.log(`[${timestamp}] ⚠️ Error obteniendo info del cliente: ${err.message}`);
+      }
+      
+      return { 
+        success: true, 
+        action: 'flag_updated',
+        previous: flagAnterior,
+        current: whatsappReady,
+        state: state
+      };
+    } else if (!isConnected && whatsappReady) {
+      whatsappReady = false;
+      console.log(`[${timestamp}] ❌ Flag actualizado: true -> false`);
+      
+      return { 
+        success: true, 
+        action: 'flag_updated',
+        previous: flagAnterior,
+        current: whatsappReady,
+        state: state
+      };
+    } else {
+      console.log(`[${timestamp}] ℹ️ Flag ya está sincronizado`);
+      return { 
+        success: true, 
+        action: 'no_change',
+        current: whatsappReady,
+        state: state
+      };
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error sincronizando estado: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -657,6 +724,7 @@ module.exports = {
   limpiarSesionCorrupta,
   limpiarSesionPostgreSQL,
   resetearContadorQR,
+  sincronizarEstadoWhatsApp,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
