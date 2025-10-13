@@ -27,7 +27,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -536,6 +536,39 @@ app.post('/whatsapp-full-reset', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Error en reinicio completo:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === LIMPIAR SOLO SESIÓN POSTGRESQL ===
+app.post('/whatsapp-clean-postgres', async (req, res) => {
+  try {
+    console.log('🗄️ Endpoint de limpieza PostgreSQL llamado');
+    
+    const result = await limpiarSesionPostgreSQL();
+    
+    if (result.success) {
+      console.log('✅ Sesión PostgreSQL limpiada exitosamente');
+      res.json({
+        success: true,
+        message: result.message,
+        timestamp: result.timestamp,
+        next_steps: [
+          '1. Reinicia el servidor para reconectar',
+          '2. Se generará nuevo QR para escanear',
+          '3. La nueva sesión se guardará en PostgreSQL'
+        ]
+      });
+    } else {
+      res.status(500).json(result);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error limpiando PostgreSQL:', error);
     res.status(500).json({
       success: false,
       error: error.message,

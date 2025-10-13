@@ -1,5 +1,6 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const PostgresAuthStrategy = require('./postgres-auth-strategy');
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -10,16 +11,32 @@ let qrGenerated = false;
 
 console.log('📱 Configurando WhatsApp Business...');
 
-// Configurar cliente WhatsApp con configuraciones optimizadas
-// Usar directorio temporal persistente para Render
-const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
-console.log(`📁 Usando directorio de autenticación: ${authPath}`);
+// Verificar si tenemos conexión a PostgreSQL
+const usePostgresAuth = !!(process.env.DATABASE_URL);
+console.log(`🗄️ Estrategia de autenticación: ${usePostgresAuth ? 'PostgreSQL (Persistente)' : 'Local (Temporal)'}`);
 
-const whatsappClient = new Client({
-  authStrategy: new LocalAuth({
+// Configurar estrategia de autenticación
+let authStrategy;
+if (usePostgresAuth) {
+  console.log('🔐 Configurando autenticación PostgreSQL...');
+  authStrategy = new PostgresAuthStrategy({
+    clientId: 'capri-store-main',
+    dataPath: './temp-auth/'
+  });
+} else {
+  console.log('⚠️ No se encontró DATABASE_URL, usando autenticación local');
+  const { LocalAuth } = require('whatsapp-web.js');
+  const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
+  console.log(`📁 Usando directorio de autenticación: ${authPath}`);
+  
+  authStrategy = new LocalAuth({
     clientId: 'capri-store-session',
     dataPath: authPath
-  }),
+  });
+}
+
+const whatsappClient = new Client({
+  authStrategy: authStrategy,
   puppeteer: {
     headless: true,
     args: [
@@ -48,6 +65,9 @@ whatsappClient.on('qr', (qr) => {
   if (qrGenerated) {
     console.log('\n⚠️ QR anterior expiró, generando nuevo código...\n');
   }
+  
+  const authType = usePostgresAuth ? 'PostgreSQL (se guardará permanentemente)' : 'Local (temporal)';
+  console.log(`\n🔐 Autenticación: ${authType}\n`);
   
   console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
   console.log('📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! 📱');
@@ -78,6 +98,17 @@ whatsappClient.on('qr', (qr) => {
   qrGenerated = true;
 });
 
+// Eventos para autenticación remota (PostgreSQL)
+if (usePostgresAuth) {
+  whatsappClient.on('remote_session_saved', () => {
+    console.log('💾 Sesión guardada en PostgreSQL exitosamente');
+  });
+  
+  whatsappClient.on('remote_session_loaded', () => {
+    console.log('📥 Sesión cargada desde PostgreSQL exitosamente');
+  });
+}
+
 whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
   whatsappReady = true;
@@ -85,14 +116,20 @@ whatsappClient.on('ready', async () => {
   // Verificar estado real
   try {
     const state = await whatsappClient.getState();
+    const authInfo = usePostgresAuth ? 'PostgreSQL (Persistente)' : 'Local (Temporal)';
+    
     console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
     console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
     console.log(`📱 Negocio: ${BUSINESS_NAME}`);
     console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
     console.log(`🔗 Estado del cliente: ${state}`);
-    console.log(`📁 Directorio auth: ${authPath}`);
+    console.log(`�️ Autenticación: ${authInfo}`);
     console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
     console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+    
+    if (usePostgresAuth) {
+      console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
+    }
     
     // En Render, programar verificación periódica para mantener sesión viva
     if (process.env.RENDER) {
@@ -421,13 +458,24 @@ async function limpiarSesionCorrupta() {
       console.log(`[${timestamp}] ⚠️ Error destruyendo cliente:`, destroyError.message);
     }
     
-    // Eliminar carpeta de autenticación
+    // Si usamos PostgreSQL, limpiar la sesión de la base de datos
+    if (usePostgresAuth && authStrategy && authStrategy.logout) {
+      console.log(`[${timestamp}] 🗄️ Eliminando sesión de PostgreSQL...`);
+      try {
+        await authStrategy.logout();
+        console.log(`[${timestamp}] ✅ Sesión eliminada de PostgreSQL`);
+      } catch (dbError) {
+        console.error(`[${timestamp}] ❌ Error eliminando sesión de PostgreSQL:`, dbError.message);
+      }
+    }
+    
+    // Eliminar carpeta de autenticación local (por si acaso)
     const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
     
     if (fs.existsSync(authPath)) {
-      console.log(`[${timestamp}] 🗑️ Eliminando carpeta de autenticación...`);
+      console.log(`[${timestamp}] 🗑️ Eliminando carpeta de autenticación local...`);
       fs.rmSync(authPath, { recursive: true, force: true });
-      console.log(`[${timestamp}] ✅ Carpeta eliminada`);
+      console.log(`[${timestamp}] ✅ Carpeta local eliminada`);
     }
     
     // Esperar un poco y reinicializar
@@ -437,14 +485,56 @@ async function limpiarSesionCorrupta() {
     console.log(`[${timestamp}] 🚀 Reinicializando con sesión limpia...`);
     await whatsappClient.initialize();
     
+    const cleanType = usePostgresAuth ? 'PostgreSQL y local' : 'local';
     return {
       success: true,
-      message: 'Sesión limpiada y reinicializada - Se necesitará escanear QR',
+      message: `Sesión limpiada (${cleanType}) y reinicializada - Se necesitará escanear QR`,
       timestamp
     };
     
   } catch (error) {
-    console.error(`[${timestamp}] ❌ Error limpiando sesión:`, error.message);
+    console.error(`[${timestamp}] ❌ ERROR limpiando sesión:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      timestamp
+    };
+  }
+}
+
+// Función específica para limpiar solo PostgreSQL
+async function limpiarSesionPostgreSQL() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🗄️ LIMPIANDO SOLO SESIÓN DE POSTGRESQL...`);
+  
+  if (!usePostgresAuth) {
+    return {
+      success: false,
+      error: 'No se está usando autenticación PostgreSQL',
+      timestamp
+    };
+  }
+  
+  try {
+    if (authStrategy && authStrategy.logout) {
+      await authStrategy.logout();
+      console.log(`[${timestamp}] ✅ Sesión eliminada de PostgreSQL exitosamente`);
+      
+      return {
+        success: true,
+        message: 'Sesión eliminada de PostgreSQL - Reinicia el servidor para reconectar',
+        timestamp
+      };
+    } else {
+      return {
+        success: false,
+        error: 'AuthStrategy no disponible',
+        timestamp
+      };
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ ERROR limpiando PostgreSQL:`, error.message);
     return {
       success: false,
       error: error.message,
@@ -460,6 +550,7 @@ module.exports = {
   getWhatsAppStatus,
   forzarReconexion,
   limpiarSesionCorrupta,
+  limpiarSesionPostgreSQL,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
