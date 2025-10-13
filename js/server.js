@@ -27,7 +27,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, resetearContadorQR, sincronizarEstadoWhatsApp, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -721,6 +721,40 @@ app.post('/whatsapp-sync-state', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Error sincronizando estado:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === FORZAR GUARDADO INMEDIATO DE SESIÓN ===
+app.post('/whatsapp-save-session-now', async (req, res) => {
+  try {
+    console.log('💾 Guardado inmediato de sesión solicitado desde API...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    const result = await forzarGuardadoSesion();
+    
+    console.log('💾 Resultado guardado inmediato:', result);
+    res.json({
+      success: result.success,
+      message: result.message || (result.success ? 'Sesión guardada exitosamente' : 'Error al guardar sesión'),
+      client_id: result.client_id,
+      client_state: result.state,
+      error: result.error,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error forzando guardado inmediato:', error);
     res.status(500).json({
       success: false,
       error: error.message,

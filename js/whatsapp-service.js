@@ -715,6 +715,61 @@ async function sincronizarEstadoWhatsApp() {
   }
 }
 
+// Función para forzar guardado inmediato de sesión PostgreSQL
+async function forzarGuardadoSesion() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 💾 Forzando guardado inmediato de sesión...`);
+  
+  try {
+    if (!whatsappClient) {
+      return { success: false, error: 'Cliente WhatsApp no disponible' };
+    }
+    
+    if (!usePostgresAuth) {
+      return { success: false, error: 'PostgreSQL no está configurado' };
+    }
+    
+    if (!authStrategy) {
+      return { success: false, error: 'AuthStrategy no disponible' };
+    }
+    
+    // Verificar que esté conectado
+    const state = await whatsappClient.getState();
+    if (state !== 'CONNECTED') {
+      return { success: false, error: `WhatsApp no conectado. Estado: ${state}` };
+    }
+    
+    console.log(`[${timestamp}] 🔄 Cliente conectado, intentando guardar sesión...`);
+    
+    // Obtener los datos de sesión del cliente actual
+    const sessionData = await whatsappClient.getSessionData();
+    if (!sessionData) {
+      return { success: false, error: 'No se pudieron obtener datos de sesión' };
+    }
+    
+    console.log(`[${timestamp}] 📦 Datos de sesión obtenidos, guardando en PostgreSQL...`);
+    
+    // Guardar usando el store de PostgreSQL
+    const saveResult = await authStrategy.store.save({ session: sessionData });
+    
+    if (saveResult) {
+      console.log(`[${timestamp}] ✅ Sesión guardada exitosamente en PostgreSQL`);
+      return { 
+        success: true, 
+        message: 'Sesión guardada manualmente en PostgreSQL',
+        client_id: authStrategy.clientId,
+        state: state
+      };
+    } else {
+      return { success: false, error: 'Error al guardar en PostgreSQL store' };
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error forzando guardado de sesión: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -725,6 +780,7 @@ module.exports = {
   limpiarSesionPostgreSQL,
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
+  forzarGuardadoSesion,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
