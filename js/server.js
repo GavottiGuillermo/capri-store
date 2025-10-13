@@ -544,6 +544,87 @@ app.post('/whatsapp-full-reset', async (req, res) => {
   }
 });
 
+// === VERIFICAR SESIÓN POSTGRESQL ===
+app.get('/whatsapp-session-check', async (req, res) => {
+  try {
+    console.log('🗄️ Verificando sesiones en PostgreSQL...');
+    
+    const query = 'SELECT id, created_at, updated_at FROM whatsapp_sessions ORDER BY updated_at DESC';
+    const result = await pool.query(query);
+    
+    console.log(`📊 Sesiones encontradas: ${result.rows.length}`);
+    
+    res.json({
+      success: true,
+      sessions_count: result.rows.length,
+      sessions: result.rows.map(row => ({
+        id: row.id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        has_data: !!(row.session_data)
+      })),
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error verificando sesiones:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === FORZAR GUARDADO DE SESIÓN ===
+app.post('/whatsapp-force-save', async (req, res) => {
+  try {
+    console.log('💾 Forzando guardado de sesión...');
+    
+    // Verificar si estamos usando PostgreSQL
+    const usePostgresAuth = !!(process.env.DATABASE_URL);
+    if (!usePostgresAuth) {
+      return res.json({
+        success: false,
+        error: 'No se está usando autenticación PostgreSQL',
+        current_auth: 'LocalAuth',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Verificar estado de WhatsApp
+    const status = await getWhatsAppStatus();
+    
+    if (!status.whatsapp_ready) {
+      return res.json({
+        success: false,
+        error: 'WhatsApp no está conectado',
+        whatsapp_status: status,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Aquí normalmente forzaríamos el guardado, pero RemoteAuth maneja esto internamente
+    console.log('🔄 Sesión debe guardarse automáticamente según backupSyncIntervalMs (5 min)');
+    
+    res.json({
+      success: true,
+      message: 'WhatsApp conectado con PostgreSQL - Sesión se guarda automáticamente cada 5 minutos',
+      whatsapp_status: status,
+      next_backup_in_minutes: 5,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error forzando guardado:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === LIMPIAR SOLO SESIÓN POSTGRESQL ===
 app.post('/whatsapp-clean-postgres', async (req, res) => {
   try {
