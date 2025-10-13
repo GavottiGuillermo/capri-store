@@ -28,9 +28,14 @@ const whatsappClient = new Client({
       '--single-process',
       '--disable-gpu',
       '--disable-web-security',
-      '--disable-features=VizDisplayCompositor'
+      '--disable-features=VizDisplayCompositor',
+      '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ],
     timeout: 60000 // Timeout más largo para conexiones lentas
+  },
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
   }
 });
 
@@ -59,6 +64,10 @@ whatsappClient.on('qr', (qr) => {
   console.log('• NO salgas de la pantalla de escaneo');
   console.log('• Espera 10-15 segundos después de escanear');
   console.log('• Si falla, espera 2 minutos antes de reintentar');
+  console.log('\n🖥️ INFORMACIÓN DEL DISPOSITIVO:');
+  console.log('• Debería aparecer como "Linux Desktop" o "Chrome Linux"');
+  console.log('• Si aparece como "MAC Desktop", la sesión está corrupta');
+  console.log('• User Agent corregido para Render/Linux');
   console.log('\n⏰ Tienes 60 segundos para escanearlo');
   console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
   

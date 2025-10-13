@@ -361,6 +361,47 @@ app.post('/whatsapp-clean-session', async (req, res) => {
   }
 });
 
+// === REINICIO COMPLETO DE WHATSAPP ===
+app.post('/whatsapp-full-reset', async (req, res) => {
+  try {
+    console.log('🔄 REINICIO COMPLETO de WhatsApp solicitado...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    // Primero limpiar sesión
+    const cleanResult = await limpiarSesionCorrupta();
+    
+    if (cleanResult.success) {
+      console.log('✅ Sesión limpiada, WhatsApp se reiniciará con configuración corregida');
+      res.json({
+        success: true,
+        message: 'Reinicio completo iniciado - Se generará nuevo QR con configuración Linux corregida',
+        timestamp: new Date().toISOString(),
+        next_steps: [
+          '1. Espera 10-15 segundos',
+          '2. Verifica /whatsapp-status para ver el nuevo QR',
+          '3. El dispositivo debería aparecer como "Linux Desktop" ahora'
+        ]
+      });
+    } else {
+      res.status(500).json(cleanResult);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error en reinicio completo:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === ENDPOINT DE DEBUG ===
 app.get('/debug', (req, res) => {
   res.json({
@@ -383,6 +424,7 @@ app.get('/debug', (req, res) => {
       '/test-whatsapp (POST)',
       '/whatsapp-reconnect (POST)',
       '/whatsapp-clean-session (POST)',
+      '/whatsapp-full-reset (POST)',
       '/stock-agotado',
       '/stock-producto/:id',
       '/validar-stock-carrito (POST)',
