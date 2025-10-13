@@ -27,7 +27,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, resetearContadorQR, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -650,6 +650,39 @@ app.post('/whatsapp-clean-postgres', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Error limpiando PostgreSQL:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === RESETEAR CONTADOR QR ===
+app.post('/whatsapp-reset-qr-counter', async (req, res) => {
+  try {
+    console.log('🔄 Reseteando contador QR solicitado desde API...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    const result = resetearContadorQR();
+    
+    console.log('🔄 Resultado reseteo contador QR:', result);
+    res.json({
+      success: true,
+      message: `Contador QR reseteado de ${result.anterior} a ${result.actual}`,
+      previous_attempts: result.anterior,
+      current_attempts: result.actual,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error reseteando contador QR:', error);
     res.status(500).json({
       success: false,
       error: error.message,

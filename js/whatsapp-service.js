@@ -9,7 +9,7 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP; // Número del admin
 let whatsappReady = false;
 let qrGenerated = false;
 let qrAttempts = 0;
-const MAX_QR_ATTEMPTS = 5; // Máximo 5 intentos de QR
+const MAX_QR_ATTEMPTS = 15; // Aumentar límite para PostgreSQL
 
 console.log('📱 Configurando WhatsApp Business...');
 
@@ -27,6 +27,9 @@ try {
       dataPath: './temp-auth/'
     });
     console.log('✅ PostgresAuthStrategy creado exitosamente');
+    // Resetear contador de QR para PostgreSQL
+    qrAttempts = 0;
+    console.log('🔄 Contador QR reseteado para PostgreSQL');
   } else {
     console.log('⚠️ No se encontró DATABASE_URL, usando autenticación local');
     const { LocalAuth } = require('whatsapp-web.js');
@@ -637,6 +640,14 @@ async function limpiarSesionPostgreSQL() {
   }
 }
 
+// Función para resetear contador QR
+function resetearContadorQR() {
+  const anteriorQrAttempts = qrAttempts;
+  qrAttempts = 0;
+  console.log(`🔄 Contador QR reseteado: ${anteriorQrAttempts} -> 0`);
+  return { success: true, anterior: anteriorQrAttempts, actual: 0 };
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -645,6 +656,7 @@ module.exports = {
   forzarReconexion,
   limpiarSesionCorrupta,
   limpiarSesionPostgreSQL,
+  resetearContadorQR,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
