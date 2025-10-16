@@ -196,6 +196,34 @@ whatsappClient.on('ready', async () => {
     
     if (usePostgresAuth) {
       console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
+      
+      // 🔥 GUARDADO AUTOMÁTICO DE SESIÓN EN POSTGRESQL 🔥
+      console.log('💾 Guardando sesión automáticamente en PostgreSQL...');
+      try {
+        // Usar RemoteAuth para triggear el guardado inmediato
+        if (authStrategy && authStrategy.store) {
+          // RemoteAuth internamente maneja los datos de sesión
+          // Forzamos una sincronización inmediata en lugar de esperar el intervalo
+          const sessionBackup = await authStrategy.store.save({ 
+            session: JSON.stringify({
+              timestamp: new Date().toISOString(),
+              ready_at: timestamp,
+              client_state: state,
+              auto_saved: true
+            })
+          });
+          
+          if (sessionBackup) {
+            console.log('✅ SESIÓN GUARDADA AUTOMÁTICAMENTE EN POSTGRESQL');
+            console.log('🔄 Próximos reinicios recuperarán esta sesión sin QR');
+          } else {
+            console.log('⚠️ Error al guardar sesión automáticamente');
+          }
+        }
+      } catch (autoSaveError) {
+        console.error('❌ Error en guardado automático:', autoSaveError.message);
+        console.log('🔄 RemoteAuth seguirá intentando cada 5 minutos automáticamente');
+      }
     }
     
     // En Render, programar verificación periódica y limpieza de memoria

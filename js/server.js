@@ -3,6 +3,8 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 
+// Force redeploy for session fix - v1.1
+
 // === IMPORTAR WHATSAPP CON MANEJO DE ERRORES ===
 let whatsappService = null;
 let whatsappAvailable = false;
