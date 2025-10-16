@@ -1,6 +1,8 @@
 const { RemoteAuth } = require('whatsapp-web.js');
 const { Pool } = require('pg');
 
+// FORCE DEPLOY: Fixed extract() method for PostgreSQL session recovery - v2.1
+
 /**
  * Store personalizado para PostgreSQL que implementa la interfaz requerida por RemoteAuth
  */
@@ -50,6 +52,7 @@ class PostgreSQLStore {
 
   async extract(options = {}) {
     try {
+      console.log('📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
       console.log('📥 Extrayendo sesión desde PostgreSQL...');
       const query = 'SELECT session_data FROM whatsapp_sessions WHERE id = $1';
       const result = await this.pool.query(query, [this.clientId]);
