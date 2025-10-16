@@ -9,9 +9,9 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP; // Número del admin
 let whatsappReady = false;
 let qrGenerated = false;
 let qrAttempts = 0;
-const MAX_QR_ATTEMPTS = 15; // Aumentar límite para PostgreSQL
+const MAX_QR_ATTEMPTS = 5; // Resetear a límite normal después de fix
 
-console.log('📱 Configurando WhatsApp Business...');
+console.log('📱 Configurando WhatsApp Business... [v2]');
 
 // Verificar si tenemos conexión a PostgreSQL
 const usePostgresAuth = !!(process.env.DATABASE_URL);
