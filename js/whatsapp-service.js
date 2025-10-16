@@ -153,6 +153,8 @@ whatsappClient.on('qr', (qr) => {
 
 // Eventos para autenticación remota (PostgreSQL)
 if (usePostgresAuth) {
+  console.log('🔄 Configurando eventos de PostgreSQL RemoteAuth...');
+  
   whatsappClient.on('remote_session_saved', () => {
     console.log('💾 ✅ Sesión guardada en PostgreSQL exitosamente');
     console.log('🕐 Timestamp:', new Date().toISOString());
@@ -161,6 +163,7 @@ if (usePostgresAuth) {
   whatsappClient.on('remote_session_loaded', () => {
     console.log('📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
     console.log('🕐 Timestamp:', new Date().toISOString());
+    console.log('🔄 Intentando reconectar automáticamente...');
   });
   
   // Eventos adicionales de RemoteAuth
@@ -169,8 +172,14 @@ if (usePostgresAuth) {
   });
   
   whatsappClient.on('disconnected', (reason) => {
-    console.warn(`⚠️ WhatsApp desconectado: ${reason}`);
-    console.log('🔄 RemoteAuth debería intentar reconectar automáticamente...');
+    console.warn('⚠️ WhatsApp desconectado:', reason);
+  });
+  
+  // Verificar al inicializar si hay sesión guardada
+  console.log('🔍 Verificando sesión existente en PostgreSQL al inicializar...');
+  
+  whatsappClient.on('disconnected', (reason) => {
+    console.warn('⚠️ WhatsApp desconectado:', reason);
   });
 } else {
   console.log('ℹ️ Usando LocalAuth - No hay eventos de sesión remota');
