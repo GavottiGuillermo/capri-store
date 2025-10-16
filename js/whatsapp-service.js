@@ -178,6 +178,27 @@ if (usePostgresAuth) {
   // Verificar al inicializar si hay sesión guardada
   console.log('🔍 Verificando sesión existente en PostgreSQL al inicializar...');
   
+  // DIAGNÓSTICO: Verificar manualmente si hay sesión
+  (async function diagnosticarSesion() {
+    try {
+      console.log('🔍 DIAGNÓSTICO: Verificando existencia de sesión manualmente...');
+      const sessionExists = await authStrategy.store.sessionExists();
+      console.log('📊 DIAGNÓSTICO: Sesión existe:', sessionExists);
+      
+      if (sessionExists) {
+        console.log('🔍 DIAGNÓSTICO: Intentando extraer sesión...');
+        const sessionData = await authStrategy.store.extract();
+        console.log('📊 DIAGNÓSTICO: Datos de sesión obtenidos:', !!sessionData);
+        console.log('📊 DIAGNÓSTICO: Tipo de dato:', typeof sessionData);
+        if (sessionData) {
+          console.log('📊 DIAGNÓSTICO: Tamaño de datos:', JSON.stringify(sessionData).length, 'chars');
+        }
+      }
+    } catch (error) {
+      console.error('❌ DIAGNÓSTICO: Error en verificación manual:', error.message);
+    }
+  })();
+  
   whatsappClient.on('disconnected', (reason) => {
     console.warn('⚠️ WhatsApp desconectado:', reason);
   });
