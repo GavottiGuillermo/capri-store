@@ -293,19 +293,45 @@ function validateCustomerData(data) {
 // ENDPOINTS BÁSICOS
 // ===============================
 
-// Endpoint de salud
-app.get('/health', (req, res) => {
+// Endpoint de salud (mejorado con info de InstanceLock)
+app.get('/health', async (req, res) => {
+  let lockInfo = null;
+  
+  // Obtener información del lock si está disponible
+  if (whatsappAvailable && whatsappService.instanceLock) {
+    try {
+      const currentLock = await whatsappService.instanceLock.getCurrentLock();
+      const hasLock = typeof whatsappService.hasInstanceLock === 'function' 
+        ? whatsappService.hasInstanceLock() 
+        : false;
+      
+      lockInfo = {
+        has_lock: hasLock,
+        current_lock: currentLock ? {
+          instance_id: currentLock.instance_id,
+          locked_at: currentLock.locked_at,
+          last_heartbeat: currentLock.last_heartbeat,
+          is_this_instance: hasLock
+        } : null
+      };
+    } catch (error) {
+      lockInfo = { error: 'Error obteniendo lock info: ' + error.message };
+    }
+  }
+  
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     whatsapp_available: whatsappAvailable,
     whatsapp_ready: whatsappAvailable ? whatsappReady : false,
+    instance_lock: lockInfo,
     business_name: BUSINESS_NAME,
     env_vars: {
       admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
       admin_instagram: !!process.env.ADMIN_INSTAGRAM,
-      mercadopago_token: !!process.env.MERCADOPAGO_ACCESS_TOKEN
+      mercadopago_token: !!process.env.MERCADOPAGO_ACCESS_TOKEN,
+      render_instance_id: process.env.RENDER_INSTANCE_ID || 'local'
     }
   });
 });
@@ -731,67 +757,6 @@ app.post('/whatsapp-sync-state', async (req, res) => {
   }
 });
 
-// === CONTROL DE HEARTBEAT ===
-app.get('/whatsapp-heartbeat-status', async (req, res) => {
-  try {
-    const { iniciarHeartbeat, detenerHeartbeat } = require('./whatsapp-service');
-    
-    res.json({
-      success: true,
-      message: 'Heartbeat está activo si WhatsApp está conectado',
-      note: 'El heartbeat se inicia automáticamente al conectar',
-      interval: '5 minutos',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Error obteniendo estado heartbeat:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-app.post('/whatsapp-heartbeat-restart', async (req, res) => {
-  try {
-    console.log('💓 Reiniciando heartbeat manualmente...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    const { iniciarHeartbeat, detenerHeartbeat } = require('./whatsapp-service');
-    
-    // Detener heartbeat existente
-    detenerHeartbeat();
-    
-    // Esperar un momento
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Reiniciar heartbeat
-    iniciarHeartbeat();
-    
-    res.json({
-      success: true,
-      message: 'Heartbeat reiniciado exitosamente',
-      interval: '5 minutos',
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error reiniciando heartbeat:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
 // === FORZAR GUARDADO INMEDIATO DE SESIÓN ===
 app.post('/whatsapp-save-session-now', async (req, res) => {
   try {
@@ -890,8 +855,6 @@ app.get('/debug', (req, res) => {
       '/whatsapp-reconnect (POST)',
       '/whatsapp-clean-session (POST)',
       '/whatsapp-full-reset (POST)',
-      '/whatsapp-heartbeat-status',
-      '/whatsapp-heartbeat-restart (POST)',
       '/stock-agotado',
       '/stock-producto/:id',
       '/validar-stock-carrito (POST)',
@@ -1472,9 +1435,9 @@ app.post('/webhook', async (req, res) => {
   let paymentId = null;
   let shouldProcess = false;
 
-  console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO`);
-  console.log(`[${timestamp}] Type: ${req.body.type || 'N/A'}, Action: ${req.body.action || 'N/A'}, Topic: ${req.body.topic || 'N/A'}`);
-  console.log(`[${timestamp}] Data ID: ${req.body.data?.id || 'N/A'}, Resource: ${req.body.resource || 'N/A'}`);
+  console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO:`);
+  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`[${timestamp}] Body:`, JSON.stringify(req.body, null, 2));
 
   try {
     const { type, data, action, topic, resource } = req.body;
