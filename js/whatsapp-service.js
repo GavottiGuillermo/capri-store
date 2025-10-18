@@ -207,6 +207,9 @@ if (usePostgresAuth) {
   console.log('ℹ️ Usando LocalAuth - No hay eventos de sesión remota');
 }
 
+// Variable para almacenar el intervalo de heartbeat
+let heartbeatInterval = null;
+
 whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
   whatsappReady = true;
@@ -224,6 +227,10 @@ whatsappClient.on('ready', async () => {
     console.log(`🗄️ Autenticación: ${authInfo}`);
     console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
     console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+    
+    // Iniciar heartbeat para mantener conexión activa
+    console.log('💓 Iniciando heartbeat para mantener conexión activa...');
+    iniciarHeartbeat();
     
     if (usePostgresAuth) {
       console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
@@ -331,6 +338,13 @@ whatsappClient.on('disconnected', (reason) => {
   console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
   whatsappReady = false;
   qrGenerated = false;
+  
+  // Detener heartbeat al desconectar
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+    console.log(`[${timestamp}] 💔 Heartbeat detenido`);
+  }
   
   // Si la desconexión es por sesión inválida, avisar
   if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
@@ -792,6 +806,68 @@ async function sincronizarEstadoWhatsApp() {
   }
 }
 
+// Función para iniciar heartbeat (mantener conexión activa)
+function iniciarHeartbeat() {
+  const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 minutos
+  
+  // Limpiar heartbeat anterior si existe
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+  }
+  
+  console.log(`💓 Heartbeat configurado: cada ${HEARTBEAT_INTERVAL / 1000 / 60} minutos`);
+  
+  heartbeatInterval = setInterval(async () => {
+    try {
+      const timestamp = new Date().toISOString();
+      
+      // Verificar estado del cliente
+      const state = await whatsappClient.getState();
+      
+      if (state === 'CONNECTED') {
+        // Obtener información básica para mantener la conexión activa
+        const info = await whatsappClient.info;
+        console.log(`[${timestamp}] 💓 Heartbeat OK - Estado: ${state}, Teléfono: ${info?.wid?.user || 'N/A'}`);
+        
+        // Opcional: obtener chats para mantener actividad (sin mostrar logs)
+        await whatsappClient.getChats();
+        
+      } else {
+        console.log(`[${timestamp}] 💔 Heartbeat - Estado: ${state} (no conectado)`);
+        
+        // Si no está conectado, marcar como no ready
+        if (whatsappReady) {
+          whatsappReady = false;
+          console.log(`[${timestamp}] ⚠️ Heartbeat detectó desconexión - Flag actualizado a false`);
+        }
+      }
+      
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] ❌ Error en heartbeat: ${error.message}`);
+      
+      // Si hay error, probablemente perdimos la conexión
+      if (whatsappReady) {
+        whatsappReady = false;
+        console.log(`[${new Date().toISOString()}] ⚠️ Heartbeat error - Marcando como no ready`);
+      }
+    }
+  }, HEARTBEAT_INTERVAL);
+  
+  console.log('✅ Heartbeat iniciado exitosamente');
+}
+
+// Función para detener heartbeat
+function detenerHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+    console.log('💔 Heartbeat detenido');
+    return { success: true, message: 'Heartbeat detenido' };
+  } else {
+    return { success: false, message: 'Heartbeat no estaba activo' };
+  }
+}
+
 // Función para forzar guardado inmediato de sesión PostgreSQL
 async function forzarGuardadoSesion() {
   const timestamp = new Date().toISOString();
@@ -858,6 +934,8 @@ module.exports = {
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
   forzarGuardadoSesion,
+  iniciarHeartbeat,
+  detenerHeartbeat,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
