@@ -1,4 +1,4 @@
-const { Client } = require('whatsapp-web.js');
+﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const PostgresAuthStrategy = require('./postgres-auth-strategy');
 
@@ -174,51 +174,6 @@ if (usePostgresAuth) {
     console.log('🔄 Intentando reconectar automáticamente...');
   });
   
-  // CRÍTICO: Listener para forzar guardado después de autenticación
-  whatsappClient.on('authenticated', async (session) => {
-    console.log('🔐 Evento "authenticated" recibido');
-    console.log('� Session object recibido:', session ? 'SÍ' : 'NO');
-    
-    if (session) {
-      console.log('🔐 Tipo de session:', typeof session);
-      console.log('🔐 Keys de session:', Object.keys(session));
-      
-      try {
-        // FORZAR guardado manual con los datos de sesión recibidos
-        console.log('� Intentando guardar sesión manualmente...');
-        
-        if (authStrategy && authStrategy.store && authStrategy.store.save) {
-          // Guardar la sesión directamente con el objeto recibido
-          const saved = await authStrategy.store.save({ session: JSON.stringify(session) });
-          
-          if (saved) {
-            console.log('✅ Sesión guardada manualmente después de autenticación');
-            
-            // Verificar que realmente se guardó
-            const sessionData = await authStrategy.store.extract();
-            if (sessionData) {
-              const dataSize = sessionData.length;
-              console.log(`📊 Tamaño de sesión guardada: ${dataSize} chars`);
-              
-              if (dataSize > 1000) {
-                console.log('✅✅✅ SESIÓN VÁLIDA GUARDADA (>1000 chars)');
-              } else {
-                console.warn(`⚠️ Sesión guardada pero pequeña (${dataSize} chars)`);
-              }
-            }
-          } else {
-            console.error('❌ Fallo al guardar sesión manualmente');
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error guardando sesión manualmente:', error.message);
-        console.error('❌ Stack:', error.stack);
-      }
-    } else {
-      console.warn('⚠️ No se recibió objeto de sesión en authenticated event');
-    }
-  });
-  
   // Eventos adicionales de RemoteAuth
   whatsappClient.on('auth_failure', (msg) => {
     console.error('❌ Fallo de autenticación RemoteAuth:', msg);
@@ -262,48 +217,6 @@ if (usePostgresAuth) {
 whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
   whatsappReady = true;
-  
-  // CRÍTICO: Capturar y guardar sesión manualmente después de ready
-  if (usePostgresAuth && authStrategy && authStrategy.store) {
-    try {
-      console.log('💾 Cliente listo - Intentando capturar y guardar sesión...');
-      
-      // Esperar 2 segundos para que el cliente esté completamente inicializado
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Obtener la sesión directamente del authStrategy
-      // RemoteAuth tiene un método interno para obtener la sesión del cliente
-      if (whatsappClient.authStrategy && whatsappClient.authStrategy.client) {
-        const sessionData = await whatsappClient.authStrategy.client.getLocalStorage();
-        
-        if (sessionData) {
-          console.log('💾 Session data obtenida del cliente, intentando guardar...');
-          const saved = await authStrategy.store.save({ session: JSON.stringify(sessionData) });
-          
-          if (saved) {
-            // Verificar guardado
-            const extracted = await authStrategy.store.extract();
-            if (extracted) {
-              const size = extracted.length;
-              console.log(`✅ SESIÓN GUARDADA MANUALMENTE: ${size} chars`);
-              
-              if (size > 1000) {
-                console.log('✅✅✅ SESIÓN COMPLETA GUARDADA (>1000 chars)');
-              } else {
-                console.warn(`⚠️ Sesión pequeña: ${size} chars`);
-              }
-            }
-          }
-        } else {
-          console.warn('⚠️ No se pudo obtener localStorage del cliente');
-        }
-      } else {
-        console.warn('⚠️ No se pudo acceder a authStrategy.client');
-      }
-    } catch (error) {
-      console.error('❌ Error capturando sesión en ready:', error.message);
-    }
-  }
   
   // Verificar estado real
   try {

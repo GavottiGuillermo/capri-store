@@ -100,30 +100,52 @@ class PostgreSQLStore {
 
   async extract(options = {}) {
     try {
-      console.log('� EXTRACT LLAMADO: RemoteAuth está intentando cargar sesión');
-      console.log('�📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
-      console.log('📥 Extrayendo sesión desde PostgreSQL...');
+      console.log('📥 EXTRACT: RemoteAuth intentando cargar sesión');
+      
+      const sessionName = options.session;
+      const zipPath = options.path;
+      
+      console.log('📥 Session name:', sessionName);
+      console.log('📥 Zip path:', zipPath);
+      
       const query = 'SELECT session_data FROM whatsapp_sessions WHERE id = $1';
-      console.log('🔍 EXTRACT: Ejecutando query para clientId:', this.clientId);
+      console.log('� Ejecutando query para clientId:', this.clientId);
       const result = await this.pool.query(query, [this.clientId]);
       
-      console.log('📊 EXTRACT: Query result rows:', result.rows.length);
+      console.log('� Query result rows:', result.rows.length);
       
       if (result.rows.length > 0) {
         const sessionData = result.rows[0].session_data;
-        console.log('✅ EXTRACT: Sesión recuperada desde PostgreSQL store');
-        console.log('📊 EXTRACT: Datos de sesión disponibles para restaurar conexión');
-        console.log('📊 EXTRACT: Tipo de dato:', typeof sessionData);
-        console.log('📊 EXTRACT: Es string?', typeof sessionData === 'string');
-        console.log('📊 EXTRACT: Tamaño:', sessionData ? sessionData.length : 0, 'chars');
+        console.log('✅ Sesión recuperada desde PostgreSQL');
+        console.log('� Tamaño de datos:', sessionData ? sessionData.length : 0, 'chars');
+        
+        // Si RemoteAuth nos pasó un path, escribir el archivo ZIP
+        if (zipPath && sessionData) {
+          try {
+            const fs = require('fs');
+            console.log('� Escribiendo archivo ZIP en:', zipPath);
+            
+            // Convertir de base64 a buffer y escribir
+            const zipBuffer = Buffer.from(sessionData, 'base64');
+            fs.writeFileSync(zipPath, zipBuffer);
+            
+            console.log('✅ Archivo ZIP escrito exitosamente');
+            console.log('� Tamaño del archivo:', zipBuffer.length, 'bytes');
+            return true; // RemoteAuth espera true cuando hay path
+          } catch (writeError) {
+            console.error('❌ Error escribiendo archivo ZIP:', writeError.message);
+            return false;
+          }
+        }
+        
+        // Si no hay path, devolver datos (no debería pasar con RemoteAuth)
         return sessionData;
       } else {
-        console.log('📭 EXTRACT: No se encontró sesión en PostgreSQL store');
+        console.log('📭 No se encontró sesión en PostgreSQL');
         return null;
       }
     } catch (error) {
       console.error('❌ EXTRACT ERROR:', error.message);
-      console.error('❌ EXTRACT STACK:', error.stack);
       return null;
     }
   }
