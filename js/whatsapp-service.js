@@ -85,8 +85,11 @@ const whatsappClient = new Client({
       '--disable-translate',
       '--disable-background-networking',
       '--memory-pressure-off',
-      '--max-memory-usage=128',
+      '--js-flags="--max-old-space-size=256"',  // Límite JS a 256MB
+      '--max-memory-usage=256',  // Límite total aumentado a 256MB
       '--aggressive-cache-discard',
+      '--disable-features=IsolateOrigins,site-per-process',  // Reducir procesos aislados
+      '--disable-site-isolation-trials',
       '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ],
     timeout: 60000,
@@ -99,7 +102,12 @@ const whatsappClient = new Client({
   webVersionCache: {
     type: 'remote',
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-  }
+  },
+  // Configuraciones adicionales para optimizar memoria
+  qrMaxRetries: 3,  // Limitar reintentos de QR
+  authTimeoutMs: 60000,  // Timeout de auth a 60s
+  takeoverOnConflict: true,  // Tomar control si hay otra sesión activa
+  takeoverTimeoutMs: 60000  // Timeout para takeover
 });
 
 console.log('✅ Cliente WhatsApp creado exitosamente');
@@ -226,34 +234,9 @@ whatsappClient.on('ready', async () => {
     
     if (usePostgresAuth) {
       console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
-      
-      // 🔥 GUARDADO AUTOMÁTICO DE SESIÓN EN POSTGRESQL 🔥
-      console.log('💾 Guardando sesión automáticamente en PostgreSQL...');
-      try {
-        // Usar RemoteAuth para triggear el guardado inmediato
-        if (authStrategy && authStrategy.store) {
-          // RemoteAuth internamente maneja los datos de sesión
-          // Forzamos una sincronización inmediata en lugar de esperar el intervalo
-          const sessionBackup = await authStrategy.store.save({ 
-            session: JSON.stringify({
-              timestamp: new Date().toISOString(),
-              ready_at: timestamp,
-              client_state: state,
-              auto_saved: true
-            })
-          });
-          
-          if (sessionBackup) {
-            console.log('✅ SESIÓN GUARDADA AUTOMÁTICAMENTE EN POSTGRESQL');
-            console.log('🔄 Próximos reinicios recuperarán esta sesión sin QR');
-          } else {
-            console.log('⚠️ Error al guardar sesión automáticamente');
-          }
-        }
-      } catch (autoSaveError) {
-        console.error('❌ Error en guardado automático:', autoSaveError.message);
-        console.log('🔄 RemoteAuth seguirá intentando cada 5 minutos automáticamente');
-      }
+      console.log('ℹ️ RemoteAuth guardará la sesión automáticamente cada 2 minutos');
+      console.log('ℹ️ La sesión ya fue guardada automáticamente por el evento "authenticated"');
+      console.log('🔄 Próximos reinicios recuperarán esta sesión sin QR');
     }
     
     // En Render, programar verificación periódica y limpieza de memoria
@@ -797,60 +780,29 @@ async function forzarGuardadoSesion() {
       return { success: false, error: `WhatsApp no conectado. Estado: ${state}` };
     }
     
-    console.log(`[${timestamp}] 🔄 Cliente conectado, forzando guardado via RemoteAuth...`);
+    console.log(`[${timestamp}] 🔄 RemoteAuth maneja el guardado automáticamente...`);
     
     try {
-      // Para RemoteAuth, podemos forzar el guardado llamando el método interno
-      // Esto debería triggear el guardado inmediatamente sin esperar el intervalo
-      if (authStrategy && authStrategy.store) {
-        // Obtener información de sesión del cliente (esto varía según la versión)
-        let sessionData;
-        
-        try {
-          // Método 1: Intentar obtener session info del cliente
-          const info = await whatsappClient.info;
-          sessionData = {
-            wid: info.wid,
-            phone: info.wid?.user,
-            timestamp: new Date().toISOString(),
-            platform: info.platform || 'unknown'
-          };
-        } catch (infoError) {
-          console.log(`[${timestamp}] ⚠️ No se pudo obtener info, usando datos básicos`);
-          // Datos mínimos de sesión
-          sessionData = {
-            connected: true,
-            timestamp: new Date().toISOString(),
-            state: state
-          };
-        }
-        
-        console.log(`[${timestamp}] 📦 Guardando datos de sesión en PostgreSQL:`, sessionData);
-        
-        // Guardar usando el store directamente
-        const saveResult = await authStrategy.store.save({ 
-          session: JSON.stringify(sessionData) 
-        });
-        
-        if (saveResult) {
-          console.log(`[${timestamp}] ✅ Sesión guardada exitosamente en PostgreSQL`);
-          return { 
-            success: true, 
-            message: 'Sesión guardada manualmente en PostgreSQL',
-            client_id: authStrategy.clientId,
-            state: state,
-            session_data: sessionData
-          };
-        } else {
-          return { success: false, error: 'Error al guardar en PostgreSQL store' };
-        }
-      } else {
-        return { success: false, error: 'Store no disponible en authStrategy' };
-      }
+      // RemoteAuth ya guarda la sesión automáticamente cada 2 minutos
+      // y cuando ocurren eventos importantes (authenticated, ready, etc.)
+      // NO debemos interferir con el proceso automático guardando manualmente
       
-    } catch (storeError) {
-      console.error(`[${timestamp}] ❌ Error accediendo al store: ${storeError.message}`);
-      return { success: false, error: `Error del store: ${storeError.message}` };
+      // Solo retornamos el estado actual
+      console.log(`[${timestamp}] ℹ️ RemoteAuth guardará la sesión según su programación interna`);
+      console.log(`[${timestamp}] ℹ️ Intervalo de guardado: cada 2 minutos`);
+      console.log(`[${timestamp}] ℹ️ La sesión se guarda automáticamente en eventos: authenticated, ready, change_state`);
+      
+      return { 
+        success: true, 
+        message: 'RemoteAuth maneja el guardado automáticamente',
+        note: 'No se requiere guardado manual - RemoteAuth lo gestiona',
+        client_id: authStrategy?.clientId || 'unknown',
+        state: state
+      };
+      
+    } catch (error) {
+      console.error(`[${timestamp}] ❌ Error en forzarGuardadoSesion: ${error.message}`);
+      return { success: false, error: error.message };
     }
     
   } catch (error) {
