@@ -179,10 +179,6 @@ if (usePostgresAuth) {
     console.error('❌ Fallo de autenticación RemoteAuth:', msg);
   });
   
-  whatsappClient.on('disconnected', (reason) => {
-    console.warn('⚠️ WhatsApp desconectado:', reason);
-  });
-  
   // Verificar al inicializar si hay sesión guardada
   console.log('🔍 Verificando sesión existente en PostgreSQL al inicializar...');
   
@@ -207,9 +203,6 @@ if (usePostgresAuth) {
     }
   })();
   
-  whatsappClient.on('disconnected', (reason) => {
-    console.warn('⚠️ WhatsApp desconectado:', reason);
-  });
 } else {
   console.log('ℹ️ Usando LocalAuth - No hay eventos de sesión remota');
 }
@@ -342,24 +335,40 @@ whatsappClient.on('disconnected', (reason) => {
   // Si la desconexión es por sesión inválida, avisar
   if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
     console.log(`[${timestamp}] ⚠️ Sesión perdida - Se necesitará escanear QR nuevamente`);
+    // Si la sesión fue invalidada, no intentar reconexión automática
+    return;
   }
   
-  // NUEVO: Intentar reconexión automática después de 30 segundos
+  // Reconexión automática después de 30 segundos
   console.log(`[${timestamp}] 🔄 Programando reconexión automática en 30 segundos...`);
   setTimeout(async () => {
     try {
       console.log(`[${new Date().toISOString()}] 🔄 Intentando reconexión automática...`);
       
-      // Verificar si la carpeta de sesión existe
-      const fs = require('fs');
-      const path = require('path');
-      const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
+      // Verificar sesión según el tipo de autenticación
+      let sessionExists = false;
       
-      if (fs.existsSync(authPath)) {
+      if (usePostgresAuth && authStrategy && authStrategy.store) {
+        // Verificar sesión en PostgreSQL
+        console.log(`[${new Date().toISOString()}] 🔍 Verificando sesión en PostgreSQL...`);
+        sessionExists = await authStrategy.store.sessionExists();
+        console.log(`[${new Date().toISOString()}] 📊 Sesión en PostgreSQL: ${sessionExists ? 'EXISTE' : 'NO EXISTE'}`);
+      } else {
+        // Verificar carpeta local (LocalAuth)
+        const fs = require('fs');
+        const path = require('path');
+        const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
+        sessionExists = fs.existsSync(authPath);
+        console.log(`[${new Date().toISOString()}] 📊 Carpeta local: ${sessionExists ? 'EXISTE' : 'NO EXISTE'}`);
+      }
+      
+      if (sessionExists) {
         console.log(`[${new Date().toISOString()}] ✅ Sesión guardada existe, intentando reconectar...`);
         await whatsappClient.initialize();
+        console.log(`[${new Date().toISOString()}] 🔄 Reinicialización completada`);
       } else {
         console.log(`[${new Date().toISOString()}] ❌ No hay sesión guardada, se necesitará QR`);
+        console.log(`[${new Date().toISOString()}] 💡 Reinicia manualmente el servidor para generar nuevo QR`);
       }
     } catch (reconnectError) {
       console.error(`[${new Date().toISOString()}] ❌ Error en reconexión automática:`, reconnectError.message);
