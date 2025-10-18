@@ -37,7 +37,20 @@ class PostgreSQLStore {
   async save(options = {}) {
     try {
       const sessionData = options.session;
-      console.log('💾 Guardando sesión en PostgreSQL...');
+      console.log('💾 ============ SAVE LLAMADO ============');
+      console.log('💾 Tipo de options:', typeof options);
+      console.log('💾 Keys en options:', Object.keys(options));
+      console.log('💾 Tipo de session:', typeof sessionData);
+      
+      if (typeof sessionData === 'string') {
+        console.log('💾 Session es STRING, tamaño:', sessionData.length, 'chars');
+        console.log('💾 Primeros 200 chars:', sessionData.substring(0, 200));
+      } else if (typeof sessionData === 'object') {
+        console.log('💾 Session es OBJECT, keys:', Object.keys(sessionData));
+        const jsonStr = JSON.stringify(sessionData);
+        console.log('💾 Session JSON size:', jsonStr.length, 'chars');
+        console.log('💾 Primeros 200 chars:', jsonStr.substring(0, 200));
+      }
       
       const query = `
         INSERT INTO whatsapp_sessions (id, session_data, created_at, updated_at) 
@@ -50,9 +63,11 @@ class PostgreSQLStore {
       
       await this.pool.query(query, [this.clientId, sessionData]);
       console.log('✅ Sesión guardada exitosamente en PostgreSQL store');
+      console.log('💾 ========================================');
       return true;
     } catch (error) {
       console.error('❌ Error guardando sesión en store:', error.message);
+      console.error('❌ Stack completo:', error.stack);
       return false;
     }
   }

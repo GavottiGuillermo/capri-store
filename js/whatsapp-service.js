@@ -174,6 +174,38 @@ if (usePostgresAuth) {
     console.log('🔄 Intentando reconectar automáticamente...');
   });
   
+  // CRÍTICO: Listener para forzar guardado después de autenticación
+  whatsappClient.on('authenticated', async () => {
+    console.log('🔐 Evento "authenticated" recibido');
+    console.log('🔄 Esperando 5 segundos para que RemoteAuth procese la sesión...');
+    
+    // Esperar a que RemoteAuth termine de procesar
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    try {
+      console.log('🔍 Verificando si RemoteAuth guardó la sesión automáticamente...');
+      
+      // Verificar tamaño de la sesión en BD
+      if (authStrategy && authStrategy.store) {
+        const sessionData = await authStrategy.store.extract();
+        if (sessionData) {
+          const dataSize = typeof sessionData === 'string' ? sessionData.length : JSON.stringify(sessionData).length;
+          console.log(`📊 Tamaño de sesión en BD: ${dataSize} chars`);
+          
+          if (dataSize < 500) {
+            console.warn('⚠️ SESIÓN PARECE CORRUPTA (< 500 chars)');
+            console.warn('⚠️ RemoteAuth debería guardar >1000 chars con credenciales reales');
+            console.warn('🔄 Esperando que RemoteAuth guarde en próximo ciclo (2 min)...');
+          } else {
+            console.log('✅ Sesión válida guardada por RemoteAuth');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error verificando sesión post-autenticación:', error.message);
+    }
+  });
+  
   // Eventos adicionales de RemoteAuth
   whatsappClient.on('auth_failure', (msg) => {
     console.error('❌ Fallo de autenticación RemoteAuth:', msg);
