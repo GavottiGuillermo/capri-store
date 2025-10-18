@@ -731,6 +731,67 @@ app.post('/whatsapp-sync-state', async (req, res) => {
   }
 });
 
+// === CONTROL DE HEARTBEAT ===
+app.get('/whatsapp-heartbeat-status', async (req, res) => {
+  try {
+    const { iniciarHeartbeat, detenerHeartbeat } = require('./whatsapp-service');
+    
+    res.json({
+      success: true,
+      message: 'Heartbeat está activo si WhatsApp está conectado',
+      note: 'El heartbeat se inicia automáticamente al conectar',
+      interval: '5 minutos',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error obteniendo estado heartbeat:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+app.post('/whatsapp-heartbeat-restart', async (req, res) => {
+  try {
+    console.log('💓 Reiniciando heartbeat manualmente...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    const { iniciarHeartbeat, detenerHeartbeat } = require('./whatsapp-service');
+    
+    // Detener heartbeat existente
+    detenerHeartbeat();
+    
+    // Esperar un momento
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Reiniciar heartbeat
+    iniciarHeartbeat();
+    
+    res.json({
+      success: true,
+      message: 'Heartbeat reiniciado exitosamente',
+      interval: '5 minutos',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error reiniciando heartbeat:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === FORZAR GUARDADO INMEDIATO DE SESIÓN ===
 app.post('/whatsapp-save-session-now', async (req, res) => {
   try {
@@ -829,6 +890,8 @@ app.get('/debug', (req, res) => {
       '/whatsapp-reconnect (POST)',
       '/whatsapp-clean-session (POST)',
       '/whatsapp-full-reset (POST)',
+      '/whatsapp-heartbeat-status',
+      '/whatsapp-heartbeat-restart (POST)',
       '/stock-agotado',
       '/stock-producto/:id',
       '/validar-stock-carrito (POST)',
@@ -1409,9 +1472,9 @@ app.post('/webhook', async (req, res) => {
   let paymentId = null;
   let shouldProcess = false;
 
-  console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO:`);
-  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
-  console.log(`[${timestamp}] Body:`, JSON.stringify(req.body, null, 2));
+  console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO`);
+  console.log(`[${timestamp}] Type: ${req.body.type || 'N/A'}, Action: ${req.body.action || 'N/A'}, Topic: ${req.body.topic || 'N/A'}`);
+  console.log(`[${timestamp}] Data ID: ${req.body.data?.id || 'N/A'}, Resource: ${req.body.resource || 'N/A'}`);
 
   try {
     const { type, data, action, topic, resource } = req.body;
