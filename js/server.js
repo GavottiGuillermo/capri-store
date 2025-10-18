@@ -1839,10 +1839,11 @@ async function startServer() {
       console.log('📱 Inicializando servicio WhatsApp...');
       try {
         await inicializarWhatsApp();
-        console.log('✅ WhatsApp inicializado correctamente');
+        console.log('✅ WhatsApp service inicializado (esperando autenticación)');
       } catch (error) {
         console.error('❌ Error inicializando WhatsApp:', error.message);
         console.log('📧 Continuando sin WhatsApp');
+        whatsappAvailable = false;
       }
     } else {
       console.log('⚠️ WhatsApp no disponible');
@@ -1850,9 +1851,17 @@ async function startServer() {
     
     // Iniciar servidor siempre, independientemente de otros servicios
     server = app.listen(PORT, () => {
+      console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
       console.log(`🌐 URL: http://localhost:${PORT}`);
-      console.log(`📱 WhatsApp: ${whatsappAvailable ? 'Disponible' : 'No disponible'}`);
+      
+      // Estado de WhatsApp más preciso
+      if (whatsappAvailable) {
+        console.log(`📱 WhatsApp: Inicializando (esperando autenticación)`);
+      } else {
+        console.log(`📱 WhatsApp: No disponible`);
+      }
+      
       console.log(`🗄️ Base de datos: ${pool ? 'Conectada' : 'No disponible'}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       if (whatsappAvailable) {
