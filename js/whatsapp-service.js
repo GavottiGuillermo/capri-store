@@ -175,34 +175,47 @@ if (usePostgresAuth) {
   });
   
   // CRÍTICO: Listener para forzar guardado después de autenticación
-  whatsappClient.on('authenticated', async () => {
+  whatsappClient.on('authenticated', async (session) => {
     console.log('🔐 Evento "authenticated" recibido');
-    console.log('🔄 Esperando 5 segundos para que RemoteAuth procese la sesión...');
+    console.log('� Session object recibido:', session ? 'SÍ' : 'NO');
     
-    // Esperar a que RemoteAuth termine de procesar
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    try {
-      console.log('🔍 Verificando si RemoteAuth guardó la sesión automáticamente...');
+    if (session) {
+      console.log('🔐 Tipo de session:', typeof session);
+      console.log('🔐 Keys de session:', Object.keys(session));
       
-      // Verificar tamaño de la sesión en BD
-      if (authStrategy && authStrategy.store) {
-        const sessionData = await authStrategy.store.extract();
-        if (sessionData) {
-          const dataSize = typeof sessionData === 'string' ? sessionData.length : JSON.stringify(sessionData).length;
-          console.log(`📊 Tamaño de sesión en BD: ${dataSize} chars`);
+      try {
+        // FORZAR guardado manual con los datos de sesión recibidos
+        console.log('� Intentando guardar sesión manualmente...');
+        
+        if (authStrategy && authStrategy.store && authStrategy.store.save) {
+          // Guardar la sesión directamente con el objeto recibido
+          const saved = await authStrategy.store.save({ session: JSON.stringify(session) });
           
-          if (dataSize < 500) {
-            console.warn('⚠️ SESIÓN PARECE CORRUPTA (< 500 chars)');
-            console.warn('⚠️ RemoteAuth debería guardar >1000 chars con credenciales reales');
-            console.warn('🔄 Esperando que RemoteAuth guarde en próximo ciclo (2 min)...');
+          if (saved) {
+            console.log('✅ Sesión guardada manualmente después de autenticación');
+            
+            // Verificar que realmente se guardó
+            const sessionData = await authStrategy.store.extract();
+            if (sessionData) {
+              const dataSize = sessionData.length;
+              console.log(`📊 Tamaño de sesión guardada: ${dataSize} chars`);
+              
+              if (dataSize > 1000) {
+                console.log('✅✅✅ SESIÓN VÁLIDA GUARDADA (>1000 chars)');
+              } else {
+                console.warn(`⚠️ Sesión guardada pero pequeña (${dataSize} chars)`);
+              }
+            }
           } else {
-            console.log('✅ Sesión válida guardada por RemoteAuth');
+            console.error('❌ Fallo al guardar sesión manualmente');
           }
         }
+      } catch (error) {
+        console.error('❌ Error guardando sesión manualmente:', error.message);
+        console.error('❌ Stack:', error.stack);
       }
-    } catch (error) {
-      console.error('❌ Error verificando sesión post-autenticación:', error.message);
+    } else {
+      console.warn('⚠️ No se recibió objeto de sesión en authenticated event');
     }
   });
   
