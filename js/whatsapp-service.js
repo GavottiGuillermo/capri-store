@@ -263,6 +263,48 @@ whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
   whatsappReady = true;
   
+  // CRÍTICO: Capturar y guardar sesión manualmente después de ready
+  if (usePostgresAuth && authStrategy && authStrategy.store) {
+    try {
+      console.log('💾 Cliente listo - Intentando capturar y guardar sesión...');
+      
+      // Esperar 2 segundos para que el cliente esté completamente inicializado
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Obtener la sesión directamente del authStrategy
+      // RemoteAuth tiene un método interno para obtener la sesión del cliente
+      if (whatsappClient.authStrategy && whatsappClient.authStrategy.client) {
+        const sessionData = await whatsappClient.authStrategy.client.getLocalStorage();
+        
+        if (sessionData) {
+          console.log('💾 Session data obtenida del cliente, intentando guardar...');
+          const saved = await authStrategy.store.save({ session: JSON.stringify(sessionData) });
+          
+          if (saved) {
+            // Verificar guardado
+            const extracted = await authStrategy.store.extract();
+            if (extracted) {
+              const size = extracted.length;
+              console.log(`✅ SESIÓN GUARDADA MANUALMENTE: ${size} chars`);
+              
+              if (size > 1000) {
+                console.log('✅✅✅ SESIÓN COMPLETA GUARDADA (>1000 chars)');
+              } else {
+                console.warn(`⚠️ Sesión pequeña: ${size} chars`);
+              }
+            }
+          }
+        } else {
+          console.warn('⚠️ No se pudo obtener localStorage del cliente');
+        }
+      } else {
+        console.warn('⚠️ No se pudo acceder a authStrategy.client');
+      }
+    } catch (error) {
+      console.error('❌ Error capturando sesión en ready:', error.message);
+    }
+  }
+  
   // Verificar estado real
   try {
     const state = await whatsappClient.getState();
@@ -273,7 +315,7 @@ whatsappClient.on('ready', async () => {
     console.log(`📱 Negocio: ${BUSINESS_NAME}`);
     console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
     console.log(`🔗 Estado del cliente: ${state}`);
-    console.log(`�️ Autenticación: ${authInfo}`);
+    console.log(`🗄️ Autenticación: ${authInfo}`);
     console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
     console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
     
