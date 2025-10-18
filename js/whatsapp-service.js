@@ -234,9 +234,36 @@ whatsappClient.on('ready', async () => {
     
     if (usePostgresAuth) {
       console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
-      console.log('ℹ️ RemoteAuth guardará la sesión automáticamente cada 2 minutos');
-      console.log('ℹ️ La sesión ya fue guardada automáticamente por el evento "authenticated"');
+      console.log('⏰ RemoteAuth esperará 60 segundos antes del primer guardado (sesión debe estabilizarse)');
+      console.log('💾 Después del primer guardado, se sincronizará automáticamente cada 2 minutos');
       console.log('🔄 Próximos reinicios recuperarán esta sesión sin QR');
+      
+      // Programar verificación de sesión después de 65 segundos
+      setTimeout(async () => {
+        try {
+          console.log('\n⏰ === VERIFICACIÓN POST-GUARDADO (después de 65 seg) ===');
+          const exists = await authStrategy.store.sessionExists();
+          if (exists) {
+            console.log('✅ ¡SESIÓN GUARDADA EXITOSAMENTE EN POSTGRESQL!');
+            const sessionData = await authStrategy.store.extract({});
+            if (sessionData) {
+              const size = sessionData.length;
+              console.log(`📊 Tamaño de sesión: ${size} chars`);
+              if (size > 5000) {
+                console.log('✅✅✅ SESIÓN COMPLETA Y VÁLIDA (>5000 chars)');
+                console.log('🎉 Próximo deploy NO necesitará QR!');
+              } else {
+                console.warn(`⚠️ Sesión guardada pero pequeña (${size} chars)`);
+              }
+            }
+          } else {
+            console.warn('⚠️ Sesión aún no guardada - Esperando próximo ciclo (2 min)');
+          }
+          console.log('⏰ ======================================\n');
+        } catch (error) {
+          console.error('❌ Error verificando sesión:', error.message);
+        }
+      }, 65000);
     }
     
     // En Render, programar verificación periódica y limpieza de memoria
