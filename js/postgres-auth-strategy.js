@@ -1,4 +1,4 @@
-const { RemoteAuth } = require('whatsapp-web.js');
+﻿const { RemoteAuth } = require('whatsapp-web.js');
 const { Pool } = require('pg');
 
 // FORCE DEPLOY: Fixed extract() method for PostgreSQL session recovery - v2.1
@@ -200,65 +200,31 @@ class PostgresAuthStrategy extends RemoteAuth {
   async beforeBrowserInitialized() {
     console.log('🔧 Inicializando estrategia de autenticación PostgreSQL...');
     
+    // CRÍTICO: Llamar al método de la clase padre PRIMERO
+    // Esto configura this.sessionName y otras propiedades
+    await super.beforeBrowserInitialized();
+    
     try {
       // Verificar conexión a la base de datos
       const client = await this.pool.connect();
       await client.query('SELECT 1');
       client.release();
       console.log('✅ Conexión a PostgreSQL establecida');
+      console.log('📝 Session name configurado:', this.sessionName);
     } catch (error) {
       console.error('❌ Error conectando a PostgreSQL:', error.message);
       throw error;
     }
   }
 
-  async afterAuthReady() {
-    console.log('🔄 ============ afterAuthReady LLAMADO ============');
-    console.log('🔄 Cliente autenticado, iniciando proceso de guardado...');
-    
-    try {
-      const sessionExists = await this.store.sessionExists({session: this.sessionName});
-      console.log('🔄 Sesión existe en BD:', sessionExists);
-      console.log('🔄 Session name:', this.sessionName);
-      
-      if (!sessionExists) {
-        console.log('⏰ Primera sesión - Esperando 60 segundos para estabilización...');
-        await this.delay(60000);
-        console.log('✅ 60 segundos completados - Intentando guardar sesión...');
-        
-        // Llamar al método de la clase padre
-        await this.storeRemoteSession({emit: true});
-        console.log('✅ storeRemoteSession completado');
-      } else {
-        console.log('ℹ️ Sesión ya existe, iniciando sync periódico cada 2 minutos');
-      }
-      
-      // Configurar intervalo de backup periódico
-      const self = this;
-      this.backupSync = setInterval(async function () {
-        console.log('� Ejecutando backup periódico (cada 2 min)...');
-        await self.storeRemoteSession();
-      }, this.backupSyncIntervalMs);
-      
-      console.log('🔄 ========================================');
-    } catch (error) {
-      console.error('❌ Error en afterAuthReady:', error.message);
-      console.error('❌ Stack:', error.stack);
-    }
-  }
-
   async logout() {
-    console.log('�🗑️ Eliminando datos de sesión de PostgreSQL...');
+    console.log('🗑️ Eliminando datos de sesión de PostgreSQL...');
     return await this.store.delete({});
   }
 
   async destroy() {
     console.log('🔚 Cerrando conexión PostgreSQL...');
     await this.pool.end();
-  }
-
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
