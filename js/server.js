@@ -116,7 +116,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia' || req.path === '/webhook' || req.path.startsWith('/numero-pedido/')) {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia' || req.path === '/webhook' || req.path.startsWith('/numero-pedido/') || req.path === '/limpiar-sesiones-whatsapp') {
     return next();
   }
   
@@ -834,7 +834,8 @@ app.get('/debug', (req, res) => {
       '/validar-stock-carrito (POST)',
       '/crear-preferencia (POST)',
       '/webhook (POST)',
-      '/numero-pedido/:paymentId'
+      '/numero-pedido/:paymentId',
+      '/limpiar-sesiones-whatsapp (POST)'
     ],
     whatsapp_info: {
       service_available: whatsappAvailable,
@@ -1739,6 +1740,84 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       error: 'Error interno del servidor',
       message: error.message,
       payment_id: paymentId
+    });
+  }
+});
+
+// ===============================
+// ENDPOINT: LIMPIAR SESIONES WHATSAPP EN BD
+// ===============================
+app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
+  console.log('🧹 Solicitud de limpieza de sesiones WhatsApp');
+  
+  try {
+    // Validar que hay conexión a BD
+    if (!pool) {
+      console.error('❌ No hay conexión a base de datos');
+      return res.status(500).json({
+        success: false,
+        error: 'Base de datos no disponible'
+      });
+    }
+    
+    // Consultar sesiones actuales ANTES de limpiar
+    const beforeQuery = await pool.query(`
+      SELECT id, LENGTH(session_data) as tamaño_bytes, created_at, updated_at 
+      FROM whatsapp_sessions
+      ORDER BY id
+    `);
+    
+    console.log('📊 Sesiones ANTES de limpiar:', beforeQuery.rows.length);
+    beforeQuery.rows.forEach(row => {
+      const isCorrupt = row.tamaño_bytes < 1000;
+      console.log(`  - ${row.id}: ${row.tamaño_bytes} bytes ${isCorrupt ? '❌ CORRUPTA' : '✅ VÁLIDA'}`);
+    });
+    
+    // Llamar al stored procedure para limpiar
+    console.log('🔧 Ejecutando sp_limpiar_sesiones_whatsapp()...');
+    await pool.query('CALL sp_limpiar_sesiones_whatsapp()');
+    
+    // Verificar resultado
+    const afterQuery = await pool.query('SELECT COUNT(*) as count FROM whatsapp_sessions');
+    const sesionesRestantes = parseInt(afterQuery.rows[0].count, 10);
+    
+    console.log('✅ Limpieza completada');
+    console.log(`📊 Sesiones DESPUÉS de limpiar: ${sesionesRestantes}`);
+    
+    res.json({
+      success: true,
+      message: 'Sesiones de WhatsApp limpiadas exitosamente',
+      sesiones_antes: beforeQuery.rows.length,
+      sesiones_despues: sesionesRestantes,
+      sesiones_eliminadas: beforeQuery.rows.length - sesionesRestantes,
+      detalle_antes: beforeQuery.rows.map(row => ({
+        id: row.id,
+        tamaño_bytes: row.tamaño_bytes,
+        estado: row.tamaño_bytes < 1000 ? 'CORRUPTA' : 'VÁLIDA',
+        created_at: row.created_at,
+        updated_at: row.updated_at
+      })),
+      siguiente_paso: 'Reinicia el servidor o espera que Render redeploy automáticamente. Luego escanea el QR.'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error limpiando sesiones WhatsApp:', error.message);
+    console.error('Stack:', error.stack);
+    
+    // Verificar si el error es porque el SP no existe
+    if (error.message.includes('does not exist') || error.message.includes('no existe')) {
+      return res.status(500).json({
+        success: false,
+        error: 'El stored procedure sp_limpiar_sesiones_whatsapp no existe en la base de datos',
+        solucion: 'Ejecuta el script database/sp_limpiar_sesiones_whatsapp.sql en la consola de Neon',
+        detalles: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Error al limpiar sesiones',
+      detalles: error.message
     });
   }
 });
