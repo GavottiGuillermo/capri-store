@@ -36,20 +36,45 @@ class PostgreSQLStore {
 
   async save(options = {}) {
     try {
-      const sessionData = options.session;
       console.log('💾 ============ SAVE LLAMADO ============');
       console.log('💾 Tipo de options:', typeof options);
       console.log('💾 Keys en options:', Object.keys(options));
-      console.log('💾 Tipo de session:', typeof sessionData);
       
-      if (typeof sessionData === 'string') {
-        console.log('💾 Session es STRING, tamaño:', sessionData.length, 'chars');
-        console.log('💾 Primeros 200 chars:', sessionData.substring(0, 200));
-      } else if (typeof sessionData === 'object') {
-        console.log('💾 Session es OBJECT, keys:', Object.keys(sessionData));
-        const jsonStr = JSON.stringify(sessionData);
-        console.log('💾 Session JSON size:', jsonStr.length, 'chars');
-        console.log('💾 Primeros 200 chars:', jsonStr.substring(0, 200));
+      // RemoteAuth pasa {session: sessionName} y espera que leamos el archivo .zip
+      const sessionName = options.session;
+      
+      if (!sessionName) {
+        console.error('❌ No session name provided');
+        return false;
+      }
+      
+      console.log('💾 Session name:', sessionName);
+      
+      // Intentar leer el archivo .zip creado por RemoteAuth
+      const fs = require('fs');
+      const zipPath = `${sessionName}.zip`;
+      
+      let dataToSave = null;
+      
+      try {
+        if (fs.existsSync(zipPath)) {
+          console.log('💾 Archivo ZIP encontrado, leyendo...');
+          const zipBuffer = fs.readFileSync(zipPath);
+          const zipBase64 = zipBuffer.toString('base64');
+          console.log('💾 ZIP leído, tamaño:', zipBase64.length, 'chars (base64)');
+          dataToSave = zipBase64;
+        } else {
+          console.log('⚠️ No se encontró archivo ZIP en:', zipPath);
+          return false;
+        }
+      } catch (readError) {
+        console.error('❌ Error leyendo ZIP:', readError.message);
+        return false;
+      }
+      
+      if (!dataToSave) {
+        console.error('❌ No hay datos para guardar');
+        return false;
       }
       
       const query = `
@@ -61,8 +86,9 @@ class PostgreSQLStore {
           updated_at = CURRENT_TIMESTAMP
       `;
       
-      await this.pool.query(query, [this.clientId, sessionData]);
+      await this.pool.query(query, [this.clientId, dataToSave]);
       console.log('✅ Sesión guardada exitosamente en PostgreSQL store');
+      console.log('💾 Tamaño guardado:', dataToSave.length, 'chars (base64)');
       console.log('💾 ========================================');
       return true;
     } catch (error) {
