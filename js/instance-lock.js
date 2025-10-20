@@ -69,7 +69,7 @@ class InstanceLock {
     }
   }
 
-  async acquireLock(timeout = 30000) {
+  async acquireLock(timeout = 60000) { // Aumentado a 60s para dar tiempo suficiente
     if (!this.pool) {
       console.log('⚠️ Pool no inicializado - asumiendo lock local');
       this.isLocked = true;
@@ -77,11 +77,14 @@ class InstanceLock {
     }
 
     const startTime = Date.now();
+    let attempt = 0;
     
     while (Date.now() - startTime < timeout) {
+      attempt++;
+      
       try {
-        // Intentar limpiar locks antiguos (más de 2 minutos sin heartbeat)
-        await this.cleanStaleLocks();
+        // Limpiar locks antiguos más agresivamente
+        const cleaned = await this.cleanStaleLocks();
         
         // Intentar adquirir el lock
         const acquired = await this.tryAcquireLock();
@@ -92,13 +95,26 @@ class InstanceLock {
           
           // Iniciar heartbeat cada 30 segundos
           this.startHeartbeat();
+          console.log(`✅ Lock adquirido - Esta es la ÚNICA instancia activa de WhatsApp`);
           
           return true;
         }
         
-        // Esperar 2 segundos antes de reintentar
-        console.log('⏳ Lock ocupado, esperando...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Mostrar progreso cada 5 intentos
+        if (attempt % 5 === 0) {
+          const currentLock = await this.getCurrentLock();
+          if (currentLock) {
+            const timeSinceHeartbeat = Date.now() - new Date(currentLock.last_heartbeat).getTime();
+            console.log(`⏳ Lock ocupado por ${currentLock.instance_id} (heartbeat hace ${Math.round(timeSinceHeartbeat/1000)}s)`);
+          } else {
+            console.log('⏳ Lock ocupado, esperando...');
+          }
+        } else {
+          console.log('⏳ Lock ocupado, esperando...');
+        }
+        
+        // Esperar menos tiempo para responder más rápido
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
       } catch (error) {
         console.error('❌ Error adquiriendo lock:', error.message);
@@ -107,6 +123,8 @@ class InstanceLock {
     }
     
     console.error('❌ Timeout adquiriendo lock');
+    console.error('❌ No se pudo adquirir el lock - otra instancia está activa');
+    console.error('💡 Si esto persiste, verifica que no haya deploys múltiples en Render');
     return false;
   }
 
@@ -139,10 +157,12 @@ class InstanceLock {
   }
 
   async cleanStaleLocks() {
+    // Limpiar locks más agresivamente para transiciones rápidas de Render
+    // 75 segundos (2.5 x heartbeat interval) - más agresivo para deploys
     const query = `
       DELETE FROM instance_locks
       WHERE lock_key = $1
-        AND last_heartbeat < NOW() - INTERVAL '2 minutes';
+        AND last_heartbeat < NOW() - INTERVAL '75 seconds';
     `;
 
     try {

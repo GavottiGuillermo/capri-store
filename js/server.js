@@ -3,7 +3,7 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-// CRITICAL SUCCESS: extract() working! Force lock transition - v3.0
+// CRITICAL SUCCESS: extract() working! Lock transition optimized - v3.1
 
 // === IMPORTAR WHATSAPP CON MANEJO DE ERRORES ===
 let whatsappService = null;
