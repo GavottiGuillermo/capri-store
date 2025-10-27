@@ -7,15 +7,19 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
-    # CRÍTICO: Una sola instancia para WhatsApp - elimina necesidad de Instance Lock
+    # FORZAR UNA SOLA INSTANCIA - CRÍTICO
     numInstances: 1
-    # Desactivar optimización de inicio para garantizar una sola instancia
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    # Desactivar optimizaciones que causan múltiples instancias
     startOptimized: false
-    # Health check simplificado
+    # Health check configuración
     healthCheckPath: /health
     healthCheckTimeout: 30
-    # Tiempo de inicio más conservador para session recovery
     startTimeout: 120
+    # Deploy sin zero-downtime para evitar instancias simultáneas
+    zeroDowntimeDeployment: false
     envVars:
       - key: NODE_ENV
         value: production
