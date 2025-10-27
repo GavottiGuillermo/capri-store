@@ -369,18 +369,12 @@ async function iniciarProcesoPago() {
 document.addEventListener('DOMContentLoaded', function() {
   console.log('🚀 Checkout inicializando...');
   
-  // Remover clase no-js para activar animaciones
+  // Remover clase no-js pero NO inicializar animaciones
   document.documentElement.classList.remove('no-js');
   
-  // Inicializar animaciones primero
-  console.log('🎭 Inicializando animaciones...');
-  initializeAnimations();
-  
-  // PREVENIR DOBLE CARGA - Inicializar datos después de las animaciones
+  // Cargar datos directamente sin delay
   console.log('📊 Cargando resumen de compra inicial...');
-  setTimeout(() => {
-    cargarResumenCompra();
-  }, 200);
+  cargarResumenCompra();
   
   console.log('🚛 Configurando tipo de entrega...');
   manejarTipoEntrega();
@@ -417,39 +411,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.warn('⚠️ No se encontró el botón #iniciarPago');
   }
   
-  // UNA SOLA ANIMACIÓN DE ENTRADA SUAVE - Control mejorado para evitar conflictos
-  setTimeout(() => {
-    // Asegurar que el título principal esté visible desde el inicio
-    const mainTitle = document.querySelector('h1.display-4');
-    if (mainTitle) {
-      mainTitle.style.opacity = '1';
-      mainTitle.style.transform = 'none';
-      mainTitle.style.visibility = 'visible';
-    }
-    
-    // Hacer visible el contenido principal
-    const mainContent = document.querySelector('.main-section');
-    if (mainContent) mainContent.classList.add('visible');
-    
-    // Activar secciones del checkout de forma escalonada pero rápida
-    const checkoutSections = document.querySelectorAll('.checkout-section');
-    checkoutSections.forEach((section, index) => {
-      setTimeout(() => {
-        section.classList.add('visible');
-      }, index * 50); // Reducido de 100ms a 50ms
-    });
-    
-    // Activar animaciones laterales solo si están en viewport
-    const fadeInElements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right');
-    fadeInElements.forEach(el => {
-      if (el.getBoundingClientRect().top < window.innerHeight * 0.8) {
-        el.classList.add('visible');
-      }
-    });
-    
-  }, 100); // Reducido de múltiples timeouts a uno solo
-  
-  console.log('✅ Checkout inicializado correctamente');
+  console.log('✅ Checkout inicializado correctamente - Sin animaciones');
 });
 
 // === FUNCIONES AUXILIARES PARA EL CARRITO ===
@@ -465,19 +427,6 @@ function mostrarPopup(mensaje, tipo = 'success') {
   } else {
     alert(mensaje);
   }
-}
-
-// === ANIMACIONES Y EFECTOS VISUALES ===
-function initializeAnimations() {
-  // Activar animaciones después de un pequeño delay
-  setTimeout(() => {
-    const elements = document.querySelectorAll('.fade-in, .fade-in-left, .fade-in-right, .section-title, .checkout-section');
-    elements.forEach((element, index) => {
-      setTimeout(() => {
-        element.classList.add('visible');
-      }, index * 100); // Escalonar las animaciones
-    });
-  }, 150);
 }
 
 // Hacer disponibles globalmente
