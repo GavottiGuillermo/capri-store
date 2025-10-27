@@ -339,7 +339,14 @@ whatsappClient.on('disconnected', (reason) => {
     return;
   }
   
-  // Reconexión automática después de 30 segundos
+  // Si es por QR timeout, no hacer reconexión automática inmediata
+  if (reason === 'Max qrcode retries reached') {
+    console.log(`[${timestamp}] ⚠️ QR timeout - Esperando intervención manual o keep-alive`);
+    console.log(`[${timestamp}] 💡 El sistema keep-alive detectará esto y generará nuevo QR`);
+    return;
+  }
+  
+  // Reconexión automática solo para otros casos después de 30 segundos
   console.log(`[${timestamp}] 🔄 Programando reconexión automática en 30 segundos...`);
   setTimeout(async () => {
     try {
@@ -351,8 +358,13 @@ whatsappClient.on('disconnected', (reason) => {
       if (usePostgresAuth && authStrategy && authStrategy.store) {
         // Verificar sesión en PostgreSQL
         console.log(`[${new Date().toISOString()}] 🔍 Verificando sesión en PostgreSQL...`);
-        sessionExists = await authStrategy.store.sessionExists();
-        console.log(`[${new Date().toISOString()}] 📊 Sesión en PostgreSQL: ${sessionExists ? 'EXISTE' : 'NO EXISTE'}`);
+        try {
+          sessionExists = await authStrategy.store.sessionExists();
+          console.log(`[${new Date().toISOString()}] 📊 Sesión en PostgreSQL: ${sessionExists ? 'EXISTE' : 'NO EXISTE'}`);
+        } catch (sessionError) {
+          console.error(`[${new Date().toISOString()}] ❌ Error verificando sesión PostgreSQL:`, sessionError.message);
+          sessionExists = false;
+        }
       } else {
         // Verificar carpeta local (LocalAuth)
         const fs = require('fs');
