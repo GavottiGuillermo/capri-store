@@ -7,19 +7,18 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
-    # CRÍTICO: Forzar UNA SOLA instancia para evitar conflictos de WhatsApp
+    # CRÍTICO: Una sola instancia para WhatsApp - elimina necesidad de Instance Lock
     numInstances: 1
-    # Estrategia de deploy: reemplazar instancia anterior antes de crear nueva
-    # Esto evita que haya 2 instancias corriendo simultáneamente
-    preDeployCommand: echo "Preparando deploy - instancia anterior será terminada primero"
-    # Health check mejorado para asegurar que WhatsApp esté realmente listo
+    # Desactivar optimización de inicio para garantizar una sola instancia
+    startOptimized: false
+    # Health check simplificado
     healthCheckPath: /health
     healthCheckTimeout: 30
-    # Tiempo de gracia para que la nueva instancia esté lista antes de matar la anterior
+    # Tiempo de inicio más conservador para session recovery
     startTimeout: 120
     envVars:
       - key: NODE_ENV
         value: production
-      # Agregar flag para identificar que estamos en Render
+      # Variable para identificar despliegue en Render
       - key: RENDER
         value: true

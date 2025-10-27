@@ -1,7 +1,6 @@
 ﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const PostgresAuthStrategy = require('./postgres-auth-strategy');
-const InstanceLock = require('./instance-lock');
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -12,11 +11,7 @@ let qrGenerated = false;
 let qrAttempts = 0;
 const MAX_QR_ATTEMPTS = 5; // Resetear a límite normal después de fix
 
-// Sistema de bloqueo de instancia para evitar múltiples deploys simultáneos
-const instanceLock = new InstanceLock();
-let hasInstanceLock = false;
-
-console.log('📱 Configurando WhatsApp Business... [v3 - Con InstanceLock]');
+console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
 
 // Verificar si tenemos conexión a PostgreSQL
 const usePostgresAuth = !!(process.env.DATABASE_URL);
@@ -385,29 +380,6 @@ whatsappClient.on('loading_screen', (percent, message) => {
   console.log('📱 Cargando WhatsApp:', percent + '%', message);
 });
 
-// ===============================
-// MANEJADOR DE PÉRDIDA DE LOCK
-// ===============================
-// Si otra instancia toma el control, cerrar WhatsApp gracefully
-process.on('instanceLockLost', async () => {
-  console.error('\n🚨🚨🚨 ALERTA: INSTANCE LOCK PERDIDO 🚨🚨🚨');
-  console.error('⚠️ Otra instancia ha tomado el control de WhatsApp');
-  console.error('🛑 Cerrando WhatsApp en esta instancia para evitar conflictos...\n');
-  
-  whatsappReady = false;
-  hasInstanceLock = false;
-  
-  try {
-    await whatsappClient.destroy();
-    console.log('✅ WhatsApp cerrado correctamente');
-  } catch (error) {
-    console.error('❌ Error cerrando WhatsApp:', error.message);
-  }
-  
-  // En Render, esto causará que el health check falle y reinicie el servicio
-  console.log('💡 El health check debería fallar y Render reiniciará este servicio');
-});
-
 // Cleanup al cerrar el proceso
 process.on('SIGTERM', async () => {
   console.log('\n🛑 SIGTERM recibido - Cerrando gracefully...');
@@ -435,65 +407,25 @@ async function cleanup() {
     console.error('⚠️ Error cerrando WhatsApp:', error.message);
   }
   
-  try {
-    if (hasInstanceLock) {
-      await instanceLock.cleanup();
-      hasInstanceLock = false;
-      console.log('✅ InstanceLock liberado');
-    }
-  } catch (error) {
-    console.error('⚠️ Error liberando lock:', error.message);
-  }
-  
   console.log('✅ Cleanup completado');
 }
 
 // ===============================
-// FUNCIÓN DE INICIALIZACIÓN
+// FUNCIÓN DE INICIALIZACIÓN SIMPLIFICADA
 // ===============================
 
-// Función para inicializar WhatsApp CON INSTANCE LOCK
+// Función para inicializar WhatsApp (simplificada sin Instance Lock)
 async function inicializarWhatsApp() {
   try {
     console.log('🚀 Inicializando WhatsApp Business...');
     
-    // PASO 1: Inicializar sistema de lock
-    console.log('🔐 PASO 1/3: Inicializando sistema de InstanceLock...');
-    const lockInitialized = await instanceLock.initialize();
-    
-    if (!lockInitialized) {
-      console.error('❌ No se pudo inicializar InstanceLock');
-      throw new Error('InstanceLock initialization failed');
-    }
-    
-    // PASO 2: Adquirir lock exclusivo
-    console.log('🔐 PASO 2/3: Adquiriendo lock exclusivo (evita múltiples instancias)...');
-    const lockAcquired = await instanceLock.acquireLock(60000); // 60s timeout
-    
-    if (!lockAcquired) {
-      console.error('❌ No se pudo adquirir el lock - otra instancia está activa');
-      console.error('💡 Si esto persiste, verifica que no haya deploys múltiples en Render');
-      throw new Error('Could not acquire instance lock - another instance is active');
-    }
-    
-    hasInstanceLock = true;
-    console.log('✅ Lock adquirido - Esta es la ÚNICA instancia activa de WhatsApp');
-    
-    // PASO 3: Inicializar WhatsApp
-    console.log('🔐 PASO 3/3: Inicializando cliente WhatsApp...');
+    console.log('� Inicializando cliente WhatsApp con PostgreSQL session persistence...');
     await whatsappClient.initialize();
     
-    console.log('✅ WhatsApp Business inicializado correctamente con InstanceLock');
+    console.log('✅ WhatsApp Business inicializado correctamente');
     
   } catch (error) {
     console.error('❌ Error inicializando WhatsApp:', error);
-    
-    // Si falla, liberar el lock
-    if (hasInstanceLock) {
-      await instanceLock.releaseLock();
-      hasInstanceLock = false;
-    }
-    
     throw error;
   }
 }
@@ -968,8 +900,5 @@ module.exports = {
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME,
-  // Exportar info del lock para health checks
-  instanceLock,
-  hasInstanceLock: () => hasInstanceLock,
   cleanup
 };

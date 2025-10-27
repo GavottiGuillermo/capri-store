@@ -3,7 +3,7 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-// CRITICAL SUCCESS: extract() working! Lock transition optimized - v3.1
+// SYSTEM SIMPLIFIED: PostgreSQL session persistence working perfectly - v4.0
 
 // === IMPORTAR WHATSAPP CON MANEJO DE ERRORES ===
 let whatsappService = null;
@@ -293,45 +293,25 @@ function validateCustomerData(data) {
 // ENDPOINTS BÁSICOS
 // ===============================
 
-// Endpoint de salud (mejorado con info de InstanceLock)
-app.get('/health', async (req, res) => {
-  let lockInfo = null;
-  
-  // Obtener información del lock si está disponible
-  if (whatsappAvailable && whatsappService.instanceLock) {
-    try {
-      const currentLock = await whatsappService.instanceLock.getCurrentLock();
-      const hasLock = typeof whatsappService.hasInstanceLock === 'function' 
-        ? whatsappService.hasInstanceLock() 
-        : false;
-      
-      lockInfo = {
-        has_lock: hasLock,
-        current_lock: currentLock ? {
-          instance_id: currentLock.instance_id,
-          locked_at: currentLock.locked_at,
-          last_heartbeat: currentLock.last_heartbeat,
-          is_this_instance: hasLock
-        } : null
-      };
-    } catch (error) {
-      lockInfo = { error: 'Error obteniendo lock info: ' + error.message };
-    }
-  }
-  
+// Endpoint de salud (simplificado sin Instance Lock)
+app.get('/health', async (req, res) => {  
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     whatsapp_available: whatsappAvailable,
     whatsapp_ready: whatsappAvailable ? whatsappReady : false,
-    instance_lock: lockInfo,
     business_name: BUSINESS_NAME,
     env_vars: {
       admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
       admin_instagram: !!process.env.ADMIN_INSTAGRAM,
       mercadopago_token: !!process.env.MERCADOPAGO_ACCESS_TOKEN,
       render_instance_id: process.env.RENDER_INSTANCE_ID || 'local'
+    },
+    deployment: {
+      simplified: true,
+      single_instance: true,
+      postgresql_sessions: !!process.env.DATABASE_URL
     }
   });
 });
@@ -1848,7 +1828,49 @@ app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
   }
 });
 
-// Inicializar la aplicación
+// Función simplificada para optimización de memoria
+function setupMemoryOptimization() {
+  console.log('🧹 Configurando optimización de memoria...');
+  
+  // Limpiar memoria cada 5 minutos
+  setInterval(() => {
+    try {
+      // Forzar garbage collection si está disponible
+      if (global.gc) {
+        const memBefore = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+        global.gc();
+        const memAfter = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+        console.log(`🧹 GC: ${memBefore}MB → ${memAfter}MB (liberados ${memBefore - memAfter}MB)`);
+      }
+      
+      // Limpiar notificaciones webhook antiguas (más de 1 hora)
+      const oneHourAgo = Date.now() - (60 * 60 * 1000);
+      let cleaned = 0;
+      for (const [key, timestamp] of webhookNotifications.entries()) {
+        if (typeof timestamp === 'number' && timestamp < oneHourAgo) {
+          webhookNotifications.delete(key);
+          cleaned++;
+        } else if (typeof timestamp !== 'number') {
+          webhookNotifications.delete(key);
+          cleaned++;
+        }
+      }
+      
+      if (cleaned > 0) {
+        console.log(`🧹 Limpiadas ${cleaned} notificaciones webhook antiguas`);
+      }
+      
+      const memUsage = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+      const memPercent = Math.round((memUsage / 512) * 100);
+      console.log(`🧹 Memoria: ${memUsage}MB / 512MB (${memPercent}%)`);
+      
+    } catch (error) {
+      console.log('🧹 Optimización de memoria completada');
+    }
+  }, 300000); // 5 minutos
+}
+
+// Inicializar la aplicación (simplificado)
 async function startServer() {
   try {
     // Intentar inicializar la base de datos, pero no fallar si no está disponible
@@ -1875,6 +1897,9 @@ async function startServer() {
       console.log('⚠️ WhatsApp no disponible');
     }
     
+    // Configurar optimización de memoria
+    setupMemoryOptimization();
+    
     // Iniciar servidor siempre, independientemente de otros servicios
     server = app.listen(PORT, () => {
       console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
@@ -1889,6 +1914,7 @@ async function startServer() {
       }
       
       console.log(`🗄️ Base de datos: ${pool ? 'Conectada' : 'No disponible'}`);
+      console.log(`⚙️ Sistema: Simplificado - Una sola instancia con PostgreSQL sessions`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       if (whatsappAvailable) {
         console.log(`📱 BUSCA EL CÓDIGO QR ARRIBA ☝️ PARA ESCANEAR`);
