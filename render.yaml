@@ -14,10 +14,12 @@ services:
       maxInstances: 1
     # Desactivar optimizaciones que causan múltiples instancias
     startOptimized: false
-    # Health check configuración
+    # Health check configuración - REDUCIDA FRECUENCIA
     healthCheckPath: /health
-    healthCheckTimeout: 30
-    startTimeout: 120
+    healthCheckTimeout: 60
+    healthCheckGracePeriod: 300
+    healthCheckInterval: 300
+    startTimeout: 180
     # Deploy sin zero-downtime para evitar instancias simultáneas
     zeroDowntimeDeployment: false
     envVars:

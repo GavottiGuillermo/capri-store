@@ -42,3 +42,12 @@ coverage/
 *_final*
 server_old_complex.js
 server_final.js
+
+# Local testing scripts (PowerShell)
+*.ps1
+capri-console.ps1
+capri-quick.ps1
+
+# Local testing tools
+test-scripts/
+local-tools/
