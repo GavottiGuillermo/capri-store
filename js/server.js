@@ -1333,7 +1333,17 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
   try {
     const statusCheck = await getWhatsAppStatus();
     realClientState = statusCheck.client_state;
-    clientReady = statusCheck.whatsapp_ready || realClientState === 'CONNECTED';
+    
+    // MEJORA: Si vemos CONNECTED en logs pero getState falla, usar verificación alternativa
+    if (realClientState === null || realClientState === undefined) {
+      // Buscar "CONNECTED" en los logs recientes o asumir conectado si flag es true
+      if (whatsappReady) {
+        console.log(`[${timestamp}] 🔄 Estado null pero flag true, asumiendo CONNECTED`);
+        realClientState = 'CONNECTED';
+      }
+    }
+    
+    clientReady = statusCheck.whatsapp_ready || realClientState === 'CONNECTED' || whatsappReady;
     
     console.log(`[${timestamp}] 🔍 Verificación estado en enviarNotificacionCompra:`);
     console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
@@ -1342,6 +1352,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     
   } catch (statusError) {
     console.warn(`[${timestamp}] ⚠️ No se pudo verificar estado real, usando flag: ${statusError.message}`);
+    // Si hay error pero el flag es true, intentar envío
+    if (whatsappReady) {
+      clientReady = true;
+      realClientState = 'CONNECTED (fallback)';
+      console.log(`[${timestamp}] 🔄 Error en verificación pero flag true, intentando envío`);
+    }
   }
 
   if (!clientReady) {
@@ -1670,6 +1686,12 @@ app.post('/webhook', async (req, res) => {
               console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
               console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
               
+              // MEJORA: Esperar un poco si WhatsApp se está inicializando
+              if (whatsappAvailable && !whatsappReady) {
+                console.log(`[${timestamp}] ⏳ WhatsApp disponible pero no listo, esperando 3 segundos...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+              }
+              
               // NUEVO: Verificar estado real del cliente, no solo el flag
               let realClientState = null;
               let canSendWhatsApp = false;
@@ -1678,7 +1700,16 @@ app.post('/webhook', async (req, res) => {
                 try {
                   const statusCheck = await getWhatsAppStatus();
                   realClientState = statusCheck.client_state;
-                  canSendWhatsApp = statusCheck.whatsapp_ready || realClientState === 'CONNECTED';
+                  
+                  // MEJORA: Ser más tolerante con estados null/undefined
+                  if (realClientState === null || realClientState === undefined) {
+                    if (whatsappReady) {
+                      console.log(`[${timestamp}] 🔄 Estado null pero flag true, asumiendo CONNECTED`);
+                      realClientState = 'CONNECTED';
+                    }
+                  }
+                  
+                  canSendWhatsApp = statusCheck.whatsapp_ready || realClientState === 'CONNECTED' || whatsappReady;
                   
                   console.log(`[${timestamp}] 🔍 Verificación estado real:`);
                   console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
@@ -1687,7 +1718,14 @@ app.post('/webhook', async (req, res) => {
                   
                 } catch (statusError) {
                   console.error(`[${timestamp}] ❌ Error verificando estado real:`, statusError.message);
-                  canSendWhatsApp = whatsappReady; // Fallback al flag original
+                  // Si hay error pero el flag es true, intentar envío
+                  if (whatsappReady) {
+                    canSendWhatsApp = true;
+                    realClientState = 'CONNECTED (fallback)';
+                    console.log(`[${timestamp}] 🔄 Error en verificación pero flag true, intentando envío`);
+                  } else {
+                    canSendWhatsApp = whatsappReady; // Fallback al flag original
+                  }
                 }
               }
               
