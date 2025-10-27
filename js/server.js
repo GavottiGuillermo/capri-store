@@ -1268,6 +1268,32 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ===============================
 
 // Función para enviar notificación de compra por WhatsApp
+// Función para actualizar el estado de notificación WhatsApp
+async function actualizarEstadoWhatsApp(paymentId, estado) {
+  const timestamp = new Date().toISOString();
+  
+  if (!paymentId) {
+    console.warn(`[${timestamp}] ⚠️ No se puede actualizar estado WhatsApp: paymentId faltante`);
+    return;
+  }
+  
+  try {
+    const estadoString = estado ? 'True' : 'False';
+    
+    await executeQueryWithRetry(
+      pool,
+      `UPDATE productos SET whatsapp_notificado = $1 WHERE mp_payment_id = $2`,
+      [estadoString, paymentId],
+      2
+    );
+    
+    console.log(`[${timestamp}] ✅ Estado WhatsApp actualizado: ${estadoString} para payment_id: ${paymentId}`);
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error actualizando estado WhatsApp:`, error.message);
+  }
+}
+
 async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] 🔔 === INICIANDO NOTIFICACIÓN DE COMPRA ===`);
@@ -1679,9 +1705,15 @@ app.post('/webhook', async (req, res) => {
                     error: notificationResult.error
                   });
                   
+                  // Actualizar estado en base de datos
+                  await actualizarEstadoWhatsApp(paymentId, notificationResult.success);
+                  
                 } catch (whatsappError) {
                   console.error(`[${timestamp}] ❌ EXCEPCIÓN enviando notificación WhatsApp:`, whatsappError.message);
                   console.error(`[${timestamp}] Stack trace:`, whatsappError.stack);
+                  
+                  // Marcar como fallido en base de datos
+                  await actualizarEstadoWhatsApp(paymentId, false);
                 }
               } else {
                 console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible para notificación:`);
@@ -1689,6 +1721,9 @@ app.post('/webhook', async (req, res) => {
                 console.warn(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
                 console.warn(`[${timestamp}] - Estado real cliente: ${realClientState}`);
                 console.warn(`[${timestamp}] - Puede enviar calculado: ${canSendWhatsApp}`);
+                
+                // Marcar como no enviado
+                await actualizarEstadoWhatsApp(paymentId, false);
                 
                 // Intentar envío forzado si el cliente está CONNECTED pero el flag es false
                 if (whatsappAvailable && realClientState === 'CONNECTED' && !whatsappReady) {
@@ -1700,8 +1735,13 @@ app.post('/webhook', async (req, res) => {
                       paymentInfo
                     );
                     console.log(`[${timestamp}] 🚀 Resultado envío forzado:`, forceResult);
+                    
+                    // Actualizar estado según resultado del envío forzado
+                    await actualizarEstadoWhatsApp(paymentId, forceResult.success);
+                    
                   } catch (forceError) {
                     console.error(`[${timestamp}] ❌ Error en envío forzado:`, forceError.message);
+                    // El estado ya se marcó como false arriba
                   }
                 }
               }
