@@ -666,6 +666,71 @@ app.post('/whatsapp-clean-postgres', async (req, res) => {
   }
 });
 
+// === LIMPIAR SESIÓN EXPIRADA AUTOMÁTICAMENTE ===
+app.post('/whatsapp-clean-expired', async (req, res) => {
+  try {
+    console.log('🔄 Limpieza automática de sesión expirada solicitada...');
+    
+    if (!whatsappAvailable) {
+      return res.status(500).json({
+        success: false,
+        error: 'WhatsApp service no disponible'
+      });
+    }
+    
+    // Verificar estado actual
+    const status = await getWhatsAppStatus();
+    
+    if (status.whatsapp_ready) {
+      return res.json({
+        success: true,
+        message: 'WhatsApp ya está conectado - no es necesaria limpieza',
+        current_status: status
+      });
+    }
+    
+    // Si hay sesión pero no está conectado, limpiar
+    if (status.auth_folder && status.auth_folder.exists && !status.qr_generated) {
+      console.log('🧹 Detectada sesión existente pero no conectada - limpiando...');
+      
+      const cleanResult = await limpiarSesionCorrupta();
+      
+      if (cleanResult.success) {
+        res.json({
+          success: true,
+          message: 'Sesión expirada limpiada automáticamente - Se generará nuevo QR',
+          clean_result: cleanResult,
+          next_steps: [
+            'Espera 10-15 segundos',
+            'Verifica /whatsapp-status para el nuevo QR',
+            'Escanea el QR con WhatsApp'
+          ]
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Error limpiando sesión expirada',
+          details: cleanResult
+        });
+      }
+    } else {
+      res.json({
+        success: true,
+        message: 'No hay sesión expirada para limpiar',
+        current_status: status
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error en limpieza automática:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === RESETEAR CONTADOR QR ===
 app.post('/whatsapp-reset-qr-counter', async (req, res) => {
   try {
@@ -841,7 +906,8 @@ app.get('/debug', (req, res) => {
       '/crear-preferencia (POST)',
       '/webhook (POST)',
       '/numero-pedido/:paymentId',
-      '/limpiar-sesiones-whatsapp (POST)'
+      '/limpiar-sesiones-whatsapp (POST)',
+      '/whatsapp-clean-expired (POST) - Limpiar sesiones expiradas automáticamente'
     ],
     whatsapp_info: {
       service_available: whatsappAvailable,

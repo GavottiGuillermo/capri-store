@@ -419,13 +419,47 @@ async function inicializarWhatsApp() {
   try {
     console.log('🚀 Inicializando WhatsApp Business...');
     
-    console.log('� Inicializando cliente WhatsApp con PostgreSQL session persistence...');
+    console.log('📱 Inicializando cliente WhatsApp con PostgreSQL session persistence...');
     await whatsappClient.initialize();
     
     console.log('✅ WhatsApp Business inicializado correctamente');
     
   } catch (error) {
     console.error('❌ Error inicializando WhatsApp:', error);
+    
+    // Detectar errores específicos de sesión expirada/corrupta
+    const isSessionError = error.message && (
+      error.message.includes('Execution context was destroyed') ||
+      error.message.includes('Protocol error') ||
+      error.message.includes('Target closed') ||
+      error.message.includes('Session closed')
+    );
+    
+    if (isSessionError && usePostgresAuth) {
+      console.log('🔄 DETECTADO: Error de sesión expirada/corrupta');
+      console.log('🧹 Intentando limpiar sesión automáticamente...');
+      
+      try {
+        // Limpiar sesión de PostgreSQL automáticamente
+        if (authStrategy && authStrategy.logout) {
+          await authStrategy.logout();
+          console.log('✅ Sesión PostgreSQL limpiada automáticamente');
+          
+          // Esperar 3 segundos y reintentar inicialización
+          console.log('⏳ Esperando 3 segundos antes de reintentar...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          console.log('🔄 Reintentando inicialización con sesión limpia...');
+          await whatsappClient.initialize();
+          
+          console.log('✅ WhatsApp reinicializado exitosamente - Se generará nuevo QR');
+          return;
+        }
+      } catch (retryError) {
+        console.error('❌ Error en reintento de inicialización:', retryError.message);
+      }
+    }
+    
     throw error;
   }
 }
