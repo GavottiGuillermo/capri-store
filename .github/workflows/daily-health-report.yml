@@ -1,0 +1,92 @@
+name: 📊 Daily Health Report
+
+on:
+  schedule:
+    # Reporte diario a las 9:00 AM UTC (6:00 AM Argentina)
+    - cron: '0 9 * * *'
+  
+  # Permitir ejecución manual
+  workflow_dispatch:
+
+jobs:
+  daily-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: 📊 Comprehensive Health Check
+        run: |
+          echo "📊 ===== REPORTE DIARIO DE SALUD - CAPRI STORE ====="
+          echo "📅 Fecha: $(date)"
+          echo ""
+          
+          # Health Check Principal
+          echo "🔍 1. HEALTH CHECK PRINCIPAL"
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/health)
+          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
+          
+          if [ $http_code -eq 200 ]; then
+            echo "✅ Servicio respondiendo correctamente"
+            echo "$body" | head -20
+          else
+            echo "❌ PROBLEMA: Servicio no responde (Status: $http_code)"
+          fi
+          
+          echo ""
+          echo "🔍 2. ESTADO DE WHATSAPP"
+          # WhatsApp Status Check
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/whatsapp-status)
+          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
+          
+          if [ $http_code -eq 200 ]; then
+            echo "✅ Estado de WhatsApp obtenido"
+            echo "$body" | head -15
+          else
+            echo "❌ PROBLEMA: No se pudo obtener estado de WhatsApp"
+          fi
+          
+          echo ""
+          echo "🔍 3. MEMORIA Y PERFORMANCE"
+          # Memory Status
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/memory-status)
+          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
+          
+          if [ $http_code -eq 200 ]; then
+            echo "✅ Información de memoria obtenida"
+            echo "$body" | head -10
+          else
+            echo "❌ PROBLEMA: No se pudo obtener información de memoria"
+          fi
+          
+          echo ""
+          echo "🔍 4. TEST DE ENDPOINTS CRÍTICOS"
+          
+          # Test Contact Info
+          echo "📞 Contact Info:"
+          curl -s https://capri-store.onrender.com/contact-info | head -5
+          
+          echo ""
+          echo "📦 Stock Status:"
+          curl -s https://capri-store.onrender.com/stock-agotado | head -3
+          
+          echo ""
+          echo "=================================================="
+          echo "📊 REPORTE COMPLETADO"
+          echo "⏰ Próximo reporte: mañana a las 9:00 AM UTC"
+          echo "🔄 Keep-alive activo cada 12 minutos"
+          echo "=================================================="
+
+      - name: 🚨 Alert on Issues
+        run: |
+          echo "🚨 Verificando si hay problemas críticos..."
+          
+          # Verificar si el servicio principal responde
+          if ! curl -f -s https://capri-store.onrender.com/health > /dev/null; then
+            echo "🚨 ALERTA CRÍTICA: Servicio principal no responde"
+            exit 1
+          fi
+          
+          echo "✅ No se detectaron problemas críticos"
