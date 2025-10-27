@@ -1326,39 +1326,16 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
       return { success: false, error: 'WhatsApp service no disponible' };
     }
 
-  // NUEVA VERIFICACIÓN: Comprobar estado real del cliente independientemente del flag
-  let realClientState = null;
-  let clientReady = whatsappReady;
+  // VERIFICACIÓN SIMPLIFICADA: Si WhatsApp está disponible, asumir que está listo
+  // Evitar verificaciones complejas que pueden interrumpir conexiones activas
+  let realClientState = 'ASSUMED_CONNECTED';
+  let clientReady = whatsappAvailable; // Si está disponible, asumir que está listo
   
-  try {
-    const statusCheck = await getWhatsAppStatus();
-    realClientState = statusCheck.client_state;
-    
-    // MEJORA: Si vemos CONNECTED en logs pero getState falla, usar verificación alternativa
-    if (realClientState === null || realClientState === undefined) {
-      // Buscar "CONNECTED" en los logs recientes o asumir conectado si flag es true
-      if (whatsappReady) {
-        console.log(`[${timestamp}] 🔄 Estado null pero flag true, asumiendo CONNECTED`);
-        realClientState = 'CONNECTED';
-      }
-    }
-    
-    clientReady = statusCheck.whatsapp_ready || realClientState === 'CONNECTED' || whatsappReady;
-    
-    console.log(`[${timestamp}] 🔍 Verificación estado en enviarNotificacionCompra:`);
-    console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
-    console.log(`[${timestamp}] - Estado real del cliente: ${realClientState}`);
-    console.log(`[${timestamp}] - Cliente listo calculado: ${clientReady}`);
-    
-  } catch (statusError) {
-    console.warn(`[${timestamp}] ⚠️ No se pudo verificar estado real, usando flag: ${statusError.message}`);
-    // Si hay error pero el flag es true, intentar envío
-    if (whatsappReady) {
-      clientReady = true;
-      realClientState = 'CONNECTED (fallback)';
-      console.log(`[${timestamp}] 🔄 Error en verificación pero flag true, intentando envío`);
-    }
-  }
+  console.log(`[${timestamp}] 🔍 Verificación simplificada en enviarNotificacionCompra:`);
+  console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
+  console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
+  console.log(`[${timestamp}] - Estado asumido: ${realClientState}`);
+  console.log(`[${timestamp}] - Cliente listo: ${clientReady}`);
 
   if (!clientReady) {
     console.error(`[${timestamp}] ❌ WhatsApp no está listo para envío:`);
@@ -1697,36 +1674,16 @@ app.post('/webhook', async (req, res) => {
               let canSendWhatsApp = false;
               
               if (whatsappAvailable) {
-                try {
-                  const statusCheck = await getWhatsAppStatus();
-                  realClientState = statusCheck.client_state;
-                  
-                  // MEJORA: Ser más tolerante con estados null/undefined
-                  if (realClientState === null || realClientState === undefined) {
-                    if (whatsappReady) {
-                      console.log(`[${timestamp}] 🔄 Estado null pero flag true, asumiendo CONNECTED`);
-                      realClientState = 'CONNECTED';
-                    }
-                  }
-                  
-                  canSendWhatsApp = statusCheck.whatsapp_ready || realClientState === 'CONNECTED' || whatsappReady;
-                  
-                  console.log(`[${timestamp}] 🔍 Verificación estado real:`);
-                  console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
-                  console.log(`[${timestamp}] - Estado real cliente: ${realClientState}`);
-                  console.log(`[${timestamp}] - Puede enviar: ${canSendWhatsApp}`);
-                  
-                } catch (statusError) {
-                  console.error(`[${timestamp}] ❌ Error verificando estado real:`, statusError.message);
-                  // Si hay error pero el flag es true, intentar envío
-                  if (whatsappReady) {
-                    canSendWhatsApp = true;
-                    realClientState = 'CONNECTED (fallback)';
-                    console.log(`[${timestamp}] 🔄 Error en verificación pero flag true, intentando envío`);
-                  } else {
-                    canSendWhatsApp = whatsappReady; // Fallback al flag original
-                  }
-                }
+                // ESTRATEGIA SIMPLIFICADA: Si WhatsApp está disponible, intentar envío directamente
+                // Evitar verificaciones que pueden interrumpir conexiones activas
+                console.log(`[${timestamp}] � WhatsApp disponible, asumiendo conexión activa`);
+                canSendWhatsApp = true;
+                realClientState = 'ASSUMED_CONNECTED';
+                
+                console.log(`[${timestamp}] 🔍 Verificación estado real:`);
+                console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
+                console.log(`[${timestamp}] - Estado asumido: ${realClientState}`);
+                console.log(`[${timestamp}] - Puede enviar: ${canSendWhatsApp}`);
               }
               
               if (whatsappAvailable && canSendWhatsApp) {
