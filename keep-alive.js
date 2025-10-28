@@ -8,7 +8,7 @@ const https = require('https');
 // Configuración
 const SERVICE_URL = 'https://capri-store.onrender.com';
 const PING_INTERVAL = 14 * 60 * 1000; // 14 minutos (Render duerme después de 15 min)
-const WHATSAPP_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutos
+const WHATSAPP_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutos (más reactivo)
 const HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutos
 
 console.log('🔄 Keep-Alive iniciado para Capri Store');
@@ -16,12 +16,19 @@ console.log(`📡 URL del servicio: ${SERVICE_URL}`);
 console.log(`⏰ Ping cada: ${PING_INTERVAL / 1000 / 60} minutos`);
 
 // Función para hacer requests HTTP
-function makeRequest(path, description) {
+function makeRequest(path, description, method = 'GET') {
   return new Promise((resolve, reject) => {
     const url = `${SERVICE_URL}${path}`;
     const startTime = Date.now();
     
-    https.get(url, (res) => {
+    const options = {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+    
+    const req = https.request(url, options, (res) => {
       let data = '';
       
       res.on('data', (chunk) => {
@@ -33,7 +40,7 @@ function makeRequest(path, description) {
         const timestamp = new Date().toISOString();
         
         console.log(`[${timestamp}] ✅ ${description}`);
-        console.log(`   Status: ${res.statusCode} | Tiempo: ${responseTime}ms`);
+        console.log(`   Status: ${res.statusCode} | Tiempo: ${responseTime}ms | Método: ${method}`);
         
         try {
           const jsonData = JSON.parse(data);
@@ -43,11 +50,15 @@ function makeRequest(path, description) {
         }
       });
       
-    }).on('error', (err) => {
+    });
+    
+    req.on('error', (err) => {
       const timestamp = new Date().toISOString();
       console.error(`[${timestamp}] ❌ Error en ${description}:`, err.message);
       reject(err);
     });
+    
+    req.end();
   });
 }
 
@@ -98,22 +109,48 @@ async function whatsappMaintenance() {
     
     const status = await makeRequest('/whatsapp-status', 'WhatsApp maintenance check');
     
-    if (!status.whatsapp_ready) {
+    if (!status.whatsapp_ready && !status.client_ready) {
       console.log('⚠️ WhatsApp no está listo - verificando causa...');
       
-      // Si hay sesión pero no está conectado, puede ser expiración
-      if (status.auth_folder && status.auth_folder.exists && !status.qr_generated) {
-        console.log('🔄 Posible sesión expirada - intentando reconexión...');
+      // Verificar si es problema de QR timeout o sesión expirada
+      if (status.state && (status.state.includes('UNPAIRED') || status.state.includes('TIMEOUT'))) {
+        console.log('🔄 Detectado QR timeout o sesión expirada - iniciando limpieza automática...');
         
         try {
-          await makeRequest('/whatsapp-reconnect', 'Forzar reconexión');
-          console.log('✅ Reconexión iniciada');
-        } catch (reconnectError) {
-          console.error('❌ Error en reconexión:', reconnectError.message);
+          const cleanResult = await makeRequest('/limpiar-sesiones-whatsapp', 'Auto-regeneración QR', 'POST');
+          
+          if (cleanResult.success) {
+            console.log('✅ Regeneración automática de QR iniciada exitosamente');
+            console.log('📱 Se generará nuevo QR en ~10-15 segundos');
+          } else {
+            console.error('❌ Error en regeneración automática:', cleanResult.error);
+            
+            // Fallback: intentar endpoint de forzado completo
+            console.log('🔄 Intentando reinicio completo como fallback...');
+            await makeRequest('/whatsapp-force-restart', 'Forzar reinicio completo', 'POST');
+          }
+        } catch (regenerationError) {
+          console.error('❌ Error en regeneración automática:', regenerationError.message);
         }
       }
-    } else {
+      // Si hay sesión pero no está conectado, puede ser expiración
+      else if (status.auth_folder && status.auth_folder.exists && !status.qr_generated) {
+        console.log('🔄 Posible sesión expirada - intentando limpieza completa...');
+        
+        try {
+          await makeRequest('/limpiar-sesiones-whatsapp', 'Limpiar sesión expirada', 'POST');
+          console.log('✅ Limpieza de sesión expirada iniciada');
+        } catch (cleanError) {
+          console.error('❌ Error en limpieza de sesión:', cleanError.message);
+        }
+      }
+      else {
+        console.log('ℹ️ WhatsApp requiere configuración inicial o escaneo manual de QR');
+      }
+    } else if (status.whatsapp_ready || status.client_ready) {
       console.log('✅ WhatsApp funcionando correctamente');
+    } else {
+      console.log('⚠️ Estado WhatsApp indeterminado - no se requiere acción automática');
     }
     
   } catch (error) {

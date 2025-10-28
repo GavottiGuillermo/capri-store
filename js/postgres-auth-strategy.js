@@ -11,57 +11,43 @@ class PostgreSQLStore {
     this.pool = pool;
     this.clientId = clientId;
     console.log(`📦 PostgreSQLStore inicializado para cliente: ${clientId}`);
-    console.log('🔍 CONSTRUCTOR: Pool objeto disponible:', !!this.pool);
-    console.log('🔍 CONSTRUCTOR: ClientId configurado:', this.clientId);
   }
 
   async sessionExists(options = {}) {
     try {
-      console.log('🔍 SESSION EXISTS: Verificando si existe sesión en PostgreSQL...');
-      console.log('🔍 SESSION EXISTS: Buscando clientId:', this.clientId);
+      console.log('🔍 Verificando si existe sesión en PostgreSQL...');
       const query = 'SELECT id FROM whatsapp_sessions WHERE id = $1';
       const result = await this.pool.query(query, [this.clientId]);
       
-      console.log('📊 SESSION EXISTS: Query result rows:', result.rows.length);
-      
       const exists = result.rows.length > 0;
-      console.log(`📊 SESSION EXISTS: Sesión existe: ${exists ? '✅ SÍ' : '❌ NO'}`);
+      console.log(`📊 Sesión existe: ${exists ? '✅ SÍ' : '❌ NO'}`);
       return exists;
     } catch (error) {
-      console.error('❌ SESSION EXISTS ERROR:', error.message);
-      console.error('❌ SESSION EXISTS STACK:', error.stack);
+      console.error('❌ Error verificando sesión:', error.message);
       return false;
     }
   }
 
   async save(options = {}) {
     try {
-      console.log('💾 ============ SAVE LLAMADO ============');
-      console.log('💾 Tipo de options:', typeof options);
-      console.log('💾 Keys en options:', Object.keys(options));
+      console.log('💾 Guardando sesión en PostgreSQL...');
       
-      // RemoteAuth pasa {session: sessionName} y espera que leamos el archivo .zip
       const sessionName = options.session;
-      
       if (!sessionName) {
         console.error('❌ No session name provided');
         return false;
       }
       
-      console.log('💾 Session name:', sessionName);
-      
-      // Intentar leer el archivo .zip creado por RemoteAuth
+      // Leer archivo ZIP creado por RemoteAuth
       const fs = require('fs');
       const zipPath = `${sessionName}.zip`;
-      
       let dataToSave = null;
       
       try {
         if (fs.existsSync(zipPath)) {
-          console.log('💾 Archivo ZIP encontrado, leyendo...');
           const zipBuffer = fs.readFileSync(zipPath);
           const zipBase64 = zipBuffer.toString('base64');
-          console.log('💾 ZIP leído, tamaño:', zipBase64.length, 'chars (base64)');
+          console.log('💾 ZIP leído, tamaño:', Math.round(zipBase64.length / 1024), 'KB');
           dataToSave = zipBase64;
         } else {
           console.log('⚠️ No se encontró archivo ZIP en:', zipPath);
@@ -87,50 +73,39 @@ class PostgreSQLStore {
       `;
       
       await this.pool.query(query, [this.clientId, dataToSave]);
-      console.log('✅ Sesión guardada exitosamente en PostgreSQL store');
-      console.log('💾 Tamaño guardado:', dataToSave.length, 'chars (base64)');
-      console.log('💾 ========================================');
+      console.log('✅ Sesión guardada exitosamente en PostgreSQL');
       return true;
     } catch (error) {
-      console.error('❌ Error guardando sesión en store:', error.message);
-      console.error('❌ Stack completo:', error.stack);
+      console.error('❌ Error guardando sesión:', error.message);
       return false;
     }
   }
 
   async extract(options = {}) {
     try {
-      console.log('📥 EXTRACT: RemoteAuth intentando cargar sesión');
+      console.log('📥 Cargando sesión desde PostgreSQL...');
       
       const sessionName = options.session;
       const zipPath = options.path;
       
-      console.log('📥 Session name:', sessionName);
-      console.log('📥 Zip path:', zipPath);
-      
       const query = 'SELECT session_data FROM whatsapp_sessions WHERE id = $1';
-      console.log('� Ejecutando query para clientId:', this.clientId);
       const result = await this.pool.query(query, [this.clientId]);
-      
-      console.log('� Query result rows:', result.rows.length);
       
       if (result.rows.length > 0) {
         const sessionData = result.rows[0].session_data;
-        console.log('✅ Sesión recuperada desde PostgreSQL');
-        console.log('� Tamaño de datos:', sessionData ? sessionData.length : 0, 'chars');
+        const sizeKB = Math.round(sessionData.length / 1024);
+        console.log(`✅ Sesión recuperada desde PostgreSQL (${sizeKB} KB)`);
         
         // Si RemoteAuth nos pasó un path, escribir el archivo ZIP
         if (zipPath && sessionData) {
           try {
             const fs = require('fs');
-            console.log('� Escribiendo archivo ZIP en:', zipPath);
+            console.log('📄 Escribiendo archivo ZIP...');
             
-            // Convertir de base64 a buffer y escribir
             const zipBuffer = Buffer.from(sessionData, 'base64');
             fs.writeFileSync(zipPath, zipBuffer);
             
-            console.log('✅ Archivo ZIP escrito exitosamente');
-            console.log('� Tamaño del archivo:', zipBuffer.length, 'bytes');
+            console.log('✅ Archivo ZIP creado exitosamente');
             return true; // RemoteAuth espera true cuando hay path
           } catch (writeError) {
             console.error('❌ Error escribiendo archivo ZIP:', writeError.message);
@@ -138,14 +113,13 @@ class PostgreSQLStore {
           }
         }
         
-        // Si no hay path, devolver datos (no debería pasar con RemoteAuth)
         return sessionData;
       } else {
         console.log('📭 No se encontró sesión en PostgreSQL');
         return null;
       }
     } catch (error) {
-      console.error('❌ EXTRACT ERROR:', error.message);
+      console.error('❌ Error cargando sesión:', error.message);
       return null;
     }
   }

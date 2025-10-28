@@ -932,6 +932,78 @@ async function forzarGuardadoSesion() {
   }
 }
 
+// Función para limpieza completa (combina PostgreSQL + Local + Reinicialización)
+async function limpiarSesionesCompleto() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🧹 LIMPIEZA COMPLETA DE SESIONES INICIADA...`);
+  
+  try {
+    // Resetear flags
+    whatsappReady = false;
+    qrGenerated = false;
+    qrAttempts = 0;
+    
+    console.log(`[${timestamp}] 1️⃣ Destruyendo cliente...`);
+    try {
+      await whatsappClient.destroy();
+    } catch (destroyError) {
+      console.log(`[${timestamp}] ⚠️ Error destruyendo cliente: ${destroyError.message}`);
+    }
+    
+    console.log(`[${timestamp}] 2️⃣ Limpiando sesión PostgreSQL...`);
+    if (usePostgresAuth && authStrategy && authStrategy.logout) {
+      try {
+        await authStrategy.logout();
+        console.log(`[${timestamp}] ✅ PostgreSQL limpiado`);
+      } catch (dbError) {
+        console.error(`[${timestamp}] ❌ Error limpiando PostgreSQL: ${dbError.message}`);
+      }
+    }
+    
+    console.log(`[${timestamp}] 3️⃣ Limpiando carpeta local...`);
+    const fs = require('fs');
+    const path = require('path');
+    const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
+    
+    if (fs.existsSync(authPath)) {
+      try {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log(`[${timestamp}] ✅ Carpeta local eliminada`);
+      } catch (fsError) {
+        console.error(`[${timestamp}] ❌ Error eliminando carpeta: ${fsError.message}`);
+      }
+    }
+    
+    console.log(`[${timestamp}] 4️⃣ Esperando 5 segundos...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    console.log(`[${timestamp}] 5️⃣ Reinicializando cliente...`);
+    await whatsappClient.initialize();
+    
+    console.log(`[${timestamp}] ✅ Limpieza completa exitosa - QR se generará automáticamente`);
+    
+    return {
+      success: true,
+      message: 'Limpieza completa exitosa - Se generará nuevo QR automáticamente',
+      actions_completed: [
+        'Cliente destruido',
+        'PostgreSQL limpiado',
+        'Carpeta local eliminada',
+        'Cliente reinicializado'
+      ],
+      timestamp
+    };
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ ERROR en limpieza completa: ${error.message}`);
+    return {
+      success: false,
+      error: error.message,
+      timestamp
+    };
+  }
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -940,6 +1012,7 @@ module.exports = {
   forzarReconexion,
   limpiarSesionCorrupta,
   limpiarSesionPostgreSQL,
+  limpiarSesionesCompleto,
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
   forzarGuardadoSesion,

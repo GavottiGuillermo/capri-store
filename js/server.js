@@ -29,7 +29,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -365,6 +365,44 @@ app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
     console.error('❌ Error en reinicio completo:', error);
     res.status(500).json({
       success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === ESTADO WHATSAPP ===
+app.get('/whatsapp-status', async (req, res) => {
+  try {
+    console.log('📱 Estado WhatsApp solicitado desde API...');
+    
+    if (!whatsappAvailable) {
+      return res.json({
+        whatsapp_ready: false,
+        error: 'WhatsApp service no disponible',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const status = await getWhatsAppStatus();
+    
+    res.json({
+      whatsapp_ready: whatsappReady,
+      client_ready: status.whatsapp_ready || false,
+      state: status.state || 'UNKNOWN',
+      qr_generated: status.qr_code ? true : false,
+      auth_folder: {
+        exists: status.auth_folder_exists || false
+      },
+      last_connection: status.last_connection || null,
+      error: status.error || null,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error obteniendo estado WhatsApp:', error);
+    res.status(500).json({
+      whatsapp_ready: false,
       error: error.message,
       timestamp: new Date().toISOString()
     });
