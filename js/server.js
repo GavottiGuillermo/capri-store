@@ -293,118 +293,12 @@ function validateCustomerData(data) {
 // ENDPOINTS BÁSICOS
 // ===============================
 
-// === ENDPOINT TEMPORAL DE TESTING ===
+// ===============================
+// ENDPOINTS PRINCIPALES
+// ===============================
+    
 
-// Endpoint temporal para forzar reintento de notificación WhatsApp
-app.post('/forzar-reintento-whatsapp', async (req, res) => {
-  const timestamp = new Date().toISOString();
-  const { payment_id } = req.body;
-  
-  try {
-    console.log(`[${timestamp}] 🔄 REINTENTO FORZADO solicitado para payment_id: ${payment_id}`);
-    
-    if (!payment_id) {
-      return res.status(400).json({ error: 'payment_id requerido' });
-    }
-    
-    // Buscar el producto
-    const resultado = await executeQueryWithRetry(
-      pool,
-      `SELECT 
-        mp_payment_id, 
-        id_pedido, 
-        pedido_nombre_cliente, 
-        pedido_telefono_cliente,
-        pedido_monto_total,
-        whatsapp_notificado,
-        estado
-       FROM productos 
-       WHERE mp_payment_id = $1`,
-      [payment_id],
-      2
-    );
-    
-    if (!resultado || !resultado.rows || resultado.rows.length === 0) {
-      console.log(`[${timestamp}] ❌ No se encontró producto con payment_id: ${payment_id}`);
-      return res.status(404).json({ error: 'Producto no encontrado' });
-    }
-    
-    const producto = resultado.rows[0];
-    console.log(`[${timestamp}] 📦 Producto encontrado:`, {
-      id_pedido: producto.id_pedido,
-      cliente: producto.pedido_nombre_cliente,
-      whatsapp_actual: producto.whatsapp_notificado,
-      estado: producto.estado
-    });
-    
-    // Verificar estado de WhatsApp
-    const estadoWhatsApp = verificarEstadoWhatsApp();
-    console.log(`[${timestamp}] 📱 Estado WhatsApp:`, estadoWhatsApp);
-    
-    if (!estadoWhatsApp.disponible) {
-      return res.status(503).json({ 
-        error: 'WhatsApp no disponible', 
-        razon: estadoWhatsApp.razon 
-      });
-    }
-    
-    // Preparar datos para envío
-    const customerData = {
-      first_name: producto.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
-      last_name: producto.pedido_nombre_cliente?.split(' ').slice(1).join(' ') || '',
-      phone: {
-        area_code: producto.pedido_telefono_cliente?.substring(2, 5) || '',
-        number: producto.pedido_telefono_cliente?.substring(5) || ''
-      }
-    };
-    
-    const orderData = {
-      numeroDisplay: producto.id_pedido?.slice(-2) || '??',
-      idPedidoCompleto: producto.id_pedido
-    };
-    
-    const paymentInfo = {
-      transaction_amount: producto.pedido_monto_total || 0,
-      id: producto.mp_payment_id
-    };
-    
-    console.log(`[${timestamp}] 🚀 Intentando reenvío de notificación...`);
-    
-    // Intentar envío
-    const resultadoEnvio = await enviarNotificacionCompra(customerData, orderData, paymentInfo);
-    
-    console.log(`[${timestamp}] 📨 Resultado del reenvío:`, resultadoEnvio);
-    
-    // Actualizar estado en BD
-    await actualizarEstadoWhatsApp(payment_id, resultadoEnvio.success);
-    
-    const mensaje = resultadoEnvio.success ? 
-      `✅ Notificación reenviada exitosamente para pedido ${producto.id_pedido}` :
-      `❌ Fallo en reenvío: ${resultadoEnvio.error}`;
-      
-    console.log(`[${timestamp}] ${mensaje}`);
-    
-    res.json({
-      success: resultadoEnvio.success,
-      mensaje,
-      pedido: producto.id_pedido,
-      resultado_envio: resultadoEnvio,
-      estado_whatsapp_previo: producto.whatsapp_notificado,
-      estado_whatsapp_nuevo: resultadoEnvio.success ? 'True' : 'False'
-    });
-    
-  } catch (error) {
-    console.error(`[${timestamp}] ❌ Error en reintento forzado:`, error.message);
-    res.status(500).json({ 
-      error: 'Error interno', 
-      detalle: error.message 
-    });
-  }
-});
-
-// === FIN ENDPOINT TEMPORAL ===
-
-// Endpoint de salud (simplificado sin Instance Lock)
+// === ENDPOINT DE SALUD ===
 app.get('/health', async (req, res) => {  
   res.json({ 
     status: 'OK', 
@@ -427,215 +321,29 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// === ESTADO DEL WHATSAPP ===
-app.get('/whatsapp-status', async (req, res) => {
+// ===============================
+// ÚNICO ENDPOINT DE WHATSAPP PARA REGENERAR QR
+// ===============================
+app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
   try {
-    const status = await getWhatsAppStatus();
-    console.log('📊 Estado WhatsApp consultado:', status);
-    res.json(status);
-  } catch (error) {
-    console.error('❌ Error obteniendo estado WhatsApp:', error);
-    res.json({
-      whatsapp_ready: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === TEST DE WHATSAPP (para debugging) ===
-app.post('/test-whatsapp', express.json(), async (req, res) => {
-  try {
-    const { numero, mensaje } = req.body;
+    console.log('🧹 REINICIO COMPLETO iniciado...');
     
-    if (!numero || !mensaje) {
-      return res.status(400).json({
+    // 1. Verificar disponibilidad de servicios
+    const usePostgresAuth = !!(process.env.DATABASE_URL);
+    
+    if (!usePostgresAuth) {
+      return res.json({
         success: false,
-        error: 'Faltan parámetros: numero y mensaje requeridos'
+        error: 'No se está usando autenticación PostgreSQL',
+        current_auth: 'LocalAuth',
+        timestamp: new Date().toISOString()
       });
     }
     
-    console.log('🧪 TEST WhatsApp solicitado:');
-    console.log('- Número:', numero);
-    console.log('- Mensaje:', mensaje.substring(0, 50) + '...');
+    console.log('🔄 Ejecutando limpieza completa...');
     
-    const result = await enviarWhatsApp(numero, mensaje);
-    
-    console.log('🧪 Resultado del test:', result);
-    
-    res.json({
-      success: result.success,
-      error: result.error,
-      details: result,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error en test de WhatsApp:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === TEST DE NORMALIZACIÓN DE TELÉFONOS ===
-app.post('/test-phone', express.json(), async (req, res) => {
-  console.log('🧪 TEST PHONE: Probando normalización de teléfonos');
-  
-  try {
-    const { phone } = req.body;
-    
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        error: 'Parámetro phone requerido'
-      });
-    }
-    
-    console.log('📱 Teléfono original:', phone);
-    const normalized = normalizePhoneNumber(phone);
-    console.log('📱 Teléfono normalizado:', normalized);
-    
-    res.json({
-      success: true,
-      original: phone,
-      normalized: normalized,
-      admin_current: ADMIN_WHATSAPP,
-      admin_normalized: normalizePhoneNumber(ADMIN_WHATSAPP),
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('🧪 TEST PHONE ERROR:', error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === TEST DE NOTIFICACIÓN COMPLETA ===
-app.post('/test-notification', express.json(), async (req, res) => {
-  console.log('🧪 TEST NOTIFICATION: Probando notificación completa');
-  
-  try {
-    // Datos de prueba
-    const testCustomerData = {
-      nombre: 'Cliente',
-      apellido: 'Prueba',
-      telefono: '+5493487610270'
-    };
-    
-    const testOrderData = {
-      numeroDisplay: '99',
-      idPedidoCompleto: 'TEST001'
-    };
-    
-    const testPaymentInfo = {
-      transaction_amount: 1000,
-      id: 'TEST_PAYMENT_123',
-      additional_info: {
-        items: [
-          {
-            title: 'Producto de Prueba',
-            quantity: 1,
-            unit_price: 1000
-          }
-        ]
-      }
-    };
-    
-    console.log('🧪 Enviando notificación de prueba...');
-    const result = await enviarNotificacionCompra(testCustomerData, testOrderData, testPaymentInfo);
-    
-    res.json({
-      success: true,
-      notification_result: result,
-      test_data: { testCustomerData, testOrderData, testPaymentInfo },
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('🧪 TEST NOTIFICATION ERROR:', error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === FORZAR RECONEXIÓN DE WHATSAPP ===
-app.post('/whatsapp-reconnect', async (req, res) => {
-  try {
-    console.log('🔄 Forzando reconexión de WhatsApp solicitada desde API...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    const result = await forzarReconexion();
-    
-    console.log('🔄 Resultado de reconexión forzada:', result);
-    res.json(result);
-    
-  } catch (error) {
-    console.error('❌ Error forzando reconexión:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === LIMPIAR SESIÓN CORRUPTA ===
-app.post('/whatsapp-clean-session', async (req, res) => {
-  try {
-    console.log('🧹 Limpieza de sesión WhatsApp solicitada desde API...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    const result = await limpiarSesionCorrupta();
-    
-    console.log('🧹 Resultado de limpieza de sesión:', result);
-    res.json(result);
-    
-  } catch (error) {
-    console.error('❌ Error limpiando sesión:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === REINICIO COMPLETO DE WHATSAPP ===
-app.post('/whatsapp-full-reset', async (req, res) => {
-  try {
-    console.log('🔄 REINICIO COMPLETO de WhatsApp solicitado... [v2]');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    // Primero limpiar sesión
-    const cleanResult = await limpiarSesionCorrupta();
+    // 2. Limpiar sesiones
+    const cleanResult = await limpiarSesionesCompleto();
     
     if (cleanResult.success) {
       console.log('✅ Sesión limpiada, WhatsApp se reiniciará con configuración corregida');
@@ -663,288 +371,86 @@ app.post('/whatsapp-full-reset', async (req, res) => {
   }
 });
 
-// === VERIFICAR SESIÓN POSTGRESQL ===
-app.get('/whatsapp-session-check', async (req, res) => {
+// === MONITOR DE MEMORIA ===
+app.get('/memory-status', (req, res) => {
   try {
-    console.log('🗄️ Verificando sesiones en PostgreSQL...');
+    const memUsage = process.memoryUsage();
+    const mbUsed = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const mbTotal = Math.round(memUsage.heapTotal / 1024 / 1024);
+    const mbRss = Math.round(memUsage.rss / 1024 / 1024);
+    const mbExternal = Math.round(memUsage.external / 1024 / 1024);
     
-    const query = 'SELECT id, created_at, updated_at FROM whatsapp_sessions ORDER BY updated_at DESC';
-    const result = await pool.query(query);
+    // Render free tier tiene 512MB de límite
+    const renderLimit = 512;
+    const usagePercent = Math.round((mbRss / renderLimit) * 100);
     
-    console.log(`📊 Sesiones encontradas: ${result.rows.length}`);
-    
-    res.json({
-      success: true,
-      sessions_count: result.rows.length,
-      sessions: result.rows.map(row => ({
-        id: row.id,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        has_data: !!(row.session_data)
-      })),
+    const status = {
+      memory_usage: {
+        heap_used_mb: mbUsed,
+        heap_total_mb: mbTotal,
+        rss_mb: mbRss,
+        external_mb: mbExternal,
+        usage_percent: usagePercent
+      },
+      limits: {
+        render_limit_mb: renderLimit,
+        warning_threshold: 90,
+        critical_threshold: 95
+      },
+      alerts: {
+        memory_warning: usagePercent > 90,
+        memory_critical: usagePercent > 95
+      },
       timestamp: new Date().toISOString()
-    });
+    };
+    
+    // Log si estamos cerca del límite
+    if (usagePercent > 80) {
+      console.warn(`⚠️ Uso de memoria alto: ${usagePercent}% (${mbRss}MB/${renderLimit}MB)`);
+    }
+    
+    res.json(status);
     
   } catch (error) {
-    console.error('❌ Error verificando sesiones:', error.message);
+    console.error('❌ Error obteniendo estado de memoria:', error);
     res.status(500).json({
-      success: false,
-      error: error.message,
+      error: 'Error obteniendo memoria',
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// === FORZAR GUARDADO DE SESIÓN ===
-app.post('/whatsapp-force-save', async (req, res) => {
-  try {
-    console.log('💾 Forzando guardado de sesión...');
-    
-    // Verificar si estamos usando PostgreSQL
-    const usePostgresAuth = !!(process.env.DATABASE_URL);
-    if (!usePostgresAuth) {
-      return res.json({
-        success: false,
-        error: 'No se está usando autenticación PostgreSQL',
-        current_auth: 'LocalAuth',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Verificar estado de WhatsApp
-    const status = await getWhatsAppStatus();
-    
-    if (!status.whatsapp_ready) {
-      return res.json({
-        success: false,
-        error: 'WhatsApp no está conectado',
-        whatsapp_status: status,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Aquí normalmente forzaríamos el guardado, pero RemoteAuth maneja esto internamente
-    console.log('🔄 Sesión debe guardarse automáticamente según backupSyncIntervalMs (5 min)');
-    
-    res.json({
-      success: true,
-      message: 'WhatsApp conectado con PostgreSQL - Sesión se guarda automáticamente cada 5 minutos',
-      whatsapp_status: status,
-      next_backup_in_minutes: 5,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error forzando guardado:', error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === LIMPIAR SOLO SESIÓN POSTGRESQL ===
-app.post('/whatsapp-clean-postgres', async (req, res) => {
-  try {
-    console.log('🗄️ Endpoint de limpieza PostgreSQL llamado');
-    
-    const result = await limpiarSesionPostgreSQL();
-    
-    if (result.success) {
-      console.log('✅ Sesión PostgreSQL limpiada exitosamente');
-      res.json({
-        success: true,
-        message: result.message,
-        timestamp: result.timestamp,
-        next_steps: [
-          '1. Reinicia el servidor para reconectar',
-          '2. Se generará nuevo QR para escanear',
-          '3. La nueva sesión se guardará en PostgreSQL'
-        ]
-      });
-    } else {
-      res.status(500).json(result);
-    }
-    
-  } catch (error) {
-    console.error('❌ Error limpiando PostgreSQL:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === LIMPIAR SESIÓN EXPIRADA AUTOMÁTICAMENTE ===
-app.post('/whatsapp-clean-expired', async (req, res) => {
-  try {
-    console.log('🔄 Limpieza automática de sesión expirada solicitada...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    // Verificar estado actual
-    const status = await getWhatsAppStatus();
-    
-    if (status.whatsapp_ready) {
-      return res.json({
-        success: true,
-        message: 'WhatsApp ya está conectado - no es necesaria limpieza',
-        current_status: status
-      });
-    }
-    
-    // Si hay sesión pero no está conectado, limpiar
-    if (status.auth_folder && status.auth_folder.exists && !status.qr_generated) {
-      console.log('🧹 Detectada sesión existente pero no conectada - limpiando...');
-      
-      const cleanResult = await limpiarSesionCorrupta();
-      
-      if (cleanResult.success) {
-        res.json({
-          success: true,
-          message: 'Sesión expirada limpiada automáticamente - Se generará nuevo QR',
-          clean_result: cleanResult,
-          next_steps: [
-            'Espera 10-15 segundos',
-            'Verifica /whatsapp-status para el nuevo QR',
-            'Escanea el QR con WhatsApp'
-          ]
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          error: 'Error limpiando sesión expirada',
-          details: cleanResult
-        });
-      }
-    } else {
-      res.json({
-        success: true,
-        message: 'No hay sesión expirada para limpiar',
-        current_status: status
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Error en limpieza automática:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === RESETEAR CONTADOR QR ===
-app.post('/whatsapp-reset-qr-counter', async (req, res) => {
-  try {
-    console.log('🔄 Reseteando contador QR solicitado desde API...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    const result = resetearContadorQR();
-    
-    console.log('🔄 Resultado reseteo contador QR:', result);
-    res.json({
-      success: true,
-      message: `Contador QR reseteado de ${result.anterior} a ${result.actual}`,
-      previous_attempts: result.anterior,
-      current_attempts: result.actual,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error reseteando contador QR:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === SINCRONIZAR ESTADO WHATSAPP ===
-app.post('/whatsapp-sync-state', async (req, res) => {
-  try {
-    console.log('🔄 Sincronización de estado WhatsApp solicitada desde API...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    const result = await sincronizarEstadoWhatsApp();
-    
-    console.log('🔄 Resultado sincronización estado:', result);
-    res.json({
-      success: result.success,
-      action: result.action || 'unknown',
-      message: result.action === 'flag_updated' ? 
-        `Estado sincronizado: ${result.previous} -> ${result.current}` :
-        'Estado ya estaba sincronizado',
-      previous_flag: result.previous,
-      current_flag: result.current,
-      client_state: result.state,
-      error: result.error,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error sincronizando estado:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// === FORZAR GUARDADO INMEDIATO DE SESIÓN ===
-app.post('/whatsapp-save-session-now', async (req, res) => {
-  try {
-    console.log('💾 Guardado inmediato de sesión solicitado desde API...');
-    
-    if (!whatsappAvailable) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp service no disponible'
-      });
-    }
-    
-    const result = await forzarGuardadoSesion();
-    
-    console.log('💾 Resultado guardado inmediato:', result);
-    res.json({
-      success: result.success,
-      message: result.message || (result.success ? 'Sesión guardada exitosamente' : 'Error al guardar sesión'),
-      client_id: result.client_id,
-      client_state: result.state,
-      error: result.error,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error forzando guardado inmediato:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+// === DEBUG INFO ===
+app.get('/debug', (req, res) => {
+  res.json({
+    app_name: 'Capri Store API',
+    version: '4.0 - Simplified',
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
+    uptime_seconds: Math.floor(process.uptime()),
+    memory_usage: {
+      heap_used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+      heap_total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB'
+    },
+    services: {
+      whatsapp_available: whatsappAvailable,
+      whatsapp_ready: whatsappAvailable ? whatsappReady : false,
+      database_configured: !!process.env.DATABASE_URL,
+      mercadopago_configured: !!process.env.MERCADOPAGO_ACCESS_TOKEN
+    },
+    env_status: {
+      admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
+      admin_instagram: !!process.env.ADMIN_INSTAGRAM,
+      render_instance: process.env.RENDER_INSTANCE_ID || 'local'
+    },
+    deployment: {
+      type: 'simplified_single_instance',
+      feature_lock_removed: true,
+      postgresql_sessions: true
+    },
+    timestamp: new Date().toISOString()
+  });
 });
 
 // === MONITOR DE MEMORIA ===
@@ -2428,6 +1934,7 @@ async function startServer() {
       
       // Iniciar sistema de reintentos de notificaciones WhatsApp
       console.log(`🔄 Configurando sistema de reintentos WhatsApp...`);
+      console.log(`📊 Sistema de tracking WhatsApp v2.1 - Con regeneración segura de QR`);
       
       // Procesar notificaciones pendientes cada 3 minutos
       setInterval(async () => {
