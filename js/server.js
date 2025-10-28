@@ -293,6 +293,117 @@ function validateCustomerData(data) {
 // ENDPOINTS BÁSICOS
 // ===============================
 
+// === ENDPOINT TEMPORAL DE TESTING ===
+
+// Endpoint temporal para forzar reintento de notificación WhatsApp
+app.post('/forzar-reintento-whatsapp', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  const { payment_id } = req.body;
+  
+  try {
+    console.log(`[${timestamp}] 🔄 REINTENTO FORZADO solicitado para payment_id: ${payment_id}`);
+    
+    if (!payment_id) {
+      return res.status(400).json({ error: 'payment_id requerido' });
+    }
+    
+    // Buscar el producto
+    const resultado = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        mp_payment_id, 
+        id_pedido, 
+        pedido_nombre_cliente, 
+        pedido_telefono_cliente,
+        pedido_monto_total,
+        whatsapp_notificado,
+        estado
+       FROM productos 
+       WHERE mp_payment_id = $1`,
+      [payment_id],
+      2
+    );
+    
+    if (!resultado || !resultado.rows || resultado.rows.length === 0) {
+      console.log(`[${timestamp}] ❌ No se encontró producto con payment_id: ${payment_id}`);
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+    
+    const producto = resultado.rows[0];
+    console.log(`[${timestamp}] 📦 Producto encontrado:`, {
+      id_pedido: producto.id_pedido,
+      cliente: producto.pedido_nombre_cliente,
+      whatsapp_actual: producto.whatsapp_notificado,
+      estado: producto.estado
+    });
+    
+    // Verificar estado de WhatsApp
+    const estadoWhatsApp = verificarEstadoWhatsApp();
+    console.log(`[${timestamp}] 📱 Estado WhatsApp:`, estadoWhatsApp);
+    
+    if (!estadoWhatsApp.disponible) {
+      return res.status(503).json({ 
+        error: 'WhatsApp no disponible', 
+        razon: estadoWhatsApp.razon 
+      });
+    }
+    
+    // Preparar datos para envío
+    const customerData = {
+      first_name: producto.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
+      last_name: producto.pedido_nombre_cliente?.split(' ').slice(1).join(' ') || '',
+      phone: {
+        area_code: producto.pedido_telefono_cliente?.substring(2, 5) || '',
+        number: producto.pedido_telefono_cliente?.substring(5) || ''
+      }
+    };
+    
+    const orderData = {
+      numeroDisplay: producto.id_pedido?.slice(-2) || '??',
+      idPedidoCompleto: producto.id_pedido
+    };
+    
+    const paymentInfo = {
+      transaction_amount: producto.pedido_monto_total || 0,
+      id: producto.mp_payment_id
+    };
+    
+    console.log(`[${timestamp}] 🚀 Intentando reenvío de notificación...`);
+    
+    // Intentar envío
+    const resultadoEnvio = await enviarNotificacionCompra(customerData, orderData, paymentInfo);
+    
+    console.log(`[${timestamp}] 📨 Resultado del reenvío:`, resultadoEnvio);
+    
+    // Actualizar estado en BD
+    await actualizarEstadoWhatsApp(payment_id, resultadoEnvio.success);
+    
+    const mensaje = resultadoEnvio.success ? 
+      `✅ Notificación reenviada exitosamente para pedido ${producto.id_pedido}` :
+      `❌ Fallo en reenvío: ${resultadoEnvio.error}`;
+      
+    console.log(`[${timestamp}] ${mensaje}`);
+    
+    res.json({
+      success: resultadoEnvio.success,
+      mensaje,
+      pedido: producto.id_pedido,
+      resultado_envio: resultadoEnvio,
+      estado_whatsapp_previo: producto.whatsapp_notificado,
+      estado_whatsapp_nuevo: resultadoEnvio.success ? 'True' : 'False'
+    });
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en reintento forzado:`, error.message);
+    res.status(500).json({ 
+      error: 'Error interno', 
+      detalle: error.message 
+    });
+  }
+});
+
+// === FIN ENDPOINT TEMPORAL ===
+
 // Endpoint de salud (simplificado sin Instance Lock)
 app.get('/health', async (req, res) => {  
   res.json({ 
@@ -1268,6 +1379,125 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 // ===============================
 
 // Función para enviar notificación de compra por WhatsApp
+// Variables para tracking de estado WhatsApp
+let ultimaConexionExitosa = null;
+let intentosReconexion = 0;
+
+// Función mejorada para verificar si WhatsApp está realmente disponible
+function verificarEstadoWhatsApp() {
+  const ahora = new Date();
+  const tiempoDesdeUltimaConexion = ultimaConexionExitosa ? (ahora - ultimaConexionExitosa) / 1000 : Infinity;
+  
+  // Criterios para considerar WhatsApp disponible:
+  // 1. Módulo cargado (whatsappAvailable = true)
+  // 2. Flag listo (whatsappReady = true) O conexión exitosa reciente (< 5 minutos)
+  const disponible = whatsappAvailable && (whatsappReady || tiempoDesdeUltimaConexion < 300);
+  
+  return {
+    disponible,
+    razon: disponible ? 'Disponible' : 
+           !whatsappAvailable ? 'Módulo no cargado' :
+           !whatsappReady && tiempoDesdeUltimaConexion >= 300 ? 'No autenticado y sin conexión reciente' :
+           'Estado desconocido',
+    tiempoDesdeUltimaConexion,
+    whatsappAvailable,
+    whatsappReady
+  };
+}
+
+// Función para marcar conexión exitosa
+function marcarConexionExitosa() {
+  ultimaConexionExitosa = new Date();
+  intentosReconexion = 0;
+  console.log(`[${new Date().toISOString()}] ✅ Conexión WhatsApp exitosa marcada`);
+}
+
+// Función para procesar notificaciones pendientes
+async function procesarNotificacionesPendientes() {
+  const timestamp = new Date().toISOString();
+  
+  try {
+    // Verificar si WhatsApp está disponible
+    const estadoWhatsApp = verificarEstadoWhatsApp();
+    if (!estadoWhatsApp.disponible) {
+      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible para reintentos: ${estadoWhatsApp.razon}`);
+      return;
+    }
+    
+    // Buscar productos con notificación pendiente
+    const resultPendientes = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        p.mp_payment_id, 
+        p.id_pedido, 
+        p.pedido_nombre_cliente, 
+        p.pedido_telefono_cliente,
+        p.pedido_monto_total,
+        p.pedido_fecha
+       FROM productos p 
+       WHERE p.estado LIKE '%Pendiente%' 
+       AND p.whatsapp_notificado = 'False'
+       AND p.pedido_fecha >= NOW() - INTERVAL '2 hours'
+       ORDER BY p.pedido_fecha ASC 
+       LIMIT 5`,
+      [],
+      2
+    );
+    
+    if (!resultPendientes || !resultPendientes.rows || resultPendientes.rows.length === 0) {
+      console.log(`[${timestamp}] ✅ No hay notificaciones WhatsApp pendientes`);
+      return;
+    }
+    
+    console.log(`[${timestamp}] 📬 Procesando ${resultPendientes.rows.length} notificaciones pendientes...`);
+    
+    for (const pedido of resultPendientes.rows) {
+      try {
+        console.log(`[${timestamp}] 🔄 Reintentando notificación para pedido: ${pedido.id_pedido}`);
+        
+        const customerData = {
+          first_name: pedido.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
+          last_name: pedido.pedido_nombre_cliente?.split(' ').slice(1).join(' ') || '',
+          phone: {
+            area_code: pedido.pedido_telefono_cliente?.substring(2, 5) || '',
+            number: pedido.pedido_telefono_cliente?.substring(5) || ''
+          }
+        };
+        
+        const orderData = {
+          numeroDisplay: pedido.id_pedido?.slice(-2) || '??',
+          idPedidoCompleto: pedido.id_pedido
+        };
+        
+        const paymentInfo = {
+          transaction_amount: pedido.pedido_monto_total || 0,
+          id: pedido.mp_payment_id
+        };
+        
+        const resultado = await enviarNotificacionCompra(customerData, orderData, paymentInfo);
+        
+        // Actualizar estado según resultado
+        await actualizarEstadoWhatsApp(pedido.mp_payment_id, resultado.success);
+        
+        if (resultado.success) {
+          console.log(`[${timestamp}] ✅ Reintento exitoso para pedido: ${pedido.id_pedido}`);
+        } else {
+          console.log(`[${timestamp}] ❌ Reintento falló para pedido: ${pedido.id_pedido} - ${resultado.error}`);
+        }
+        
+        // Delay entre envíos para evitar spam
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error) {
+        console.error(`[${timestamp}] ❌ Error procesando pedido ${pedido.id_pedido}:`, error.message);
+      }
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en procesarNotificacionesPendientes:`, error.message);
+  }
+}
+
 // Función para actualizar el estado de notificación WhatsApp
 async function actualizarEstadoWhatsApp(paymentId, estado) {
   const timestamp = new Date().toISOString();
@@ -1326,23 +1556,22 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
       return { success: false, error: 'WhatsApp service no disponible' };
     }
 
-  // VERIFICACIÓN SIMPLIFICADA: Si WhatsApp está disponible, asumir que está listo
-  // Evitar verificaciones complejas que pueden interrumpir conexiones activas
-  let realClientState = 'ASSUMED_CONNECTED';
-  let clientReady = whatsappAvailable; // Si está disponible, asumir que está listo
+  // VERIFICACIÓN MEJORADA: Usar sistema de flags inteligente
+  const estadoWhatsApp = verificarEstadoWhatsApp();
   
-  console.log(`[${timestamp}] 🔍 Verificación simplificada en enviarNotificacionCompra:`);
-  console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-  console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
-  console.log(`[${timestamp}] - Estado asumido: ${realClientState}`);
-  console.log(`[${timestamp}] - Cliente listo: ${clientReady}`);
+  console.log(`[${timestamp}] 🔍 Verificación mejorada en enviarNotificacionCompra:`);
+  console.log(`[${timestamp}] - Disponible: ${estadoWhatsApp.disponible}`);
+  console.log(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
+  console.log(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
+  console.log(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
+  console.log(`[${timestamp}] - Tiempo desde última conexión: ${estadoWhatsApp.tiempoDesdeUltimaConexion}s`);
 
-  if (!clientReady) {
-    console.error(`[${timestamp}] ❌ WhatsApp no está listo para envío:`);
-    console.error(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
-    console.error(`[${timestamp}] - Estado real cliente: ${realClientState}`);
-    console.error(`[${timestamp}] - Cliente listo calculado: ${clientReady}`);
-    return { success: false, error: `WhatsApp no está listo. Flag: ${whatsappReady}, Estado: ${realClientState}` };
+  if (!estadoWhatsApp.disponible) {
+    console.error(`[${timestamp}] ❌ WhatsApp no está disponible:`);
+    console.error(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
+    console.error(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
+    console.error(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
+    return { success: false, error: `WhatsApp no disponible: ${estadoWhatsApp.razon}` };
   }
 
   if (!ADMIN_WHATSAPP) {
@@ -1478,12 +1707,19 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     }
     
     // Retornar resultado combinado
-    return {
+    const resultado = {
       success: resultAdmin.success,
       admin_result: resultAdmin,
       cliente_result: resultCliente,
       both_sent: resultAdmin.success && resultCliente.success
     };
+    
+    // Si el envío fue exitoso, marcar conexión como buena
+    if (resultado.success) {
+      marcarConexionExitosa();
+    }
+    
+    return resultado;
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ ERROR CRÍTICO en enviarNotificacionCompra:`, error.message);
@@ -1852,6 +2088,124 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
 });
 
 // ===============================
+// ENDPOINT TEMPORAL: Reintento manual de notificación WhatsApp
+// ===============================
+app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  const { paymentId } = req.params;
+  
+  console.log(`[${timestamp}] 🔄 === REINTENTO MANUAL WHATSAPP ===`);
+  console.log(`[${timestamp}] 📱 Payment ID: ${paymentId}`);
+  
+  try {
+    // Verificar estado de WhatsApp
+    const estadoWhatsApp = verificarEstadoWhatsApp();
+    console.log(`[${timestamp}] 📊 Estado WhatsApp: ${JSON.stringify(estadoWhatsApp, null, 2)}`);
+    
+    if (!estadoWhatsApp.disponible) {
+      return res.json({
+        success: false,
+        error: `WhatsApp no disponible: ${estadoWhatsApp.razon}`,
+        estado_whatsapp: estadoWhatsApp
+      });
+    }
+    
+    // Buscar la compra en la BD
+    const resultCompra = await executeQueryWithRetry(
+      pool,
+      `SELECT 
+        p.mp_payment_id, 
+        p.id_pedido, 
+        p.pedido_nombre_cliente, 
+        p.pedido_telefono_cliente,
+        p.pedido_monto_total,
+        p.pedido_fecha,
+        p.whatsapp_notificado,
+        p.estado
+       FROM productos p 
+       WHERE p.mp_payment_id = $1`,
+      [paymentId],
+      2
+    );
+    
+    if (!resultCompra || !resultCompra.rows || resultCompra.rows.length === 0) {
+      return res.json({
+        success: false,
+        error: 'Compra no encontrada',
+        payment_id: paymentId
+      });
+    }
+    
+    const compra = resultCompra.rows[0];
+    console.log(`[${timestamp}] 📦 Compra encontrada:`, {
+      id_pedido: compra.id_pedido,
+      cliente: compra.pedido_nombre_cliente,
+      whatsapp_notificado: compra.whatsapp_notificado,
+      estado: compra.estado
+    });
+    
+    // Preparar datos para envío
+    const customerData = {
+      first_name: compra.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
+      last_name: compra.pedido_nombre_cliente?.split(' ').slice(1).join(' ') || '',
+      phone: {
+        area_code: compra.pedido_telefono_cliente?.substring(2, 5) || '',
+        number: compra.pedido_telefono_cliente?.substring(5) || ''
+      }
+    };
+    
+    const orderData = {
+      numeroDisplay: compra.id_pedido?.slice(-2) || '??',
+      idPedidoCompleto: compra.id_pedido
+    };
+    
+    const paymentInfo = {
+      transaction_amount: compra.pedido_monto_total || 0,
+      id: paymentId
+    };
+    
+    console.log(`[${timestamp}] 📨 Intentando envío WhatsApp...`);
+    
+    // Enviar notificación
+    const resultado = await enviarNotificacionCompra(customerData, orderData, paymentInfo);
+    
+    console.log(`[${timestamp}] 📡 Resultado envío:`, {
+      success: resultado.success,
+      error: resultado.error
+    });
+    
+    // Actualizar estado en BD
+    const estadoAnterior = compra.whatsapp_notificado;
+    await actualizarEstadoWhatsApp(paymentId, resultado.success);
+    const estadoNuevo = resultado.success ? 'True' : 'False';
+    
+    console.log(`[${timestamp}] 💾 Estado actualizado: ${estadoAnterior} → ${estadoNuevo}`);
+    
+    res.json({
+      success: true,
+      reintento_exitoso: resultado.success,
+      payment_id: paymentId,
+      id_pedido: compra.id_pedido,
+      cliente: compra.pedido_nombre_cliente,
+      estado_anterior: estadoAnterior,
+      estado_nuevo: estadoNuevo,
+      resultado_envio: resultado,
+      timestamp: timestamp
+    });
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en reintento WhatsApp:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno en reintento',
+      message: error.message,
+      payment_id: paymentId,
+      timestamp: timestamp
+    });
+  }
+});
+
+// ===============================
 // ENDPOINT: LIMPIAR SESIONES WHATSAPP EN BD
 // ===============================
 app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
@@ -2019,6 +2373,31 @@ async function startServer() {
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       if (whatsappAvailable) {
         console.log(`📱 BUSCA EL CÓDIGO QR ARRIBA ☝️ PARA ESCANEAR`);
+      }
+      
+      // Iniciar sistema de reintentos de notificaciones WhatsApp
+      console.log(`🔄 Configurando sistema de reintentos WhatsApp...`);
+      
+      // Procesar notificaciones pendientes cada 3 minutos
+      setInterval(async () => {
+        try {
+          await procesarNotificacionesPendientes();
+        } catch (error) {
+          console.error('❌ Error en procesamiento automático de notificaciones:', error.message);
+        }
+      }, 3 * 60 * 1000); // 3 minutos
+      
+      // Procesar una vez al inicio (después de 30 segundos para que WhatsApp se estabilice)
+      setTimeout(async () => {
+        console.log('🔄 Procesamiento inicial de notificaciones pendientes...');
+        try {
+          await procesarNotificacionesPendientes();
+        } catch (error) {
+          console.error('❌ Error en procesamiento inicial:', error.message);
+        }
+      }, 30000); // 30 segundos
+      
+      if (whatsappAvailable) {
         console.log(`📲 Usa WhatsApp > Dispositivos Vinculados > Vincular`);
       }
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
