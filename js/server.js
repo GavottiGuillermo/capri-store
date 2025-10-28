@@ -2206,6 +2206,57 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
 });
 
 // ===============================
+// ENDPOINT TEMPORAL: Forzar reinicialización completa de WhatsApp
+// ===============================
+app.post('/whatsapp-force-restart', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  
+  console.log(`[${timestamp}] 🔥 === FORZAR REINICIO COMPLETO WHATSAPP ===`);
+  
+  try {
+    // 1. Limpiar sesión PostgreSQL
+    console.log(`[${timestamp}] 🧹 Paso 1: Limpiando sesión PostgreSQL...`);
+    await limpiarSesionPostgreSQL();
+    
+    // 2. Resetear contador QR
+    console.log(`[${timestamp}] 🔄 Paso 2: Reseteando contador QR...`);
+    await resetearContadorQR();
+    
+    // 3. Forzar reconexión
+    console.log(`[${timestamp}] 🔌 Paso 3: Forzando reconexión...`);
+    const reconexionResult = await forzarReconexion();
+    
+    // 4. Reinicializar WhatsApp
+    console.log(`[${timestamp}] 🚀 Paso 4: Reinicializando WhatsApp...`);
+    await inicializarWhatsApp();
+    
+    console.log(`[${timestamp}] ✅ Reinicio completo solicitado - Monitorear logs para QR`);
+    
+    res.json({
+      success: true,
+      message: 'Reinicio completo de WhatsApp iniciado',
+      pasos_ejecutados: [
+        'Limpieza sesión PostgreSQL',
+        'Reset contador QR', 
+        'Forzar reconexión',
+        'Reinicialización WhatsApp'
+      ],
+      instrucciones: 'Monitorear logs del servidor para ver el nuevo código QR',
+      timestamp: timestamp
+    });
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en reinicio completo:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Error en reinicio completo',
+      message: error.message,
+      timestamp: timestamp
+    });
+  }
+});
+
+// ===============================
 // ENDPOINT: LIMPIAR SESIONES WHATSAPP EN BD
 // ===============================
 app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
