@@ -958,6 +958,14 @@ function verificarEstadoWhatsApp() {
   const ultimaConexion = whatsappService.ultimaConexionExitosa || null;
   const tiempoDesdeUltimaConexion = ultimaConexion ? (ahora - ultimaConexion) / 1000 : Infinity;
   
+  // Debug detallado para entender el problema de timing
+  console.log(`🔍 DEBUG verificarEstadoWhatsApp:`, {
+    whatsappAvailable,
+    serviceReady,
+    ultimaConexion: ultimaConexion ? ultimaConexion.toISOString() : 'null',
+    tiempoDesdeUltimaConexion: tiempoDesdeUltimaConexion === Infinity ? 'Infinity' : `${tiempoDesdeUltimaConexion.toFixed(1)}s`
+  });
+  
   // Criterios para considerar WhatsApp disponible:
   // 1. Módulo cargado (whatsappAvailable = true)
   // 2. Flag listo (whatsappReady = true) O conexión exitosa reciente (< 5 minutos)
@@ -2017,15 +2025,29 @@ async function startServer() {
         }
       }, 3 * 60 * 1000); // 3 minutos
       
-      // Procesar una vez al inicio (después de 30 segundos para que WhatsApp se estabilice)
+      // Procesar una vez al inicio (después de 120 segundos para que WhatsApp se estabilice completamente)
       setTimeout(async () => {
         console.log('🔄 Procesamiento inicial de notificaciones pendientes...');
+        
+        // Doble verificación: esperar a que WhatsApp esté realmente listo
+        let intentos = 0;
+        while (intentos < 10) { // Máximo 10 intentos (50 segundos adicionales)
+          const estadoWhatsApp = verificarEstadoWhatsApp();
+          if (estadoWhatsApp.disponible) {
+            console.log('✅ WhatsApp confirmado disponible para procesamiento inicial');
+            break;
+          }
+          console.log(`⏳ Esperando WhatsApp... intento ${intentos + 1}/10 (${estadoWhatsApp.razon})`);
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
+          intentos++;
+        }
+        
         try {
           await procesarNotificacionesPendientes();
         } catch (error) {
           console.error('❌ Error en procesamiento inicial:', error.message);
         }
-      }, 30000); // 30 segundos
+      }, 2 * 60 * 1000); // 2 minutos para permitir completa inicialización
       
       if (whatsappAvailable) {
         console.log(`📲 Usa WhatsApp > Dispositivos Vinculados > Vincular`);
