@@ -1082,7 +1082,7 @@ async function procesarNotificacionesPendientes() {
         p.pedido_telefono_cliente,
         p.pedido_monto_total,
         p.pedido_fecha,
-        p.producto,
+        p.prenda,
         p.categoria,
         p.color,
         p.talle,
@@ -1131,7 +1131,7 @@ async function procesarNotificacionesPendientes() {
       
       // Agregar producto al pedido
       pedidosMap.get(paymentId).productos.push({
-        nombre: producto.producto,
+        nombre: producto.prenda,
         categoria: producto.categoria,
         color: producto.color,
         talle: producto.talle,
