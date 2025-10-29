@@ -1168,6 +1168,7 @@ async function procesarNotificacionesPendientes() {
         const customerData = {
           first_name: pedido.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
           last_name: pedido.pedido_nombre_cliente?.split(' ').slice(1).join(' ') || '',
+          telefono: pedido.pedido_telefono_cliente, // ✅ Usar directo de BD
           phone: {
             area_code: pedido.pedido_telefono_cliente?.substring(2, 5) || '',
             number: pedido.pedido_telefono_cliente?.substring(5) || ''
@@ -1312,10 +1313,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   const { first_name = '', last_name = '', phone } = customerData || {};
   const nombre = first_name;
   const apellido = last_name;
-  // Reconstruir teléfono desde estructura area_code/number o usar directo si es string
-  const telefono = phone ? 
-    (typeof phone === 'object' ? `${phone.area_code}${phone.number}` : phone) : 
-    customerData?.telefono || '';
+  // CORREGIDO: Usar teléfono completo de la base de datos en lugar de reconstruir
+  // El teléfono de la BD ya tiene el formato completo (ej: 5491165031329)
+  const telefono = customerData?.telefono || 
+    (phone ? 
+      (typeof phone === 'string' ? phone : `${phone.area_code}${phone.number}`) : 
+      '');
   
   const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
   const { transaction_amount = 0, id: paymentId = 'N/A' } = paymentInfo || {};
