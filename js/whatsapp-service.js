@@ -1,6 +1,7 @@
 ﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const PostgresAuthStrategy = require('./postgres-auth-strategy');
+const { marcarConexionExitosa } = require('./server');
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -216,6 +217,9 @@ if (usePostgresAuth) {
 whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
   whatsappReady = true;
+  
+  // Marcar conexión exitosa para verificación de disponibilidad
+  marcarConexionExitosa();
   
   // Verificar estado real
   try {
@@ -435,6 +439,20 @@ async function cleanup() {
 // Función para inicializar WhatsApp (simplificada sin Instance Lock)
 async function inicializarWhatsApp() {
   try {
+    // VALIDACIÓN PREVIA: Verificar si WhatsApp ya está conectado
+    if (whatsappReady && whatsappClient) {
+      try {
+        const state = await whatsappClient.getState();
+        if (state === 'CONNECTED') {
+          console.log('✅ WhatsApp ya está conectado - Saltando inicialización');
+          console.log(`🔗 Estado actual: ${state}`);
+          return;
+        }
+      } catch (stateError) {
+        console.log('⚠️ Error verificando estado, continuando con inicialización:', stateError.message);
+      }
+    }
+    
     console.log('🚀 Inicializando WhatsApp Business...');
     
     console.log('📱 Inicializando cliente WhatsApp con PostgreSQL session persistence...');

@@ -1958,6 +1958,17 @@ async function startServer() {
     // Inicializar WhatsApp si está disponible
     if (whatsappAvailable) {
       console.log('📱 Inicializando servicio WhatsApp...');
+      
+      // Detectar reinicios y verificar estado previo
+      const ahora = new Date();
+      const tiempoDesdeUltimaConexion = ultimaConexionWhatsApp ? 
+        Math.floor((ahora - ultimaConexionWhatsApp) / 1000) : 999;
+      
+      if (ultimaConexionWhatsApp && tiempoDesdeUltimaConexion < 300) {
+        console.log(`⚡ REINICIO DETECTADO: Última conexión hace ${tiempoDesdeUltimaConexion}s`);
+        console.log('🔍 Validando estado de WhatsApp antes de reconectar...');
+      }
+      
       try {
         await inicializarWhatsApp();
         console.log('✅ WhatsApp service inicializado (esperando autenticación)');
@@ -1974,10 +1985,12 @@ async function startServer() {
     setupMemoryOptimization();
     
     // Iniciar servidor siempre, independientemente de otros servicios
-    server = app.listen(PORT, () => {
+    const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+    server = app.listen(PORT, HOST, () => {
       console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
       console.log(`🚀 Capri Store API escuchando en puerto ${PORT}`);
-      console.log(`🌐 URL: http://localhost:${PORT}`);
+      console.log(`🌐 Host: ${HOST}:${PORT}`);
+      console.log(`🌐 URL: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
       
       // Estado de WhatsApp más preciso
       if (whatsappAvailable) {
@@ -2027,8 +2040,10 @@ async function startServer() {
     
     // Intentar iniciar servidor básico aunque haya errores
     try {
-      server = app.listen(PORT, () => {
+      const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+      server = app.listen(PORT, HOST, () => {
         console.log(`🚨 Servidor en modo de emergencia en puerto ${PORT}`);
+        console.log(`🌐 Host: ${HOST}:${PORT}`);
         console.log(`⚠️ Algunos servicios pueden no estar disponibles`);
       });
     } catch (criticalError) {
@@ -2039,3 +2054,8 @@ async function startServer() {
 }
 
 startServer();
+
+// Exportar función para uso en whatsapp-service.js
+module.exports = {
+  marcarConexionExitosa
+};
