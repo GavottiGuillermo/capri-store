@@ -185,9 +185,15 @@ if (usePostgresAuth) {
   // DIAGNÓSTICO: Verificar manualmente si hay sesión
   (async function diagnosticarSesion() {
     try {
-      console.log('🔍 DIAGNÓSTICO: Verificando existencia de sesión manualmente...');
+      console.log('🔍 DIAGNÓSTICO: Verificando existencia de sesión inicial en PostgreSQL...');
       const sessionExists = await authStrategy.store.sessionExists();
-      console.log('📊 DIAGNÓSTICO: Sesión existe:', sessionExists);
+      console.log('📊 DIAGNÓSTICO: Sesión existente al iniciar:', sessionExists ? '✅ SÍ' : '❌ NO');
+      
+      if (sessionExists) {
+        console.log('🎉 ¡Hay sesión guardada! WhatsApp debería conectar automáticamente');
+      } else {
+        console.log('⚠️ No hay sesión previa - Se necesitará escanear QR');
+      }
       
       if (sessionExists) {
         console.log('🔍 DIAGNÓSTICO: Intentando extraer sesión...');
@@ -227,14 +233,14 @@ whatsappClient.on('ready', async () => {
     
     if (usePostgresAuth) {
       console.log('✅ SESIÓN PERSISTENTE ACTIVADA - No necesitarás escanear QR en próximos deploys');
-      console.log('⏰ RemoteAuth esperará 60 segundos antes del primer guardado (sesión debe estabilizarse)');
-      console.log('💾 Después del primer guardado, se sincronizará automáticamente cada 2 minutos');
+      console.log('⏰ RemoteAuth guarda automáticamente cada 2 minutos después del primer guardado');
+      console.log('� IMPORTANTE: La sesión se guarda ~2 minutos después de la conexión exitosa');
       console.log('🔄 Próximos reinicios recuperarán esta sesión sin QR');
       
-      // Programar verificación de sesión después de 65 segundos
+      // Programar verificación de sesión después de 130 segundos (después del guardado automático)
       setTimeout(async () => {
         try {
-          console.log('\n⏰ === VERIFICACIÓN POST-GUARDADO (después de 65 seg) ===');
+          console.log('\n⏰ === VERIFICACIÓN POST-GUARDADO (después de 130 seg) ===');
           const exists = await authStrategy.store.sessionExists();
           if (exists) {
             console.log('✅ ¡SESIÓN GUARDADA EXITOSAMENTE EN POSTGRESQL!');
@@ -250,13 +256,13 @@ whatsappClient.on('ready', async () => {
               }
             }
           } else {
-            console.warn('⚠️ Sesión aún no guardada - Esperando próximo ciclo (2 min)');
+            console.warn('⚠️ Sesión aún no guardada - Revisar configuración PostgreSQL');
           }
           console.log('⏰ ======================================\n');
         } catch (error) {
           console.error('❌ Error verificando sesión:', error.message);
         }
-      }, 65000);
+      }, 130000); // 130 segundos = 2 min 10 seg
     }
     
     // En Render, programar verificación periódica y limpieza de memoria
