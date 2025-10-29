@@ -14,6 +14,14 @@ const MAX_QR_ATTEMPTS = 5; // Resetear a límite normal después de fix
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
 
+// Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
+let onWhatsAppReadyCallback = null;
+
+// Función para configurar el callback
+function setOnWhatsAppReadyCallback(callback) {
+  onWhatsAppReadyCallback = callback;
+}
+
 // Función para marcar conexión exitosa (local para evitar dependencia circular)
 function marcarConexionExitosa() {
   ultimaConexionExitosa = new Date();
@@ -232,6 +240,18 @@ whatsappClient.on('ready', async () => {
   // Marcar conexión exitosa para verificación de disponibilidad
   console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
   marcarConexionExitosa();
+  
+  // Procesar notificaciones pendientes en background
+  if (onWhatsAppReadyCallback) {
+    console.log('🔄 Ejecutando callback para notificaciones pendientes...');
+    setImmediate(() => {
+      try {
+        onWhatsAppReadyCallback();
+      } catch (error) {
+        console.error('❌ Error en callback de notificaciones pendientes:', error);
+      }
+    });
+  }
   
   // Verificar estado real
   try {
@@ -1094,6 +1114,7 @@ module.exports = {
   sincronizarEstadoWhatsApp,
   forzarGuardadoSesion,
   marcarConexionExitosa,
+  setOnWhatsAppReadyCallback,
   ultimaConexionExitosa,
   whatsappReady,
   ADMIN_WHATSAPP,

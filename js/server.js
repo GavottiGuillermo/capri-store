@@ -13,6 +13,13 @@ try {
   whatsappService = require('./whatsapp-service');
   whatsappAvailable = true;
   console.log('📱 Servicio WhatsApp cargado correctamente');
+  
+  // Configurar callback para procesar notificaciones pendientes cuando WhatsApp se conecte
+  whatsappService.setOnWhatsAppReadyCallback(async () => {
+    console.log('🔄 WhatsApp conectado - procesando notificaciones pendientes...');
+    await procesarNotificacionesPendientes();
+  });
+  
 } catch (error) {
   console.error('⚠️ WhatsApp service no disponible:', error.message);
   console.log('� Modo básico: WhatsApp no estará disponible para notificaciones');
@@ -1078,15 +1085,18 @@ async function procesarNotificacionesPendientes() {
        FROM productos p 
        WHERE p.estado LIKE '%Pendiente%' 
        AND p.whatsapp_notificado = 'False'
-       AND p.pedido_fecha >= NOW() - INTERVAL '2 hours'
+       AND p.pedido_fecha >= NOW() - INTERVAL '24 hours'
        ORDER BY p.pedido_fecha ASC 
        LIMIT 5`,
       [],
       2
     );
     
+    console.log(`[${timestamp}] 🔍 DEBUG: Query ejecutada para notificaciones pendientes`);
+    console.log(`[${timestamp}] 🔍 Resultado query:`, resultPendientes?.rows?.length || 0, 'registros encontrados');
+    
     if (!resultPendientes || !resultPendientes.rows || resultPendientes.rows.length === 0) {
-      console.log(`[${timestamp}] ✅ No hay notificaciones WhatsApp pendientes`);
+      console.log(`[${timestamp}] ✅ No hay notificaciones WhatsApp pendientes (últimas 24h)`);
       return;
     }
     
