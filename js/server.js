@@ -1086,14 +1086,14 @@ async function procesarNotificacionesPendientes() {
         p.categoria,
         p.color,
         p.talle,
-        p.precio_unitario,
-        p.cantidad,
+        p.precio_venta_efectivo,
+        p.precio_venta_transferencia,
         p.pedido_tipo_entrega
        FROM productos p 
        WHERE p.estado LIKE '%Pendiente%' 
        AND p.whatsapp_notificado = 'False'
        AND p.pedido_fecha >= NOW() - INTERVAL '24 hours'
-       ORDER BY p.pedido_fecha ASC, p.mp_payment_id, p.id 
+       ORDER BY p.pedido_fecha ASC, p.mp_payment_id, p.id_articulo 
        LIMIT 20`,
       [],
       2
@@ -1135,17 +1135,35 @@ async function procesarNotificacionesPendientes() {
         categoria: producto.categoria,
         color: producto.color,
         talle: producto.talle,
-        precio_unitario: producto.precio_unitario,
-        cantidad: producto.cantidad
+        precio_efectivo: producto.precio_venta_efectivo,
+        precio_transferencia: producto.precio_venta_transferencia,
+        cantidad: 1 // Cada fila es un producto individual
       });
     }
     
     console.log(`[${timestamp}] 📋 Agrupados en ${pedidosMap.size} pedidos únicos`);
     
+    // Agrupar productos idénticos y contar cantidad
+    for (const pedido of pedidosMap.values()) {
+      const productosAgrupados = new Map();
+      
+      for (const prod of pedido.productos) {
+        const key = `${prod.nombre}-${prod.color}-${prod.talle}`;
+        
+        if (productosAgrupados.has(key)) {
+          productosAgrupados.get(key).cantidad++;
+        } else {
+          productosAgrupados.set(key, { ...prod });
+        }
+      }
+      
+      pedido.productos = Array.from(productosAgrupados.values());
+    }
+    
     // Procesar cada pedido agrupado
     for (const pedido of pedidosMap.values()) {
       try {
-        console.log(`[${timestamp}] 🔄 Reintentando notificación para pedido: ${pedido.id_pedido} (${pedido.productos.length} productos)`);
+        console.log(`[${timestamp}] 🔄 Reintentando notificación para pedido: ${pedido.id_pedido} (${pedido.productos.length} productos únicos)`);
         
         const customerData = {
           first_name: pedido.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
@@ -1171,7 +1189,7 @@ async function procesarNotificacionesPendientes() {
               category_id: prod.categoria,
               description: `${prod.nombre} - ${prod.color} - Talle ${prod.talle}`,
               quantity: prod.cantidad,
-              unit_price: prod.precio_unitario,
+              unit_price: prod.precio_transferencia || prod.precio_efectivo || 0,
               type: 'product'
             }))
           },
