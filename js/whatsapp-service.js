@@ -16,6 +16,8 @@ let ultimaConexionExitosa = null;
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
+let lastCallbackExecution = 0;
+const CALLBACK_DEBOUNCE_MS = 30000; // 30 segundos entre ejecuciones
 
 // Función para configurar el callback
 function setOnWhatsAppReadyCallback(callback) {
@@ -241,16 +243,22 @@ whatsappClient.on('ready', async () => {
   console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
   marcarConexionExitosa();
   
-  // Procesar notificaciones pendientes en background
+  // Procesar notificaciones pendientes en background (con debounce)
   if (onWhatsAppReadyCallback) {
-    console.log('🔄 Ejecutando callback para notificaciones pendientes...');
-    setImmediate(() => {
-      try {
-        onWhatsAppReadyCallback();
-      } catch (error) {
-        console.error('❌ Error en callback de notificaciones pendientes:', error);
-      }
-    });
+    const now = Date.now();
+    if (now - lastCallbackExecution > CALLBACK_DEBOUNCE_MS) {
+      lastCallbackExecution = now;
+      console.log('🔄 Ejecutando callback para notificaciones pendientes...');
+      setImmediate(() => {
+        try {
+          onWhatsAppReadyCallback();
+        } catch (error) {
+          console.error('❌ Error en callback de notificaciones pendientes:', error);
+        }
+      });
+    } else {
+      console.log('⏳ Callback omitido - ejecutado recientemente (debounce)');
+    }
   }
   
   // Verificar estado real

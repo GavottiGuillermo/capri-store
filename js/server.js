@@ -1232,16 +1232,25 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
 
   console.log(`[${timestamp}] 📋 Datos de la compra:`);
     
-    // Extraer datos con valores por defecto seguros
-    const { nombre = '', apellido = '', telefono = '' } = customerData || {};
-    const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
-    const { transaction_amount = 0, id: paymentId = 'N/A' } = paymentInfo || {};
-    
-    console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
-    console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
-    console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
-    console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
-    console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
+  // Extraer datos con valores por defecto seguros
+  const { first_name = '', last_name = '', phone } = customerData || {};
+  const nombre = first_name;
+  const apellido = last_name;
+  // Reconstruir teléfono desde estructura area_code/number o usar directo si es string
+  const telefono = phone ? 
+    (typeof phone === 'object' ? `${phone.area_code}${phone.number}` : phone) : 
+    customerData?.telefono || '';
+  
+  const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
+  const { transaction_amount = 0, id: paymentId = 'N/A' } = paymentInfo || {};
+  
+  console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
+  console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
+  console.log(`[${timestamp}] - Teléfono RAW:`, phone);
+  console.log(`[${timestamp}] - CustomerData completo:`, customerData);
+  console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
+  console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
+  console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
     
     const fechaHora = new Date().toLocaleString('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
