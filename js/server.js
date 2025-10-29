@@ -1183,7 +1183,7 @@ async function procesarNotificacionesPendientes() {
           }
         };
         
-        const resultado = await enviarNotificacionCompra(customerData, orderData, paymentInfo);
+        const resultado = await enviarNotificacionCompra(customerData, orderData, paymentInfo, true);
         
         // Actualizar estado según resultado
         await actualizarEstadoWhatsApp(pedido.mp_payment_id, resultado.success);
@@ -1233,7 +1233,7 @@ async function actualizarEstadoWhatsApp(paymentId, estado) {
   }
 }
 
-async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
+async function enviarNotificacionCompra(customerData, orderData, paymentInfo, esReintento = false) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] 🔔 === INICIANDO NOTIFICACIÓN DE COMPRA ===`);
   
@@ -1328,14 +1328,26 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     
     let productosTexto = '';
     if (Array.isArray(items) && items.length > 0) {
-      productosTexto = items.map((item, index) => {
-        const title = item?.title || 'Producto sin nombre';
-        const quantity = item?.quantity || 1;
-        const unit_price = item?.unit_price || 0;
-        
-        console.log(`[${timestamp}] - Item ${index + 1}: ${title} x${quantity} - $${unit_price}`);
-        return `• ${title} x${quantity} - $${unit_price.toLocaleString('es-AR')}`;
-      }).join('\n');
+      if (esReintento) {
+        // Para reintentos: solo mostrar nombres de productos
+        productosTexto = items.map((item, index) => {
+          const title = item?.title || 'Producto sin nombre';
+          const quantity = item?.quantity || 1;
+          
+          console.log(`[${timestamp}] - Item ${index + 1}: ${title} x${quantity} (reintento simplificado)`);
+          return quantity > 1 ? `• ${title} (${quantity})` : `• ${title}`;
+        }).join('\n');
+      } else {
+        // Para compras nuevas: mostrar información completa
+        productosTexto = items.map((item, index) => {
+          const title = item?.title || 'Producto sin nombre';
+          const quantity = item?.quantity || 1;
+          const unit_price = item?.unit_price || 0;
+          
+          console.log(`[${timestamp}] - Item ${index + 1}: ${title} x${quantity} - $${unit_price}`);
+          return `• ${title} x${quantity} - $${unit_price.toLocaleString('es-AR')}`;
+        }).join('\n');
+      }
     } else {
       console.log(`[${timestamp}] ⚠️ No se encontraron items válidos en paymentInfo`);
       productosTexto = '• Información de productos no disponible';
@@ -1381,10 +1393,13 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
       console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador:`, resultAdmin.error);
     }
     
-    // 2. ENVIAR CONFIRMACIÓN AL CLIENTE
+    // 2. ENVIAR CONFIRMACIÓN AL CLIENTE (solo en compras nuevas, no en reintentos)
     let resultCliente = { success: false, error: 'No se intentó enviar' };
     
-    if (telefono && telefono.trim()) {
+    if (esReintento) {
+      console.log(`[${timestamp}] ⏭️ Reintento: NO enviando confirmación al cliente (evitar spam)`);
+      resultCliente = { success: true, error: null, skipped: true };
+    } else if (telefono && telefono.trim()) {
       console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
       
       // Mensaje para el cliente
