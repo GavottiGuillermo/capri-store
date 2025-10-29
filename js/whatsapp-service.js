@@ -226,9 +226,11 @@ if (usePostgresAuth) {
 
 whatsappClient.on('ready', async () => {
   const timestamp = new Date().toLocaleString('es-AR');
+  console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
   whatsappReady = true;
   
   // Marcar conexión exitosa para verificación de disponibilidad
+  console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
   marcarConexionExitosa();
   
   // Verificar estado real
@@ -334,6 +336,10 @@ whatsappClient.on('ready', async () => {
 
 whatsappClient.on('authenticated', () => {
   console.log('🔐 WhatsApp autenticado correctamente');
+  
+  // FALLBACK: Marcar conexión exitosa aquí también por si 'ready' no se dispara
+  console.log('🎯 FALLBACK: Marcando conexión desde evento authenticated');
+  marcarConexionExitosa();
 });
 
 whatsappClient.on('auth_failure', (msg) => {
