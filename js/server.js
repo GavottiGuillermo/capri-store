@@ -1081,13 +1081,20 @@ async function procesarNotificacionesPendientes() {
         p.pedido_nombre_cliente, 
         p.pedido_telefono_cliente,
         p.pedido_monto_total,
-        p.pedido_fecha
+        p.pedido_fecha,
+        p.producto_nombre,
+        p.producto_categoria,
+        p.producto_color,
+        p.producto_talle,
+        p.precio_unitario,
+        p.cantidad,
+        p.pedido_tipo_entrega
        FROM productos p 
        WHERE p.estado LIKE '%Pendiente%' 
        AND p.whatsapp_notificado = 'False'
        AND p.pedido_fecha >= NOW() - INTERVAL '24 hours'
-       ORDER BY p.pedido_fecha ASC 
-       LIMIT 5`,
+       ORDER BY p.pedido_fecha ASC, p.mp_payment_id, p.id 
+       LIMIT 20`,
       [],
       2
     );
@@ -1100,11 +1107,45 @@ async function procesarNotificacionesPendientes() {
       return;
     }
     
-    console.log(`[${timestamp}] 📬 Procesando ${resultPendientes.rows.length} notificaciones pendientes...`);
+    console.log(`[${timestamp}] 📬 Procesando ${resultPendientes.rows.length} productos de notificaciones pendientes...`);
     
-    for (const pedido of resultPendientes.rows) {
+    // Agrupar productos por mp_payment_id para construir pedidos completos
+    const pedidosMap = new Map();
+    
+    for (const producto of resultPendientes.rows) {
+      const paymentId = producto.mp_payment_id;
+      
+      if (!pedidosMap.has(paymentId)) {
+        // Crear nuevo pedido
+        pedidosMap.set(paymentId, {
+          mp_payment_id: producto.mp_payment_id,
+          id_pedido: producto.id_pedido,
+          pedido_nombre_cliente: producto.pedido_nombre_cliente,
+          pedido_telefono_cliente: producto.pedido_telefono_cliente,
+          pedido_monto_total: producto.pedido_monto_total,
+          pedido_fecha: producto.pedido_fecha,
+          pedido_tipo_entrega: producto.pedido_tipo_entrega,
+          productos: []
+        });
+      }
+      
+      // Agregar producto al pedido
+      pedidosMap.get(paymentId).productos.push({
+        nombre: producto.producto_nombre,
+        categoria: producto.producto_categoria,
+        color: producto.producto_color,
+        talle: producto.producto_talle,
+        precio_unitario: producto.precio_unitario,
+        cantidad: producto.cantidad
+      });
+    }
+    
+    console.log(`[${timestamp}] 📋 Agrupados en ${pedidosMap.size} pedidos únicos`);
+    
+    // Procesar cada pedido agrupado
+    for (const pedido of pedidosMap.values()) {
       try {
-        console.log(`[${timestamp}] 🔄 Reintentando notificación para pedido: ${pedido.id_pedido}`);
+        console.log(`[${timestamp}] 🔄 Reintentando notificación para pedido: ${pedido.id_pedido} (${pedido.productos.length} productos)`);
         
         const customerData = {
           first_name: pedido.pedido_nombre_cliente?.split(' ')[0] || 'Cliente',
@@ -1122,7 +1163,24 @@ async function procesarNotificacionesPendientes() {
         
         const paymentInfo = {
           transaction_amount: pedido.pedido_monto_total || 0,
-          id: pedido.mp_payment_id
+          id: pedido.mp_payment_id,
+          additional_info: {
+            items: pedido.productos.map(prod => ({
+              id: `${prod.categoria}-${prod.nombre}`.replace(/\s+/g, '-').toLowerCase(),
+              title: prod.nombre,
+              category_id: prod.categoria,
+              description: `${prod.nombre} - ${prod.color} - Talle ${prod.talle}`,
+              quantity: prod.cantidad,
+              unit_price: prod.precio_unitario,
+              type: 'product'
+            }))
+          },
+          // Simular estructura de payer para compatibilidad
+          payer: {
+            first_name: customerData.first_name,
+            last_name: customerData.last_name,
+            phone: customerData.phone
+          }
         };
         
         const resultado = await enviarNotificacionCompra(customerData, orderData, paymentInfo);
