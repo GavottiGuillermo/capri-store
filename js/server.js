@@ -950,21 +950,37 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 let intentosReconexion = 0;
 
 // Función mejorada para verificar si WhatsApp está realmente disponible
-function verificarEstadoWhatsApp() {
+async function verificarEstadoWhatsApp() {
   const ahora = new Date();
   
-  // Obtener estado actual del whatsapp-service (variables correctas)
-  const serviceReady = whatsappService.whatsappReady || false;
-  const ultimaConexion = whatsappService.ultimaConexionExitosa || null;
-  const tiempoDesdeUltimaConexion = ultimaConexion ? (ahora - ultimaConexion) / 1000 : Infinity;
+  // Obtener estado dinámico del whatsapp-service (funciones en lugar de variables)
+  let serviceReady = false;
+  let ultimaConexion = null;
   
-  // Debug detallado para entender el problema de timing
-  console.log(`🔍 DEBUG verificarEstadoWhatsApp:`, {
-    whatsappAvailable,
-    serviceReady,
-    ultimaConexion: ultimaConexion ? ultimaConexion.toISOString() : 'null',
-    tiempoDesdeUltimaConexion: tiempoDesdeUltimaConexion === Infinity ? 'Infinity' : `${tiempoDesdeUltimaConexion.toFixed(1)}s`
-  });
+  try {
+    // Obtener estado real del cliente WhatsApp
+    const whatsappStatus = await whatsappService.getWhatsAppStatus();
+    serviceReady = whatsappStatus.whatsapp_ready || false;
+    
+    // Usar la variable del servicio si está disponible
+    ultimaConexion = whatsappService.ultimaConexionExitosa || null;
+    
+    console.log(`🔍 DEBUG DETALLADO:`, {
+      whatsappAvailable,
+      serviceReady,
+      clientState: whatsappStatus.client_state,
+      isReady: whatsappStatus.isReady,
+      ultimaConexionFromService: ultimaConexion ? ultimaConexion.toISOString() : 'null'
+    });
+    
+  } catch (error) {
+    console.log(`⚠️ Error obteniendo estado dinámico:`, error.message);
+    // Fallback a variables originales
+    serviceReady = whatsappService.whatsappReady || false;
+    ultimaConexion = whatsappService.ultimaConexionExitosa || null;
+  }
+  
+  const tiempoDesdeUltimaConexion = ultimaConexion ? (ahora - ultimaConexion) / 1000 : Infinity;
   
   // Criterios para considerar WhatsApp disponible:
   // 1. Módulo cargado (whatsappAvailable = true)
@@ -990,7 +1006,7 @@ async function procesarNotificacionesPendientes() {
   
   try {
     // Verificar si WhatsApp está disponible
-    const estadoWhatsApp = verificarEstadoWhatsApp();
+    const estadoWhatsApp = await verificarEstadoWhatsApp();
     if (!estadoWhatsApp.disponible) {
       console.log(`[${timestamp}] ⏭️ WhatsApp no disponible para reintentos: ${estadoWhatsApp.razon}`);
       return;
@@ -2032,7 +2048,7 @@ async function startServer() {
         // Doble verificación: esperar a que WhatsApp esté realmente listo
         let intentos = 0;
         while (intentos < 10) { // Máximo 10 intentos (50 segundos adicionales)
-          const estadoWhatsApp = verificarEstadoWhatsApp();
+          const estadoWhatsApp = await verificarEstadoWhatsApp();
           if (estadoWhatsApp.disponible) {
             console.log('✅ WhatsApp confirmado disponible para procesamiento inicial');
             break;
