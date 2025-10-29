@@ -464,6 +464,7 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
         timestamp: resultado.timestamp
       });
     } else {
+
       console.log('❌ Error en limpieza:', resultado.error);
       res.status(500).json({
         success: false,
@@ -1197,7 +1198,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     }
 
   // VERIFICACIÓN MEJORADA: Usar sistema de flags inteligente
-  const estadoWhatsApp = verificarEstadoWhatsApp();
+  const estadoWhatsApp = await verificarEstadoWhatsApp();
   
   console.log(`[${timestamp}] 🔍 Verificación mejorada en enviarNotificacionCompra:`);
   console.log(`[${timestamp}] - Disponible: ${estadoWhatsApp.disponible}`);
@@ -1354,9 +1355,18 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
       both_sent: resultAdmin.success && resultCliente.success
     };
     
-    // Si el envío fue exitoso, marcar conexión como buena
+    // Si el envío fue exitoso, marcar conexión como buena y procesar pendientes
     if (resultado.success) {
       whatsappService.marcarConexionExitosa();
+      
+      // Procesar notificaciones pendientes en background
+      setImmediate(async () => {
+        try {
+          await procesarNotificacionesPendientes();
+        } catch (error) {
+          console.error('Error procesando notificaciones pendientes:', error);
+        }
+      });
     }
     
     return resultado;
@@ -1377,7 +1387,8 @@ app.post('/webhook', async (req, res) => {
   let shouldProcess = false;
 
   console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO:`);
-  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
+  // Headers omitidos para reducir logs - solo mostrar info relevante
+  console.log(`[${timestamp}] User-Agent: ${req.headers['user-agent']}`);
   console.log(`[${timestamp}] Body:`, JSON.stringify(req.body, null, 2));
 
   try {
@@ -1739,7 +1750,7 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
   
   try {
     // Verificar estado de WhatsApp
-    const estadoWhatsApp = verificarEstadoWhatsApp();
+    const estadoWhatsApp = await verificarEstadoWhatsApp();
     console.log(`[${timestamp}] 📊 Estado WhatsApp: ${JSON.stringify(estadoWhatsApp, null, 2)}`);
     
     if (!estadoWhatsApp.disponible) {
