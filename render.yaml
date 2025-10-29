@@ -6,7 +6,7 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
-    autoDeploy: true
+    autoDeploy: false  # ✅ DESACTIVADO - Solo deploy manual para evitar reinicios no deseados
     # FORZAR UNA SOLA INSTANCIA - CRÍTICO
     numInstances: 1
     scaling:
@@ -14,12 +14,12 @@ services:
       maxInstances: 1
     # Desactivar optimizaciones que causan múltiples instancias
     startOptimized: false
-    # Health check configuración - REDUCIDA FRECUENCIA
+    # Health check configuración - OPTIMIZADA para estabilidad
     healthCheckPath: /health
     healthCheckTimeout: 60
     healthCheckGracePeriod: 300
-    healthCheckInterval: 300
-    startTimeout: 180
+    healthCheckInterval: 600  # ✅ Cada 10 minutos (era 5 min)
+    startTimeout: 300  # ✅ Más tiempo para inicializar WhatsApp
     # Deploy sin zero-downtime para evitar instancias simultáneas
     zeroDowntimeDeployment: false
     envVars:
