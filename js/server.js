@@ -1082,10 +1082,10 @@ async function procesarNotificacionesPendientes() {
         p.pedido_telefono_cliente,
         p.pedido_monto_total,
         p.pedido_fecha,
-        p.producto_nombre,
-        p.producto_categoria,
-        p.producto_color,
-        p.producto_talle,
+        p.producto,
+        p.categoria,
+        p.color,
+        p.talle,
         p.precio_unitario,
         p.cantidad,
         p.pedido_tipo_entrega
@@ -1131,10 +1131,10 @@ async function procesarNotificacionesPendientes() {
       
       // Agregar producto al pedido
       pedidosMap.get(paymentId).productos.push({
-        nombre: producto.producto_nombre,
-        categoria: producto.producto_categoria,
-        color: producto.producto_color,
-        talle: producto.producto_talle,
+        nombre: producto.producto,
+        categoria: producto.categoria,
+        color: producto.color,
+        talle: producto.talle,
         precio_unitario: producto.precio_unitario,
         cantidad: producto.cantidad
       });
