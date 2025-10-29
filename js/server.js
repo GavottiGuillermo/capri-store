@@ -1376,16 +1376,37 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     
     // Mensaje para administrador
     const businessName = BUSINESS_NAME || 'Tienda Online';
-    const mensajeAdmin = `🛒 *NUEVA COMPRA - ${businessName}* 🛒\n\n` +
+    
+    // Mensaje base para el admin
+    let mensajeAdmin = `🛒 *NUEVA COMPRA - ${businessName}* 🛒\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
-      ` *Teléfono:* ${telefono || 'No proporcionado'}\n` +
+      `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
       `🛍️ *Productos:*\n${productosTexto}\n\n` +
       `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n` +
-      `🆔 *Pedido:* ${numeroDisplay || idPedidoCompleto}\n` +
+      `🆔 *Pedido:* ${idPedidoCompleto}\n` +
       `💳 *Pago ID:* ${paymentId}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `✅ *¡Pago confirmado! Proceder con el envío*`;
+    
+    // Si es reintento, agregar instrucciones para enviar al cliente
+    if (esReintento && telefono && telefono.trim()) {
+      const mensajeParaCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
+        `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
+        `📋 *Detalles de tu pedido:*\n` +
+        `🆔 *Número:* ${idPedidoCompleto}\n` +
+        `📅 *Fecha:* ${fechaHora}\n` +
+        `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
+        `🛍️ *Productos:*\n${productosTexto}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📞 *Te contactaremos pronto para coordinar la entrega*\n\n` +
+        `¡Gracias por elegirnos! 💜`;
+      
+      mensajeAdmin += `\n\n🔄 *REINTENTO - ENVIAR MANUALMENTE AL CLIENTE:*\n` +
+        `📱 *Enviar a:* ${telefono}\n\n` +
+        `📝 *Mensaje para copiar y pegar:*\n` +
+        `${mensajeParaCliente}`;
+    }
     
     console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
     console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
@@ -1427,7 +1448,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
         `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
         `📋 *Detalles de tu pedido:*\n` +
-        `🆔 *Número:* ${numeroDisplay || idPedidoCompleto}\n` +
+        `🆔 *Número:* ${idPedidoCompleto}\n` +
         `📅 *Fecha:* ${fechaHora}\n` +
         `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
         `🛍️ *Productos:*\n${productosTexto}\n\n` +
