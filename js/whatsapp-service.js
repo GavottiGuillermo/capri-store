@@ -1,7 +1,6 @@
 ﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const PostgresAuthStrategy = require('./postgres-auth-strategy');
-const { marcarConexionExitosa } = require('./server');
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -11,6 +10,15 @@ let whatsappReady = false;
 let qrGenerated = false;
 let qrAttempts = 0;
 const MAX_QR_ATTEMPTS = 5; // Resetear a límite normal después de fix
+
+// Variables para tracking de conexión (evitar dependencia circular)
+let ultimaConexionExitosa = null;
+
+// Función para marcar conexión exitosa (local para evitar dependencia circular)
+function marcarConexionExitosa() {
+  ultimaConexionExitosa = new Date();
+  whatsappReady = true;
+}
 
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
 
@@ -1040,6 +1048,7 @@ module.exports = {
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
   forzarGuardadoSesion,
+  marcarConexionExitosa,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME,

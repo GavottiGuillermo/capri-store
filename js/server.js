@@ -973,12 +973,6 @@ function verificarEstadoWhatsApp() {
 }
 
 // Función para marcar conexión exitosa
-function marcarConexionExitosa() {
-  ultimaConexionExitosa = new Date();
-  intentosReconexion = 0;
-  console.log(`[${new Date().toISOString()}] ✅ Conexión WhatsApp exitosa marcada`);
-}
-
 // Función para procesar notificaciones pendientes
 async function procesarNotificacionesPendientes() {
   const timestamp = new Date().toISOString();
@@ -1283,7 +1277,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo) {
     
     // Si el envío fue exitoso, marcar conexión como buena
     if (resultado.success) {
-      marcarConexionExitosa();
+      whatsappService.marcarConexionExitosa();
     }
     
     return resultado;
@@ -1961,10 +1955,10 @@ async function startServer() {
       
       // Detectar reinicios y verificar estado previo
       const ahora = new Date();
-      const tiempoDesdeUltimaConexion = ultimaConexionWhatsApp ? 
-        Math.floor((ahora - ultimaConexionWhatsApp) / 1000) : 999;
+      const tiempoDesdeUltimaConexion = ultimaConexionExitosa ? 
+        Math.floor((ahora - ultimaConexionExitosa) / 1000) : 999;
       
-      if (ultimaConexionWhatsApp && tiempoDesdeUltimaConexion < 300) {
+      if (ultimaConexionExitosa && tiempoDesdeUltimaConexion < 300) {
         console.log(`⚡ REINICIO DETECTADO: Última conexión hace ${tiempoDesdeUltimaConexion}s`);
         console.log('🔍 Validando estado de WhatsApp antes de reconectar...');
       }
@@ -2054,8 +2048,3 @@ async function startServer() {
 }
 
 startServer();
-
-// Exportar función para uso en whatsapp-service.js
-module.exports = {
-  marcarConexionExitosa
-};
