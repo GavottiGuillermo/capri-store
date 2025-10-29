@@ -432,6 +432,58 @@ app.get('/whatsapp-status', async (req, res) => {
   }
 });
 
+// === REGENERAR QR DE WHATSAPP ===
+app.get('/whatsapp-regenerar-qr', async (req, res) => {
+  console.log('🔄 Solicitud de regeneración de QR desde:', req.ip);
+  
+  try {
+    if (!whatsappAvailable) {
+      return res.status(503).json({
+        success: false,
+        error: 'WhatsApp service no disponible',
+        message: 'El módulo WhatsApp no está cargado'
+      });
+    }
+
+    console.log('🧹 Iniciando limpieza de sesión para regenerar QR...');
+    
+    // Limpiar sesión completa para forzar QR
+    const resultado = await whatsappService.limpiarSesionesCompleto();
+    
+    if (resultado.success) {
+      console.log('✅ Limpieza exitosa - QR se regenerará automáticamente');
+      res.json({
+        success: true,
+        message: 'Sesión limpiada exitosamente',
+        details: resultado.message,
+        instructions: [
+          '📱 Busca el código QR en los logs del servidor',
+          '🔍 Refresh la página en unos segundos para ver el nuevo QR',
+          '📲 Escanéalo con WhatsApp > Dispositivos Vinculados > Vincular'
+        ],
+        timestamp: resultado.timestamp
+      });
+    } else {
+      console.log('❌ Error en limpieza:', resultado.error);
+      res.status(500).json({
+        success: false,
+        error: resultado.error,
+        message: 'Error al limpiar sesión',
+        timestamp: resultado.timestamp
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error crítico en regeneración de QR:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Error crítico al regenerar QR',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // === MONITOR DE MEMORIA ===
 app.get('/memory-status', (req, res) => {
   try {
