@@ -469,6 +469,19 @@ async function inicializarWhatsApp() {
       }
     }
     
+    // VALIDACIÓN DE CONTEXTO: Verificar que no hay errores de contexto destruido previos
+    if (whatsappClient && whatsappClient._page) {
+      try {
+        // Test simple para verificar que el contexto está vivo
+        await whatsappClient._page.evaluate(() => window.location.href);
+      } catch (contextError) {
+        if (contextError.message.includes('Execution context was destroyed')) {
+          console.log('⚠️ Contexto de ejecución previamente destruido - Requiere sesión fresca');
+          throw new Error('Contexto de ejecución destruido - Sesión incompatible');
+        }
+      }
+    }
+    
     console.log('🚀 Inicializando WhatsApp Business...');
     
     console.log('📱 Inicializando cliente WhatsApp con PostgreSQL session persistence...');
@@ -480,15 +493,39 @@ async function inicializarWhatsApp() {
     console.error('❌ Error inicializando WhatsApp:', error);
     
     // Detectar errores específicos de sesión expirada/corrupta
+    const isContextError = error.message && error.message.includes('Execution context was destroyed');
     const isSessionError = error.message && (
-      error.message.includes('Execution context was destroyed') ||
       error.message.includes('Protocol error') ||
       error.message.includes('Target closed') ||
-      error.message.includes('Session closed')
+      error.message.includes('Session closed') ||
+      error.message.includes('Invalid session') ||
+      error.message.includes('Authentication failed')
     );
     
+    if (isContextError && usePostgresAuth) {
+      console.log('⚠️ DETECTADO: Error de contexto destruido (NO es sesión corrupta)');
+      console.log('🔄 La sesión en PostgreSQL es válida - Solo reiniciando cliente...');
+      console.log('💡 Este error es normal en reinicios de Render');
+      
+      // NO limpiar la sesión - solo reinicializar con nueva instancia
+      console.log('🔄 Reinicializando con sesión existente...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      try {
+        // Crear nueva instancia del cliente pero mantener la sesión
+        console.log('🔄 Creando nueva instancia del cliente WhatsApp...');
+        await whatsappClient.initialize();
+        console.log('✅ WhatsApp reinicializado exitosamente - Sesión conservada');
+        return;
+      } catch (retryError) {
+        console.error('❌ Error en segundo intento:', retryError.message);
+        // Si falla el retry, entonces sí podría ser sesión corrupta
+        console.log('🔄 Segundo intento falló - Ahora sí limpiando sesión...');
+      }
+    }
+    
     if (isSessionError && usePostgresAuth) {
-      console.log('🔄 DETECTADO: Error de sesión expirada/corrupta');
+      console.log('🔄 DETECTADO: Error de sesión genuinamente corrupta');
       console.log('🧹 Intentando limpiar sesión automáticamente...');
       
       try {
