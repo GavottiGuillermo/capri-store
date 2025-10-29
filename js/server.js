@@ -947,28 +947,31 @@ async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
 
 // Función para enviar notificación de compra por WhatsApp
 // Variables para tracking de estado WhatsApp
-let ultimaConexionExitosa = null;
 let intentosReconexion = 0;
 
 // Función mejorada para verificar si WhatsApp está realmente disponible
 function verificarEstadoWhatsApp() {
   const ahora = new Date();
-  const tiempoDesdeUltimaConexion = ultimaConexionExitosa ? (ahora - ultimaConexionExitosa) / 1000 : Infinity;
+  
+  // Obtener estado actual del whatsapp-service (variables correctas)
+  const serviceReady = whatsappService.whatsappReady || false;
+  const ultimaConexion = whatsappService.ultimaConexionExitosa || null;
+  const tiempoDesdeUltimaConexion = ultimaConexion ? (ahora - ultimaConexion) / 1000 : Infinity;
   
   // Criterios para considerar WhatsApp disponible:
   // 1. Módulo cargado (whatsappAvailable = true)
   // 2. Flag listo (whatsappReady = true) O conexión exitosa reciente (< 5 minutos)
-  const disponible = whatsappAvailable && (whatsappReady || tiempoDesdeUltimaConexion < 300);
+  const disponible = whatsappAvailable && (serviceReady || tiempoDesdeUltimaConexion < 300);
   
   return {
     disponible,
     razon: disponible ? 'Disponible' : 
            !whatsappAvailable ? 'Módulo no cargado' :
-           !whatsappReady && tiempoDesdeUltimaConexion >= 300 ? 'No autenticado y sin conexión reciente' :
+           !serviceReady && tiempoDesdeUltimaConexion >= 300 ? 'No autenticado y sin conexión reciente' :
            'Estado desconocido',
     tiempoDesdeUltimaConexion,
     whatsappAvailable,
-    whatsappReady
+    whatsappReady: serviceReady
   };
 }
 
@@ -1955,10 +1958,11 @@ async function startServer() {
       
       // Detectar reinicios y verificar estado previo
       const ahora = new Date();
-      const tiempoDesdeUltimaConexion = ultimaConexionExitosa ? 
-        Math.floor((ahora - ultimaConexionExitosa) / 1000) : 999;
+      const ultimaConexion = whatsappService.ultimaConexionExitosa;
+      const tiempoDesdeUltimaConexion = ultimaConexion ? 
+        Math.floor((ahora - ultimaConexion) / 1000) : 999;
       
-      if (ultimaConexionExitosa && tiempoDesdeUltimaConexion < 300) {
+      if (ultimaConexion && tiempoDesdeUltimaConexion < 300) {
         console.log(`⚡ REINICIO DETECTADO: Última conexión hace ${tiempoDesdeUltimaConexion}s`);
         console.log('🔍 Validando estado de WhatsApp antes de reconectar...');
       }

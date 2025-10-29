@@ -18,6 +18,8 @@ let ultimaConexionExitosa = null;
 function marcarConexionExitosa() {
   ultimaConexionExitosa = new Date();
   whatsappReady = true;
+  console.log(`🎯 MARCA CONEXIÓN EXITOSA: ${ultimaConexionExitosa.toISOString()}`);
+  console.log(`🎯 Estado whatsappReady: ${whatsappReady}`);
 }
 
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
@@ -1049,6 +1051,7 @@ module.exports = {
   sincronizarEstadoWhatsApp,
   forzarGuardadoSesion,
   marcarConexionExitosa,
+  ultimaConexionExitosa,
   whatsappReady,
   ADMIN_WHATSAPP,
   BUSINESS_NAME,
