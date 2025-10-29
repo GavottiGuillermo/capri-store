@@ -1394,7 +1394,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       const mensajeParaCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
         `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
         `📋 *Detalles de tu pedido:*\n` +
-        `🆔 *Número:* ${idPedidoCompleto}\n` +
+        `🆔 *Número:* ${numeroDisplay || idPedidoCompleto}\n` +
         `📅 *Fecha:* ${fechaHora}\n` +
         `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
         `🛍️ *Productos:*\n${productosTexto}\n\n` +
