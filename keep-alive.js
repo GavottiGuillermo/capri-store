@@ -65,7 +65,7 @@ function makeRequest(path, description, method = 'GET') {
 // Ping básico para mantener despierto
 async function keepAlive() {
   try {
-    await makeRequest('/', 'Keep-alive ping');
+    await makeRequest('/ping', 'Keep-alive ping silencioso');
   } catch (error) {
     console.error('❌ Keep-alive falló:', error.message);
   }
@@ -74,7 +74,7 @@ async function keepAlive() {
 // Verificar salud del sistema
 async function healthCheck() {
   try {
-    const health = await makeRequest('/health', 'Health check');
+    const health = await makeRequest('/ping', 'Health check silencioso');
     
     if (health.whatsapp_ready) {
       console.log('   📱 WhatsApp: ✅ CONECTADO');

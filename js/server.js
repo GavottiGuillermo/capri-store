@@ -299,7 +299,19 @@ function validateCustomerData(data) {
     
 
 // === ENDPOINT DE SALUD ===
-app.get('/health', async (req, res) => {  
+app.get('/health', async (req, res) => {
+  // Solo hacer log si NO es un health check automático de Render/GitHub Actions
+  const isAutomatedCheck = req.ip && (
+    req.ip.includes('10.219.') ||  // IP interna de Render
+    req.ip.includes('::ffff:10.219.') ||
+    req.headers['user-agent']?.includes('curl') ||
+    req.headers['user-agent']?.includes('GitHub-Actions')
+  );
+  
+  if (!isAutomatedCheck) {
+    console.log('🏥 Health check manual solicitado desde:', req.ip);
+  }
+  
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -318,6 +330,17 @@ app.get('/health', async (req, res) => {
       single_instance: true,
       postgresql_sessions: !!process.env.DATABASE_URL
     }
+  });
+});
+
+// === ENDPOINT DE SALUD SILENCIOSO (para keep-alive) ===
+app.get('/ping', async (req, res) => {
+  // Health check silencioso sin logs para sistemas automáticos
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    whatsapp_ready: whatsappAvailable ? whatsappReady : false
   });
 });
 

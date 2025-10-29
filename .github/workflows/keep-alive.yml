@@ -17,7 +17,7 @@ jobs:
       - name: 📡 Ping Health Check
         run: |
           echo "🔄 Verificando salud del servicio..."
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/health)
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/ping)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
@@ -64,20 +64,20 @@ jobs:
 
       - name: 🔧 WhatsApp Maintenance
         run: |
-          echo "🔧 Ejecutando mantenimiento automático de WhatsApp..."
+          echo "🔧 Verificando estado de WhatsApp..."
           
-          # Intentar limpiar sesiones expiradas si es necesario
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" -X POST https://capri-store.onrender.com/whatsapp-clean-expired)
+          # Verificar estado de WhatsApp sin intervención
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/whatsapp-status)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
-          echo "🔧 Maintenance Status Code: $http_code"
-          echo "🔧 Maintenance Response: $body"
+          echo "🔧 WhatsApp Status Code: $http_code"
+          echo "🔧 WhatsApp Response: $body"
           
           if [ $http_code -eq 200 ]; then
-            echo "✅ Mantenimiento ejecutado correctamente"
+            echo "✅ Estado de WhatsApp obtenido correctamente"
           else
-            echo "⚠️ Mantenimiento falló, pero continuando..."
+            echo "⚠️ No se pudo obtener estado de WhatsApp, pero continuando..."
           fi
 
       - name: 📊 Memory Check
