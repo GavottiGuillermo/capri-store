@@ -448,7 +448,18 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
       return res.status(503).json({
         success: false,
         error: 'WhatsApp service no disponible',
-        message: 'El módulo WhatsApp no está cargado'
+        message: 'El módulo WhatsApp no está cargado',
+        available: false
+      });
+    }
+
+    // Verificar que el servicio tenga los métodos necesarios
+    if (!whatsappService || typeof whatsappService.limpiarSesionesCompleto !== 'function') {
+      return res.status(503).json({
+        success: false,
+        error: 'WhatsApp service incompleto',
+        message: 'El método de limpieza no está disponible',
+        service_loaded: !!whatsappService
       });
     }
 
@@ -457,7 +468,7 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
     // Limpiar sesión completa para forzar QR
     const resultado = await whatsappService.limpiarSesionesCompleto();
     
-    if (resultado.success) {
+    if (resultado && resultado.success) {
       console.log('✅ Limpieza exitosa - QR se regenerará automáticamente');
       res.json({
         success: true,
@@ -465,19 +476,19 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
         details: resultado.message,
         instructions: [
           '📱 Busca el código QR en los logs del servidor',
-          '🔍 Refresh la página en unos segundos para ver el nuevo QR',
+          '🔍 Verifica /whatsapp-status en unos segundos para ver el nuevo QR',
           '📲 Escanéalo con WhatsApp > Dispositivos Vinculados > Vincular'
         ],
+        actions_completed: resultado.actions_completed || [],
         timestamp: resultado.timestamp
       });
     } else {
-
-      console.log('❌ Error en limpieza:', resultado.error);
+      console.log('❌ Error en limpieza:', resultado?.error || 'Resultado inválido');
       res.status(500).json({
         success: false,
-        error: resultado.error,
+        error: resultado?.error || 'Error desconocido en limpieza',
         message: 'Error al limpiar sesión',
-        timestamp: resultado.timestamp
+        timestamp: resultado?.timestamp || new Date().toISOString()
       });
     }
     
