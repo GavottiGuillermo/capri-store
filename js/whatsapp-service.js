@@ -1077,6 +1077,118 @@ async function forzarGuardadoSesion() {
   }
 }
 
+// Función para configurar eventos básicos del cliente WhatsApp
+function configurarEventosBasicos() {
+  // Evento QR
+  whatsappClient.on('qr', (qr) => {
+    qrAttempts++;
+    
+    if (qrAttempts > MAX_QR_ATTEMPTS) {
+      console.error(`\n❌ DEMASIADOS INTENTOS DE QR (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
+      console.error('🛑 DETENIENDO PARA EVITAR CONSUMO EXCESIVO DE MEMORIA');
+      console.error('💡 Solución: Reinicia el servidor o usa /whatsapp-clean-session\n');
+      return;
+    }
+    
+    if (qrGenerated) {
+      console.log(`\n⚠️ QR anterior expiró, generando nuevo código (intento ${qrAttempts}/${MAX_QR_ATTEMPTS})...\n`);
+    }
+    
+    const authType = usePostgresAuth ? 'PostgreSQL (se guardará permanentemente)' : 'Local (temporal)';
+    console.log(`\n🔐 Autenticación: ${authType}\n`);
+    
+    console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+    console.log(`📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! (${qrAttempts}/${MAX_QR_ATTEMPTS}) 📱`);
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+    
+    // Generar QR en la terminal
+    qrcode.generate(qr, { small: true });
+    
+    console.log('\n📲 INSTRUCCIONES PARA EVITAR "NO SE PUDO CONECTAR":');
+    console.log('1️⃣ Abre WhatsApp en tu teléfono');
+    console.log('2️⃣ Asegúrate de tener BUENA conexión WiFi/datos');
+    console.log('3️⃣ Ve a Configuración > Dispositivos vinculados');
+    console.log('4️⃣ Toca "Vincular un dispositivo"');
+    console.log('5️⃣ Escanea LENTAMENTE el QR de arriba ☝️');
+    console.log('6️⃣ ¡ESPERA hasta ver "CONECTADO" sin cerrar nada!');
+    console.log('\n⚠️ TIPS IMPORTANTES:');
+    console.log('• NO cierres WhatsApp mientras escaneas');
+    console.log('• NO salgas de la pantalla de escaneo');
+    console.log('• Espera 10-15 segundos después de escanear');
+    console.log('• Si falla, espera 2 minutos antes de reintentar');
+    console.log('\n🖥️ INFORMACIÓN DEL DISPOSITIVO:');
+    console.log('• Debería aparecer como "Linux Desktop" o "Chrome Linux"');
+    console.log('• Si aparece como "MAC Desktop", la sesión está corrupta');
+    console.log('• User Agent corregido para Render/Linux');
+    console.log('\n⏰ Tienes 60 segundos para escanearlo');
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+    
+    qrGenerated = true;
+  });
+
+  // Evento ready
+  whatsappClient.on('ready', async () => {
+    whatsappReady = true;
+    qrGenerated = false;
+    qrAttempts = 0;
+    ultimaConexion = new Date().toISOString();
+    
+    console.log('\n🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢');
+    console.log('🚀 WHATSAPP BUSINESS CONECTADO EXITOSAMENTE 🚀');
+    console.log('🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢\n');
+    
+    try {
+      const info = whatsappClient.info;
+      if (info) {
+        console.log(`📱 WhatsApp conectado como: ${info.pushname || 'Sin nombre'}`);
+        console.log(`📞 Número: ${info.wid.user || 'No disponible'}`);
+        console.log(`🔋 Dispositivo: ${info.platform || 'Desconocido'}`);
+      }
+    } catch (infoError) {
+      console.log('⚠️ No se pudo obtener información del dispositivo');
+    }
+    
+    console.log(`⏰ Conectado a las: ${ultimaConexion}`);
+    
+    // Limpiar memoria después de la conexión exitosa
+    limpiarMemoriaProactiva();
+  });
+
+  // Evento authenticated
+  whatsappClient.on('authenticated', () => {
+    console.log('🔐 WhatsApp autenticado correctamente');
+  });
+
+  // Evento auth_failure
+  whatsappClient.on('auth_failure', (msg) => {
+    console.error('❌ Error de autenticación WhatsApp:', msg);
+    whatsappReady = false;
+  });
+
+  // Evento disconnected
+  whatsappClient.on('disconnected', (reason) => {
+    console.log(`🔌 WhatsApp desconectado. Razón: ${reason}`);
+    whatsappReady = false;
+    ultimaConexion = null;
+  });
+
+  // Evento loading_screen
+  whatsappClient.on('loading_screen', (percent, message) => {
+    console.log(`⏳ Cargando WhatsApp... ${percent}% - ${message}`);
+  });
+
+  // Eventos específicos para PostgreSQL
+  if (usePostgresAuth) {
+    whatsappClient.on('remote_session_saved', () => {
+      console.log('💾 Sesión guardada en PostgreSQL exitosamente');
+    });
+
+    whatsappClient.on('remote_session_loaded', () => {
+      console.log('📥 Sesión cargada desde PostgreSQL exitosamente');
+    });
+  }
+}
+
 // Función para limpieza completa (combina PostgreSQL + Local + Reinicialización)
 async function limpiarSesionesCompleto() {
   const timestamp = new Date().toISOString();
@@ -1088,14 +1200,7 @@ async function limpiarSesionesCompleto() {
     qrGenerated = false;
     qrAttempts = 0;
     
-    console.log(`[${timestamp}] 1️⃣ Destruyendo cliente...`);
-    try {
-      await whatsappClient.destroy();
-    } catch (destroyError) {
-      console.log(`[${timestamp}] ⚠️ Error destruyendo cliente: ${destroyError.message}`);
-    }
-    
-    console.log(`[${timestamp}] 2️⃣ Limpiando sesión PostgreSQL...`);
+    console.log(`[${timestamp}] 1️⃣ Limpiando sesión PostgreSQL...`);
     if (usePostgresAuth && authStrategy) {
       try {
         // Usar clearSessionOnly en lugar de logout para no cerrar el pool
@@ -1108,6 +1213,13 @@ async function limpiarSesionesCompleto() {
       } catch (dbError) {
         console.error(`[${timestamp}] ❌ Error limpiando PostgreSQL: ${dbError.message}`);
       }
+    }
+    
+    console.log(`[${timestamp}] 2️⃣ Destruyendo cliente...`);
+    try {
+      await whatsappClient.destroy();
+    } catch (destroyError) {
+      console.log(`[${timestamp}] ⚠️ Error destruyendo cliente: ${destroyError.message}`);
     }
     
     console.log(`[${timestamp}] 3️⃣ Limpiando carpeta local...`);
@@ -1128,6 +1240,59 @@ async function limpiarSesionesCompleto() {
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     console.log(`[${timestamp}] 5️⃣ Reinicializando cliente...`);
+    
+    // Recrear la estrategia de autenticación PostgreSQL si es necesaria
+    if (usePostgresAuth) {
+      console.log(`[${timestamp}] 🔧 Recreando estrategia de autenticación PostgreSQL...`);
+      try {
+        const PostgresAuthStrategy = require('./postgres-auth-strategy');
+        authStrategy = new PostgresAuthStrategy({
+          clientId: 'whatsapp_business_client',
+          pgConfig: {
+            host: process.env.DB_HOST,
+            port: process.env.DB_PORT,
+            database: process.env.DB_NAME,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            ssl: {
+              rejectUnauthorized: false
+            }
+          }
+        });
+        
+        // Recrear cliente con nueva estrategia
+        const { Client, LocalAuth } = require('whatsapp-web.js');
+        whatsappClient = new Client({
+          authStrategy: authStrategy,
+          puppeteer: {
+            headless: true,
+            args: puppeteerArgs
+          }
+        });
+        
+        // Reconfigurar eventos básicos
+        configurarEventosBasicos();
+        
+        console.log(`[${timestamp}] ✅ Estrategia PostgreSQL recreada`);
+      } catch (recreateError) {
+        console.error(`[${timestamp}] ❌ Error recreando estrategia PostgreSQL: ${recreateError.message}`);
+        console.log(`[${timestamp}] 🔄 Usando LocalAuth como fallback...`);
+        
+        // Fallback a LocalAuth
+        const { Client, LocalAuth } = require('whatsapp-web.js');
+        whatsappClient = new Client({
+          authStrategy: new LocalAuth(),
+          puppeteer: {
+            headless: true,
+            args: puppeteerArgs
+          }
+        });
+        
+        configurarEventosBasicos();
+        usePostgresAuth = false; // Deshabilitar PostgreSQL temporalmente
+      }
+    }
+    
     await whatsappClient.initialize();
     
     console.log(`[${timestamp}] ✅ Limpieza completa exitosa - QR se generará automáticamente`);
