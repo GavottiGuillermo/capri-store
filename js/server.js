@@ -1097,10 +1097,11 @@ async function verificarEstadoWhatsApp() {
   // Obtener estado dinámico del whatsapp-service (funciones en lugar de variables)
   let serviceReady = false;
   let ultimaConexion = null;
+  let whatsappStatus = null; // Declarar aquí para usarla después
   
   try {
     // Obtener estado real del cliente WhatsApp
-    const whatsappStatus = await whatsappService.getWhatsAppStatus();
+    whatsappStatus = await whatsappService.getWhatsAppStatus();
     serviceReady = whatsappStatus.whatsapp_ready || false;
     
     // Usar la variable del servicio si está disponible
@@ -1128,7 +1129,7 @@ async function verificarEstadoWhatsApp() {
   // 2. Flag listo (whatsappReady = true) O conexión exitosa reciente (< 5 minutos)
   // 3. NO está en estado NOT_INITIALIZED (lazy loading)
   
-  const clientState = whatsappStatus?.client_state;
+  const clientState = whatsappStatus?.client_state || whatsappStatus?.state;
   const isNotInitialized = clientState === 'NOT_INITIALIZED';
   
   const disponible = whatsappAvailable && 
