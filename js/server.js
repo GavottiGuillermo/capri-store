@@ -470,27 +470,17 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
         success: false,
         error: 'WhatsApp service incompleto',
         message: 'El método de limpieza no está disponible',
-        service_loaded: !!whatsappService
+        service_loaded: !!whatsappService,
+        method_available: typeof whatsappService?.limpiarSesionesCompleto
       });
     }
 
     console.log('🧹 Iniciando proceso de regeneración QR...');
     
-    // PASO 1: Inicializar WhatsApp si no está inicializado
-    console.log('📱 Paso 1: Verificando/inicializando WhatsApp...');
-    try {
-      await inicializarWhatsApp();
-      console.log('✅ WhatsApp inicializado correctamente');
-    } catch (initError) {
-      console.error('❌ Error inicializando WhatsApp:', initError.message);
-      return res.status(500).json({
-        success: false,
-        error: 'Error inicializando WhatsApp: ' + initError.message,
-        message: 'No se pudo inicializar el servicio WhatsApp'
-      });
-    }
+    // PASO 1: Verificar estado inicial
+    console.log('📱 Paso 1: Verificando estado inicial...');
     
-    // PASO 2: Limpiar sesión completa para forzar QR
+    // PASO 2: Limpiar sesión completa para forzar QR (sin inicialización previa)
     console.log('🧹 Paso 2: Limpiando sesión para generar nuevo QR...');
     const resultado = await whatsappService.limpiarSesionesCompleto();
     
@@ -498,7 +488,7 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
       console.log('✅ Limpieza exitosa - QR se regenerará automáticamente');
       res.json({
         success: true,
-        message: 'WhatsApp inicializado y sesión limpiada exitosamente',
+        message: 'Sesión limpiada exitosamente - QR se generará automáticamente',
         details: resultado.message,
         instructions: [
           '📱 Busca el código QR en los logs del servidor',
@@ -514,15 +504,18 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
         success: false,
         error: resultado?.error || 'Error desconocido en limpieza',
         message: 'Error al limpiar sesión',
+        resultado_completo: resultado,
         timestamp: resultado?.timestamp || new Date().toISOString()
       });
     }
     
   } catch (error) {
     console.error('❌ Error crítico en regeneración de QR:', error.message);
+    console.error('Stack trace:', error.stack);
     res.status(500).json({
       success: false,
       error: error.message,
+      stack: error.stack,
       message: 'Error crítico al regenerar QR',
       timestamp: new Date().toISOString()
     });
