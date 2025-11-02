@@ -55,6 +55,8 @@ console.log('- ADMIN_INSTAGRAM:', process.env.ADMIN_INSTAGRAM ? '✅ CONFIGURADO
 // CONFIGURACIÓN DEL SERVIDOR
 // ===============================
 console.log('🚀 Capri Store API iniciando...');
+console.log('💾 OPTIMIZACIÓN MEMORIA: WhatsApp bajo demanda');
+console.log('📊 RAM inicial:', Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB');
 console.log('📱 Sistema de comunicación: WhatsApp Business únicamente');
 
 const app = express();
@@ -463,16 +465,31 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
       });
     }
 
-    console.log('🧹 Iniciando limpieza de sesión para regenerar QR...');
+    console.log('🧹 Iniciando proceso de regeneración QR...');
     
-    // Limpiar sesión completa para forzar QR
+    // PASO 1: Inicializar WhatsApp si no está inicializado
+    console.log('📱 Paso 1: Verificando/inicializando WhatsApp...');
+    try {
+      await inicializarWhatsApp();
+      console.log('✅ WhatsApp inicializado correctamente');
+    } catch (initError) {
+      console.error('❌ Error inicializando WhatsApp:', initError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Error inicializando WhatsApp: ' + initError.message,
+        message: 'No se pudo inicializar el servicio WhatsApp'
+      });
+    }
+    
+    // PASO 2: Limpiar sesión completa para forzar QR
+    console.log('🧹 Paso 2: Limpiando sesión para generar nuevo QR...');
     const resultado = await whatsappService.limpiarSesionesCompleto();
     
     if (resultado && resultado.success) {
       console.log('✅ Limpieza exitosa - QR se regenerará automáticamente');
       res.json({
         success: true,
-        message: 'Sesión limpiada exitosamente',
+        message: 'WhatsApp inicializado y sesión limpiada exitosamente',
         details: resultado.message,
         instructions: [
           '📱 Busca el código QR en los logs del servidor',
@@ -600,7 +617,7 @@ app.post('/cleanup-memory', (req, res) => {
 app.get('/debug', (req, res) => {
   res.json({
     app_name: 'Capri Store API',
-    version: '4.0 - Simplified',
+    version: '4.1 - Memory Optimized',
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
     uptime_seconds: Math.floor(process.uptime()),
@@ -2243,14 +2260,13 @@ async function startServer() {
         console.log('🔍 Validando estado de WhatsApp antes de reconectar...');
       }
       
-      try {
-        await inicializarWhatsApp();
-        console.log('✅ WhatsApp service inicializado (esperando autenticación)');
-      } catch (error) {
-        console.error('❌ Error inicializando WhatsApp:', error.message);
-        console.log('📧 Continuando sin WhatsApp');
-        whatsappAvailable = false;
-      }
+      // CAMBIO: NO inicializar WhatsApp automáticamente para ahorrar memoria
+      // Solo se inicializará cuando se use el endpoint /whatsapp-regenerar-qr
+      console.log('💾 OPTIMIZACIÓN: WhatsApp se inicializará bajo demanda para ahorrar memoria');
+      console.log('📡 Usa /whatsapp-regenerar-qr para inicializar WhatsApp cuando lo necesites');
+      
+      // Marcar como disponible pero no inicializado
+      whatsappAvailable = true;
     } else {
       console.log('⚠️ WhatsApp no disponible');
     }
