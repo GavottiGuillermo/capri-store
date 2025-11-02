@@ -106,11 +106,26 @@ const whatsappClient = new Client({
       '--disable-translate',
       '--disable-background-networking',
       '--memory-pressure-off',
-      '--js-flags="--max-old-space-size=256"',  // Límite JS a 256MB
-      '--max-memory-usage=256',  // Límite total aumentado a 256MB
+      '--js-flags="--max-old-space-size=200"',  // Reducido de 256MB a 200MB
+      '--max-memory-usage=200',  // Reducido de 256MB a 200MB
       '--aggressive-cache-discard',
-      '--disable-features=IsolateOrigins,site-per-process',  // Reducir procesos aislados
+      '--disable-features=IsolateOrigins,site-per-process',
       '--disable-site-isolation-trials',
+      // NUEVAS optimizaciones agresivas de memoria
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=TranslateUI',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-background-mode',
+      '--disable-compositor-threaded-scrollbar-scrolling',
+      '--disable-hang-monitor',
+      '--disable-prompt-on-repost',
+      '--disable-breakpad',
+      '--disable-client-side-phishing-detection',
+      '--disable-component-update',
+      '--disable-domain-reliability',
+      '--disable-features=AudioServiceOutOfProcess',
+      '--renderer-process-limit=1',  // Solo 1 proceso renderer
+      '--max-unused-resource-memory-usage-percentage=25',  // Liberar memoria no usada
       '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ],
     timeout: 60000,
@@ -187,12 +202,24 @@ if (usePostgresAuth) {
   whatsappClient.on('remote_session_saved', () => {
     console.log('💾 ✅ Sesión guardada en PostgreSQL exitosamente');
     console.log('🕐 Timestamp:', new Date().toISOString());
+    
+    // Forzar limpieza de memoria después de guardar sesión
+    if (global.gc) {
+      console.log('🧹 Ejecutando garbage collection después de guardar sesión...');
+      global.gc();
+    }
   });
   
   whatsappClient.on('remote_session_loaded', () => {
     console.log('📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
     console.log('🕐 Timestamp:', new Date().toISOString());
     console.log('🔄 Intentando reconectar automáticamente...');
+    
+    // Forzar limpieza de memoria después de cargar sesión
+    if (global.gc) {
+      console.log('🧹 Ejecutando garbage collection después de cargar sesión...');
+      global.gc();
+    }
   });
   
   // Eventos adicionales de RemoteAuth
@@ -1114,6 +1141,43 @@ async function limpiarSesionesCompleto() {
   }
 }
 
+// Función de limpieza proactiva de memoria
+function limpiarMemoriaProactiva() {
+  const timestamp = new Date().toISOString();
+  
+  try {
+    // Obtener uso de memoria antes
+    const memBefore = process.memoryUsage();
+    const usedMB = Math.round(memBefore.heapUsed / 1024 / 1024);
+    
+    console.log(`[${timestamp}] 🧹 Limpieza proactiva de memoria iniciada - Uso actual: ${usedMB}MB`);
+    
+    // Forzar garbage collection si está disponible
+    if (global.gc) {
+      global.gc();
+      
+      // Obtener uso después
+      const memAfter = process.memoryUsage();
+      const usedAfterMB = Math.round(memAfter.heapUsed / 1024 / 1024);
+      const liberadoMB = usedMB - usedAfterMB;
+      
+      console.log(`[${timestamp}] ✅ Memoria liberada: ${liberadoMB}MB (${usedAfterMB}MB restante)`);
+    } else {
+      console.log(`[${timestamp}] ⚠️ Garbage collection no disponible (use --expose-gc)`);
+    }
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en limpieza de memoria:`, error.message);
+  }
+}
+
+// Configurar limpieza periódica de memoria (cada 10 minutos)
+if (process.env.RENDER) {
+  console.log('🧹 Configurando limpieza automática de memoria para Render...');
+  setInterval(() => {
+    limpiarMemoriaProactiva();
+  }, 10 * 60 * 1000); // 10 minutos
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -1128,6 +1192,7 @@ module.exports = {
   forzarGuardadoSesion,
   marcarConexionExitosa,
   setOnWhatsAppReadyCallback,
+  limpiarMemoriaProactiva,
   ultimaConexionExitosa,
   whatsappReady,
   ADMIN_WHATSAPP,

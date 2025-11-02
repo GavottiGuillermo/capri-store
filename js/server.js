@@ -516,6 +516,12 @@ app.get('/memory-status', (req, res) => {
     const renderLimit = 512;
     const usagePercent = Math.round((mbRss / renderLimit) * 100);
     
+    // Auto-limpieza si el uso está muy alto
+    if (usagePercent >= 85 && whatsappService && whatsappService.limpiarMemoriaProactiva) {
+      console.log(`🚨 Uso de memoria alto (${usagePercent}%) - Activando limpieza automática`);
+      whatsappService.limpiarMemoriaProactiva();
+    }
+    
     const status = {
       memory_usage: {
         heap_used_mb: mbUsed,
@@ -526,7 +532,7 @@ app.get('/memory-status', (req, res) => {
       },
       limits: {
         render_limit_mb: renderLimit,
-        warning_threshold: 90,
+        warning_threshold: 85,  // Reducido de 90 a 85
         critical_threshold: 95
       },
       alerts: {
@@ -548,6 +554,44 @@ app.get('/memory-status', (req, res) => {
     res.status(500).json({
       error: 'Error obteniendo memoria',
       timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// === LIMPIEZA MANUAL DE MEMORIA ===
+app.post('/cleanup-memory', (req, res) => {
+  try {
+    console.log('🧹 Limpieza manual de memoria solicitada desde:', req.ip);
+    
+    if (whatsappService && whatsappService.limpiarMemoriaProactiva) {
+      whatsappService.limpiarMemoriaProactiva();
+      
+      // Esperar un momento y obtener nueva información de memoria
+      setTimeout(() => {
+        const memUsage = process.memoryUsage();
+        const mbRss = Math.round(memUsage.rss / 1024 / 1024);
+        const usagePercent = Math.round((mbRss / 512) * 100);
+        
+        res.json({
+          success: true,
+          message: 'Limpieza de memoria ejecutada',
+          memory_after_cleanup: {
+            rss_mb: mbRss,
+            usage_percent: usagePercent
+          },
+          timestamp: new Date().toISOString()
+        });
+      }, 1000);
+    } else {
+      res.status(503).json({
+        success: false,
+        error: 'Servicio de limpieza no disponible'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
