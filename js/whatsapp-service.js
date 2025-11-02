@@ -706,6 +706,19 @@ async function getWhatsAppStatus() {
     let stateError = null;
     let clientInfo = null;
     
+    // Verificar si el cliente está inicializado
+    if (!whatsappClient) {
+      console.log(`[DEBUG] Cliente WhatsApp no inicializado (lazy loading)`);
+      return {
+        whatsappReady: false,
+        clientState: 'NOT_INITIALIZED',
+        isReady: false,
+        hasStateError: false,
+        serviceReady: false,
+        ultimaConexionFromService: ultimaConexionExitosa ? ultimaConexionExitosa.toISOString() : 'null'
+      };
+    }
+    
     try {
       clientState = await whatsappClient.getState();
       console.log(`[DEBUG] getState() devolvió: ${clientState}`);

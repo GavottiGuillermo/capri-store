@@ -418,16 +418,25 @@ app.get('/whatsapp-status', async (req, res) => {
     
     const status = await getWhatsAppStatus();
     
+    // Detectar si está en modo lazy loading
+    const isLazyLoading = status.state === 'NOT_INITIALIZED';
+    
     res.json({
       whatsapp_ready: whatsappReady,
       client_ready: status.whatsapp_ready || false,
       state: status.state || 'UNKNOWN',
+      lazy_loading: isLazyLoading,
       qr_generated: status.qr_code ? true : false,
       auth_folder: {
         exists: status.auth_folder_exists || false
       },
       last_connection: status.last_connection || null,
       error: status.error || null,
+      instructions: isLazyLoading ? [
+        '💾 WhatsApp está en modo ahorro de memoria',
+        '🚀 Usa /whatsapp-regenerar-qr para inicializar',
+        '📱 Esto generará el código QR para escanear'
+      ] : null,
       timestamp: new Date().toISOString()
     });
     
@@ -1117,12 +1126,20 @@ async function verificarEstadoWhatsApp() {
   // Criterios para considerar WhatsApp disponible:
   // 1. Módulo cargado (whatsappAvailable = true)
   // 2. Flag listo (whatsappReady = true) O conexión exitosa reciente (< 5 minutos)
-  const disponible = whatsappAvailable && (serviceReady || tiempoDesdeUltimaConexion < 300);
+  // 3. NO está en estado NOT_INITIALIZED (lazy loading)
+  
+  const clientState = whatsappStatus?.client_state;
+  const isNotInitialized = clientState === 'NOT_INITIALIZED';
+  
+  const disponible = whatsappAvailable && 
+                    !isNotInitialized && 
+                    (serviceReady || tiempoDesdeUltimaConexion < 300);
   
   return {
     disponible,
     razon: disponible ? 'Disponible' : 
            !whatsappAvailable ? 'Módulo no cargado' :
+           isNotInitialized ? 'WhatsApp no inicializado (usa /whatsapp-regenerar-qr)' :
            !serviceReady && tiempoDesdeUltimaConexion >= 300 ? 'No autenticado y sin conexión reciente' :
            'Estado desconocido',
     tiempoDesdeUltimaConexion,
