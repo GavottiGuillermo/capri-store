@@ -1056,9 +1056,14 @@ async function limpiarSesionesCompleto() {
     }
     
     console.log(`[${timestamp}] 2️⃣ Limpiando sesión PostgreSQL...`);
-    if (usePostgresAuth && authStrategy && authStrategy.logout) {
+    if (usePostgresAuth && authStrategy) {
       try {
-        await authStrategy.logout();
+        // Usar clearSessionOnly en lugar de logout para no cerrar el pool
+        if (authStrategy.clearSessionOnly) {
+          await authStrategy.clearSessionOnly();
+        } else if (authStrategy.logout) {
+          await authStrategy.logout();
+        }
         console.log(`[${timestamp}] ✅ PostgreSQL limpiado`);
       } catch (dbError) {
         console.error(`[${timestamp}] ❌ Error limpiando PostgreSQL: ${dbError.message}`);

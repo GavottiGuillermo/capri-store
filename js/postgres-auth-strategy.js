@@ -83,6 +83,11 @@ class PostgreSQLStore {
 
   async extract(options = {}) {
     try {
+      if (this.pool.ended) {
+        console.log('⚠️ Pool PostgreSQL ya cerrado, no se puede cargar sesión');
+        return null;
+      }
+      
       console.log('📥 Cargando sesión desde PostgreSQL...');
       
       const sessionName = options.session;
@@ -126,6 +131,11 @@ class PostgreSQLStore {
 
   async delete(options = {}) {
     try {
+      if (this.pool.ended) {
+        console.log('⚠️ Pool PostgreSQL ya cerrado, no se puede eliminar sesión');
+        return false;
+      }
+      
       console.log('🗑️ Eliminando sesión de PostgreSQL...');
       const query = 'DELETE FROM whatsapp_sessions WHERE id = $1';
       const result = await this.pool.query(query, [this.clientId]);
@@ -196,9 +206,23 @@ class PostgresAuthStrategy extends RemoteAuth {
     return await this.store.delete({});
   }
 
+  async clearSessionOnly() {
+    console.log('🧹 Limpiando solo datos de sesión (manteniendo pool activo)...');
+    return await this.store.delete({});
+  }
+
   async destroy() {
     console.log('🔚 Cerrando conexión PostgreSQL...');
-    await this.pool.end();
+    try {
+      if (!this.pool.ended) {
+        await this.pool.end();
+        console.log('✅ Pool PostgreSQL cerrado correctamente');
+      } else {
+        console.log('⚠️ Pool PostgreSQL ya estaba cerrado');
+      }
+    } catch (error) {
+      console.error('❌ Error cerrando pool PostgreSQL:', error.message);
+    }
   }
 }
 
