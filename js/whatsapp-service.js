@@ -81,53 +81,56 @@ try {
 
 console.log('🔧 Creando cliente WhatsApp...');
 
+// Argumentos de Puppeteer para optimización de memoria
+const puppeteerArgs = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-accelerated-2d-canvas',
+  '--no-first-run',
+  '--no-zygote',
+  '--single-process',
+  '--disable-gpu',
+  '--disable-web-security',
+  '--disable-features=VizDisplayCompositor',
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--disable-extensions',
+  '--disable-plugins',
+  '--disable-default-apps',
+  '--disable-sync',
+  '--disable-translate',
+  '--disable-background-networking',
+  '--memory-pressure-off',
+  '--js-flags="--max-old-space-size=200"',  // Reducido de 256MB a 200MB
+  '--max-memory-usage=200',  // Reducido de 256MB a 200MB
+  '--aggressive-cache-discard',
+  '--disable-features=IsolateOrigins,site-per-process',
+  '--disable-site-isolation-trials',
+  // NUEVAS optimizaciones agresivas de memoria
+  '--disable-blink-features=AutomationControlled',
+  '--disable-features=TranslateUI',
+  '--disable-component-extensions-with-background-pages',
+  '--disable-background-mode',
+  '--disable-compositor-threaded-scrollbar-scrolling',
+  '--disable-hang-monitor',
+  '--disable-prompt-on-repost',
+  '--disable-breakpad',
+  '--disable-client-side-phishing-detection',
+  '--disable-component-update',
+  '--disable-domain-reliability',
+  '--disable-features=AudioServiceOutOfProcess',
+  '--renderer-process-limit=1',  // Solo 1 proceso renderer
+  '--max-unused-resource-memory-usage-percentage=25',  // Liberar memoria no usada
+  '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+];
+
 const whatsappClient = new Client({
   authStrategy: authStrategy,
   puppeteer: {
     headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu',
-      '--disable-web-security',
-      '--disable-features=VizDisplayCompositor',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-extensions',
-      '--disable-plugins',
-      '--disable-default-apps',
-      '--disable-sync',
-      '--disable-translate',
-      '--disable-background-networking',
-      '--memory-pressure-off',
-      '--js-flags="--max-old-space-size=200"',  // Reducido de 256MB a 200MB
-      '--max-memory-usage=200',  // Reducido de 256MB a 200MB
-      '--aggressive-cache-discard',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-site-isolation-trials',
-      // NUEVAS optimizaciones agresivas de memoria
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=TranslateUI',
-      '--disable-component-extensions-with-background-pages',
-      '--disable-background-mode',
-      '--disable-compositor-threaded-scrollbar-scrolling',
-      '--disable-hang-monitor',
-      '--disable-prompt-on-repost',
-      '--disable-breakpad',
-      '--disable-client-side-phishing-detection',
-      '--disable-component-update',
-      '--disable-domain-reliability',
-      '--disable-features=AudioServiceOutOfProcess',
-      '--renderer-process-limit=1',  // Solo 1 proceso renderer
-      '--max-unused-resource-memory-usage-percentage=25',  // Liberar memoria no usada
-      '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    ],
+    args: puppeteerArgs,
     timeout: 60000,
     // Configuraciones adicionales para reducir memoria
     executablePath: undefined,
@@ -1297,58 +1300,8 @@ async function limpiarSesionesCompleto() {
     
     console.log(`[${timestamp}] 5️⃣ Reinicializando cliente...`);
     
-    // Recrear la estrategia de autenticación PostgreSQL si es necesaria
-    if (usePostgresAuth) {
-      console.log(`[${timestamp}] 🔧 Recreando estrategia de autenticación PostgreSQL...`);
-      try {
-        const PostgresAuthStrategy = require('./postgres-auth-strategy');
-        authStrategy = new PostgresAuthStrategy({
-          clientId: 'whatsapp_business_client',
-          pgConfig: {
-            host: process.env.DB_HOST,
-            port: process.env.DB_PORT,
-            database: process.env.DB_NAME,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-            ssl: {
-              rejectUnauthorized: false
-            }
-          }
-        });
-        
-        // Recrear cliente con nueva estrategia
-        const { Client, LocalAuth } = require('whatsapp-web.js');
-        whatsappClient = new Client({
-          authStrategy: authStrategy,
-          puppeteer: {
-            headless: true,
-            args: puppeteerArgs
-          }
-        });
-        
-        // Reconfigurar eventos básicos
-        configurarEventosBasicos();
-        
-        console.log(`[${timestamp}] ✅ Estrategia PostgreSQL recreada`);
-      } catch (recreateError) {
-        console.error(`[${timestamp}] ❌ Error recreando estrategia PostgreSQL: ${recreateError.message}`);
-        console.log(`[${timestamp}] 🔄 Usando LocalAuth como fallback...`);
-        
-        // Fallback a LocalAuth
-        const { Client, LocalAuth } = require('whatsapp-web.js');
-        whatsappClient = new Client({
-          authStrategy: new LocalAuth(),
-          puppeteer: {
-            headless: true,
-            args: puppeteerArgs
-          }
-        });
-        
-        configurarEventosBasicos();
-        usePostgresAuth = false; // Deshabilitar PostgreSQL temporalmente
-      }
-    }
-    
+    // El cliente WhatsApp ya fue destruido, ahora lo reinicializamos
+    // Esto forzará la generación de un nuevo QR
     await whatsappClient.initialize();
     
     console.log(`[${timestamp}] ✅ Limpieza completa exitosa - QR se generará automáticamente`);
