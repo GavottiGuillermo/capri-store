@@ -709,6 +709,18 @@ async function getWhatsAppStatus() {
     // Verificar si el cliente está inicializado
     if (!whatsappClient) {
       console.log(`[DEBUG] Cliente WhatsApp no inicializado (lazy loading)`);
+      console.log(`\n⚠️ ════════════════════════════════════════════════════════════════════════════`);
+      console.log(`⚠️  WHATSAPP NO ESTÁ CONECTADO - Cliente no inicializado (lazy loading)`);
+      console.log(`⚠️ ════════════════════════════════════════════════════════════════════════════`);
+      console.log(`📱 Para inicializar WhatsApp y generar un nuevo código QR, ejecuta:`);
+      console.log(``);
+      console.log(`   🌐 CURL:`);
+      console.log(`   curl https://capri-store.onrender.com/whatsapp-regenerar-qr`);
+      console.log(``);
+      console.log(`   💻 POWERSHELL:`);
+      console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
+      console.log(``);
+      console.log(`⚠️ ════════════════════════════════════════════════════════════════════════════\n`);
       return {
         whatsappReady: false,
         clientState: 'NOT_INITIALIZED',
@@ -735,6 +747,8 @@ async function getWhatsAppStatus() {
       stateError = error.message;
       clientState = null;
       console.error(`[DEBUG] Error en getState():`, error.message);
+      console.log(`📱 ⚠️ WhatsApp con ERROR - Para reconectar use:`);
+      console.log(`   🔗 GET https://capri-store.onrender.com/whatsapp-regenerar-qr`);
     }
     
     const isReady = whatsappReady && clientState === 'CONNECTED';
@@ -745,6 +759,48 @@ async function getWhatsAppStatus() {
       isReady,
       hasStateError: !!stateError
     });
+    
+    // Mostrar instrucciones si no está listo
+    if (!isReady) {
+      console.log(`\n⚠️ ═══════════════════════════════════════════════════════════════`);
+      console.log(`⚠️  WHATSAPP NO ESTÁ CONECTADO`);
+      console.log(`⚠️  Estado: ${clientState || 'DESCONOCIDO'}`);
+      console.log(`⚠️  Ready flag: ${whatsappReady}`);
+      console.log(`⚠️ ═══════════════════════════════════════════════════════════════`);
+      console.log(`📱 Para generar un nuevo código QR, ejecuta:`);
+      console.log(``);
+      console.log(`   curl https://capri-store.onrender.com/whatsapp-regenerar-qr`);
+      console.log(``);
+      console.log(`   O desde PowerShell:`);
+      console.log(``);
+      console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
+      console.log(``);
+      console.log(`⚠️ ═══════════════════════════════════════════════════════════════\n`);
+    }
+    
+    // Mostrar instrucciones si no está listo
+    if (!isReady) {
+      console.log(`\n⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`⚠️  WHATSAPP NO ESTÁ CONECTADO`);
+      console.log(`⚠️  Estado: ${clientState || 'DESCONOCIDO'}`);
+      console.log(`⚠️  Ready flag: ${whatsappReady}`);
+      console.log(`⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`📱 Para generar un nuevo código QR, ejecuta:`);
+      console.log(``);
+      console.log(`   curl https://capri-store.onrender.com/whatsapp-regenerar-qr`);
+      console.log(``);
+      console.log(`   O desde PowerShell:`);
+      console.log(``);
+      console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
+      console.log(``);
+      console.log(`⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+    }
+    
+    // Si no está listo, mostrar cómo regenerar QR
+    if (!isReady && clientState !== 'CONNECTED') {
+      console.log(`📱 ℹ️ WhatsApp NO READY (${clientState || 'UNKNOWN'}) - Para regenerar QR:`);
+      console.log(`   🔗 GET https://capri-store.onrender.com/whatsapp-regenerar-qr`);
+    }
     
     // Verificar si existe la carpeta de autenticación
     const authDirPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
