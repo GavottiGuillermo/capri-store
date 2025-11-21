@@ -310,54 +310,53 @@ function validateCustomerData(data) {
 // === ENDPOINT DE SALUD ===
 // Variables para control de reconexión automática
 let lastReconnectAttempt = 0;
-const RECONNECT_INTERVAL = 5 * 60 * 1000; // 5 minutos entre intentos
+const RECONNECT_INTERVAL = 10 * 60 * 1000; // 10 minutos entre intentos
 
 app.get('/health', async (req, res) => {
-  // Solo hacer log si NO es un health check automático de Render/GitHub Actions
+  // Detectar si es un health check de GitHub Actions
+  const isGitHubActions = req.headers['user-agent']?.includes('GitHub-Actions');
   const isAutomatedCheck = req.ip && (
     req.ip.includes('10.219.') ||  // IP interna de Render
-    req.ip.includes('::ffff:10.219.') ||
-    req.headers['user-agent']?.includes('curl') ||
-    req.headers['user-agent']?.includes('GitHub-Actions')
+    req.ip.includes('::ffff:10.219.')
   );
   
-  if (!isAutomatedCheck) {
+  // Solo hacer log si es manual (no automatizado)
+  if (!isAutomatedCheck && !isGitHubActions) {
     console.log('🏥 Health check manual solicitado desde:', req.ip);
   }
   
-  // Verificar estado de WhatsApp y intentar reconectar si es necesario
-  if (whatsappAvailable) {
-    try {
-      const estadoWhatsApp = await verificarEstadoWhatsApp();
-      const now = Date.now();
+  // SOLO intentar reconexión si viene de GitHub Actions
+  if (whatsappAvailable && isGitHubActions) {
+    const now = Date.now();
+    
+    // Si han pasado 10 minutos desde el último intento
+    if ((now - lastReconnectAttempt) > RECONNECT_INTERVAL) {
+      lastReconnectAttempt = now;
       
-      // Si WhatsApp no está disponible y han pasado 5 minutos desde el último intento
-      if (!estadoWhatsApp.disponible && (now - lastReconnectAttempt) > RECONNECT_INTERVAL) {
-        lastReconnectAttempt = now;
-        
-        // Intentar reconexión en background (no bloquear el health check)
-        setImmediate(async () => {
-          try {
+      // Verificar estado en background
+      setImmediate(async () => {
+        try {
+          const estadoWhatsApp = await verificarEstadoWhatsApp();
+          
+          // Solo intentar reconectar si NO está disponible
+          if (!estadoWhatsApp.disponible) {
             console.log('\n🔄 ═══════════════════════════════════════════════════════');
-            console.log('🔄 KEEP-ALIVE: WhatsApp desconectado - Intentando reconexión automática...');
+            console.log('🔄 KEEP-ALIVE (GitHub): WhatsApp desconectado - Intentando reconexión...');
             console.log(`🔄 Razón: ${estadoWhatsApp.razon}`);
             console.log('🔄 ═══════════════════════════════════════════════════════\n');
             
-            // Intentar inicializar WhatsApp (usará sesión de PostgreSQL si existe)
-            await inicializarWhatsApp();
-            
-            console.log('✅ Reconexión iniciada - WhatsApp intentará cargar sesión de PostgreSQL');
-          } catch (reconnectError) {
-            console.error('❌ Error en reconexión automática:', reconnectError.message);
-            console.log('\n📱 ═══════════════════════════════════════════════════════');
-            console.log('📱 Para regenerar QR manualmente, ejecuta:');
-            console.log('📱 GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-            console.log('📱 ═══════════════════════════════════════════════════════\n');
+            try {
+              await inicializarWhatsApp();
+              console.log('✅ Reconexión iniciada - WhatsApp cargará sesión de PostgreSQL');
+            } catch (reconnectError) {
+              console.error('❌ Error en reconexión automática:', reconnectError.message);
+              console.log('\n📱 Para regenerar QR: GET https://capri-store.onrender.com/whatsapp-regenerar-qr\n');
+            }
           }
-        });
-      }
-    } catch (checkError) {
-      console.error('⚠️ Error verificando estado WhatsApp en health:', checkError.message);
+        } catch (checkError) {
+          console.error('⚠️ Error verificando estado WhatsApp:', checkError.message);
+        }
+      });
     }
   }
   

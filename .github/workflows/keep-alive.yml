@@ -2,8 +2,8 @@ name: 🔄 Keep Capri Store Alive
 
 on:
   schedule:
-    # Ejecutar cada 12 minutos (evita que Render duerma después de 15 min)
-    - cron: '*/12 * * * *'
+    # Ejecutar cada 10 minutos (evita que Render duerma y permite reconexión WhatsApp)
+    - cron: '*/10 * * * *'
   
   # Permitir ejecución manual desde GitHub
   workflow_dispatch:
@@ -14,70 +14,26 @@ jobs:
     timeout-minutes: 10
     
     steps:
-      - name: 📡 Ping Health Check
+      - name: 🔄 Keep-Alive Health Check (triggers auto-reconnect)
         run: |
-          echo "🔄 Verificando salud del servicio..."
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/ping)
+          echo "🔄 Keep-alive con reconexión automática de WhatsApp..."
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" -H "User-Agent: GitHub-Actions-Keep-Alive" https://capri-store.onrender.com/health)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
           echo "📊 Status Code: $http_code"
-          echo "📄 Response: $body"
           
           if [ $http_code -eq 200 ]; then
-            echo "✅ Servicio respondiendo correctamente"
-          else
-            echo "❌ Servicio no responde correctamente"
-            exit 1
-          fi
-
-      - name: 📱 Check WhatsApp Status
-        run: |
-          echo "📱 Verificando estado de WhatsApp..."
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/whatsapp-status)
-          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
-          
-          echo "📊 WhatsApp Status Code: $http_code"
-          echo "📄 WhatsApp Response: $body"
-          
-          if [ $http_code -eq 200 ]; then
-            echo "✅ Estado de WhatsApp obtenido correctamente"
+            echo "✅ Servicio activo (WhatsApp intentará reconexión automática si es necesario)"
             
-            # Extraer si WhatsApp está ready usando jq si está disponible, si no con grep
+            # Extraer estado de WhatsApp
             if command -v jq &> /dev/null; then
               whatsapp_ready=$(echo "$body" | jq -r '.whatsapp_ready // false')
-            else
-              whatsapp_ready=$(echo "$body" | grep -o '"whatsapp_ready":[^,}]*' | cut -d':' -f2 | tr -d ' "')
-            fi
-            
-            echo "📱 WhatsApp Ready: $whatsapp_ready"
-            
-            if [ "$whatsapp_ready" = "true" ]; then
-              echo "✅ WhatsApp está conectado y funcionando"
-            else
-              echo "⚠️ WhatsApp no está conectado - puede necesitar atención"
+              echo "📱 WhatsApp: $whatsapp_ready"
             fi
           else
-            echo "❌ No se pudo obtener estado de WhatsApp"
-          fi
-
-      - name: 🔧 WhatsApp Maintenance
-        run: |
-          echo "🔧 Verificando estado de WhatsApp..."
-          
-          # Verificar estado de WhatsApp sin intervención
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/whatsapp-status)
-          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
-          
-          echo "🔧 WhatsApp Status Code: $http_code"
-          echo "🔧 WhatsApp Response: $body"
-          
-          if [ $http_code -eq 200 ]; then
-            echo "✅ Estado de WhatsApp obtenido correctamente"
-          else
-            echo "⚠️ No se pudo obtener estado de WhatsApp, pero continuando..."
+            echo "❌ Servicio no responde"
+            exit 1
           fi
 
       - name: 📊 Memory Check
@@ -112,7 +68,7 @@ jobs:
           echo "🎯 ===== RESUMEN DE KEEP-ALIVE ====="
           echo "📅 Fecha: $(date)"
           echo "🔄 Servicio mantenido activo exitosamente"
-          echo "⏰ Próxima ejecución: en 12 minutos"
+          echo "📱 Auto-reconexión WhatsApp: cada 10 min si desconectado"
+          echo "⏰ Próxima ejecución: en 10 minutos"
           echo "🌐 URL: https://capri-store.onrender.com"
-          echo "📱 Dashboard: https://dashboard.render.com"
           echo "=================================="
