@@ -2342,9 +2342,6 @@ async function startServer() {
       console.log(`🗄️ Base de datos: ${pool ? 'Conectada' : 'No disponible'}`);
       console.log(`⚙️ Sistema: Simplificado - Una sola instancia con PostgreSQL sessions`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      if (whatsappAvailable) {
-        console.log(`📱 BUSCA EL CÓDIGO QR ARRIBA ☝️ PARA ESCANEAR`);
-      }
       
       // Iniciar sistema de reintentos de notificaciones WhatsApp
       console.log(`🔄 Configurando sistema de reintentos WhatsApp...`);
@@ -2358,6 +2355,11 @@ async function startServer() {
           console.error('❌ Error en procesamiento automático de notificaciones:', error.message);
         }
       }, 3 * 60 * 1000); // 3 minutos
+      
+      if (whatsappAvailable) {
+        console.log(`📱 Si WhatsApp no conectó automáticamente, usa: /whatsapp-regenerar-qr`);
+      }
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
       // Procesar una vez al inicio (después de 120 segundos para que WhatsApp se estabilice completamente)
       setTimeout(async () => {

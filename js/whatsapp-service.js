@@ -233,27 +233,44 @@ if (usePostgresAuth) {
   // Verificar al inicializar si hay sesión guardada
   console.log('🔍 Verificando sesión existente en PostgreSQL al inicializar...');
   
-  // DIAGNÓSTICO: Verificar manualmente si hay sesión
-  (async function diagnosticarSesion() {
+  // DIAGNÓSTICO Y AUTO-INICIALIZACIÓN: Verificar si hay sesión y conectar automáticamente
+  (async function diagnosticarYConectarSesion() {
     try {
       console.log('🔍 DIAGNÓSTICO: Verificando existencia de sesión inicial en PostgreSQL...');
       const sessionExists = await authStrategy.store.sessionExists();
       console.log('📊 DIAGNÓSTICO: Sesión existente al iniciar:', sessionExists ? '✅ SÍ' : '❌ NO');
       
       if (sessionExists) {
-        console.log('🎉 ¡Hay sesión guardada! WhatsApp debería conectar automáticamente');
-      } else {
-        console.log('⚠️ No hay sesión previa - Se necesitará escanear QR');
-      }
-      
-      if (sessionExists) {
-        console.log('🔍 DIAGNÓSTICO: Intentando extraer sesión...');
-        const sessionData = await authStrategy.store.extract();
-        console.log('📊 DIAGNÓSTICO: Datos de sesión obtenidos:', !!sessionData);
-        console.log('📊 DIAGNÓSTICO: Tipo de dato:', typeof sessionData);
-        if (sessionData) {
-          console.log('📊 DIAGNÓSTICO: Tamaño de datos:', JSON.stringify(sessionData).length, 'chars');
+        console.log('🎉 ¡Hay sesión guardada! Inicializando WhatsApp automáticamente...');
+        
+        // Extraer información de la sesión
+        try {
+          console.log('🔍 DIAGNÓSTICO: Intentando extraer sesión...');
+          const sessionData = await authStrategy.store.extract();
+          console.log('📊 DIAGNÓSTICO: Datos de sesión obtenidos:', !!sessionData);
+          console.log('📊 DIAGNÓSTICO: Tipo de dato:', typeof sessionData);
+          if (sessionData) {
+            const size = JSON.stringify(sessionData).length;
+            console.log('📊 DIAGNÓSTICO: Tamaño de datos:', size, 'chars');
+            
+            if (size > 5000) {
+              console.log('✅ Sesión válida encontrada - Inicializando WhatsApp...');
+              
+              // Inicializar WhatsApp automáticamente
+              await whatsappClient.initialize();
+              console.log('🔄 WhatsApp inicializado - Esperando conexión automática con sesión guardada');
+            } else {
+              console.warn('⚠️ Sesión guardada pero muy pequeña - puede estar corrupta');
+              console.log('💡 Usa /whatsapp-regenerar-qr para generar nuevo QR');
+            }
+          }
+        } catch (extractError) {
+          console.error('❌ Error extrayendo sesión:', extractError.message);
+          console.log('💡 Usa /whatsapp-regenerar-qr para generar nuevo QR');
         }
+      } else {
+        console.log('⚠️ No hay sesión previa guardada');
+        console.log('💡 Usa /whatsapp-regenerar-qr cuando necesites generar QR');
       }
     } catch (error) {
       console.error('❌ DIAGNÓSTICO: Error en verificación manual:', error.message);
