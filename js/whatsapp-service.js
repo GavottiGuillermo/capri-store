@@ -1358,13 +1358,50 @@ async function limpiarSesionesCompleto() {
     console.log(`[${timestamp}] 4️⃣ Esperando 5 segundos...`);
     await new Promise(resolve => setTimeout(resolve, 5000));
     
-    console.log(`[${timestamp}] 5️⃣ Reinicializando cliente...`);
+    console.log(`[${timestamp}] 5️⃣ Recreando y reinicializando cliente...`);
     
-    // El cliente WhatsApp ya fue destruido, ahora lo reinicializamos
-    // Esto forzará la generación de un nuevo QR
-    await whatsappClient.initialize();
-    
-    console.log(`[${timestamp}] ✅ Limpieza completa exitosa - QR se generará automáticamente`);
+    // Recrear el cliente WhatsApp completo con nueva estrategia
+    try {
+      const { Client } = require('whatsapp-web.js');
+      const PostgresAuthStrategy = require('./postgres-auth-strategy');
+      
+      // Crear nueva estrategia de autenticación
+      console.log('🔧 Recreando estrategia de autenticación PostgreSQL...');
+      authStrategy = new PostgresAuthStrategy({
+        clientId: 'capri-store-main',
+        pgConfig: {
+          host: process.env.DB_HOST,
+          port: process.env.DB_PORT,
+          database: process.env.DB_NAME,
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD,
+          ssl: {
+            rejectUnauthorized: false
+          }
+        }
+      });
+      
+      // Recrear cliente con eventos
+      whatsappClient = new Client({
+        authStrategy: authStrategy,
+        puppeteer: {
+          headless: true,
+          args: puppeteerArgs
+        }
+      });
+      
+      console.log('🔄 Reconfigurando eventos del cliente...');
+      configurarEventosBasicos();
+      
+      // Inicializar
+      console.log('🚀 Inicializando cliente recreado...');
+      await whatsappClient.initialize();
+      
+      console.log(`[${timestamp}] ✅ Cliente recreado e inicializado - QR se generará automáticamente`);
+    } catch (recreateError) {
+      console.error(`[${timestamp}] ❌ Error recreando cliente: ${recreateError.message}`);
+      throw recreateError;
+    }
     
     return {
       success: true,
