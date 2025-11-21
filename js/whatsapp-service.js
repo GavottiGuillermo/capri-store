@@ -241,7 +241,37 @@ if (usePostgresAuth) {
       console.log('📊 DIAGNÓSTICO: Sesión existente al iniciar:', sessionExists ? '✅ SÍ' : '❌ NO');
       
       if (sessionExists) {
-        console.log('🎉 ¡Hay sesión guardada! Inicializando WhatsApp automáticamente...');
+        console.log('🎉 ¡Hay sesión guardada! Verificando vigencia...');
+        
+        // Verificar fecha de la sesión
+        try {
+          const sessionInfo = await authStrategy.store.pool.query(
+            'SELECT updated_at, created_at FROM whatsapp_sessions WHERE id = $1',
+            [authStrategy.store.clientId]
+          );
+          
+          if (sessionInfo.rows.length > 0) {
+            const lastUpdate = new Date(sessionInfo.rows[0].updated_at || sessionInfo.rows[0].created_at);
+            const now = new Date();
+            const hoursSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60);
+            
+            console.log(`📅 Última actualización de sesión: ${lastUpdate.toISOString()}`);
+            console.log(`⏰ Horas transcurridas: ${Math.round(hoursSinceUpdate)}h`);
+            
+            // Si la sesión tiene más de 24 horas, considerar regenerar
+            if (hoursSinceUpdate > 24) {
+              console.log('⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('⚠️ Sesión antigua (>24h) - Se recomienda regenerar QR');
+              console.log('💡 Usa: GET /whatsapp-regenerar-qr');
+              console.log('⚠️ Intentando conexión de todos modos...');
+              console.log('⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            } else {
+              console.log('✅ Sesión reciente - Inicializando automáticamente...');
+            }
+          }
+        } catch (dateError) {
+          console.warn('⚠️ No se pudo verificar fecha de sesión:', dateError.message);
+        }
         
         // Extraer información de la sesión
         try {

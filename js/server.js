@@ -2367,15 +2367,24 @@ async function startServer() {
         
         // Doble verificación: esperar a que WhatsApp esté realmente listo
         let intentos = 0;
-        while (intentos < 10) { // Máximo 10 intentos (50 segundos adicionales)
+        while (intentos < 3) { // Máximo 3 intentos (15 segundos adicionales)
           const estadoWhatsApp = await verificarEstadoWhatsApp();
           if (estadoWhatsApp.disponible) {
             console.log('✅ WhatsApp confirmado disponible para procesamiento inicial');
             break;
           }
-          console.log(`⏳ Esperando WhatsApp... intento ${intentos + 1}/10 (${estadoWhatsApp.razon})`);
+          console.log(`⏳ Esperando WhatsApp... intento ${intentos + 1}/3 (${estadoWhatsApp.razon})`);
           await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
           intentos++;
+        }
+        
+        // Si tras 3 intentos no está disponible, sugerir regenerar QR
+        const estadoFinal = await verificarEstadoWhatsApp();
+        if (!estadoFinal.disponible) {
+          console.log('\n⚠️ ═══════════════════════════════════════════════════════');
+          console.log('⚠️ WhatsApp no conectó tras espera de 15 segundos');
+          console.log('💡 Para regenerar QR: GET /whatsapp-regenerar-qr');
+          console.log('⚠️ ═══════════════════════════════════════════════════════\n');
         }
         
         try {
