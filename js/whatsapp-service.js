@@ -9,7 +9,8 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP; // Número del admin
 let whatsappReady = false;
 let qrGenerated = false;
 let qrAttempts = 0;
-const MAX_QR_ATTEMPTS = 5; // Resetear a límite normal después de fix
+const MAX_QR_ATTEMPTS = 5;
+let sessionIsOld = false; // Bandera para sesiones >24h // Resetear a límite normal después de fix
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -258,15 +259,27 @@ if (usePostgresAuth) {
             console.log(`📅 Última actualización de sesión: ${lastUpdate.toISOString()}`);
             console.log(`⏰ Horas transcurridas: ${Math.round(hoursSinceUpdate)}h`);
             
-            // Si la sesión tiene más de 24 horas, considerar regenerar
-            if (hoursSinceUpdate > 24) {
-              console.log('⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-              console.log('⚠️ Sesión antigua (>24h) - Se recomienda regenerar QR');
-              console.log('💡 Usa: GET /whatsapp-regenerar-qr');
-              console.log('⚠️ Intentando conexión de todos modos...');
-              console.log('⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            // Si la sesión tiene más de 7 días, no inicializar - probablemente expiró
+            if (hoursSinceUpdate > 168) { // 7 días
+              console.log('\n❌ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('❌ SESIÓN EXPIRADA (>7 días)');
+              console.log('❌ NO se inicializará WhatsApp automáticamente');
+              console.log('💡 SOLUCIÓN: Regenerar QR con:');
+              console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+              console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
+              console.log('❌ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+              return; // No continuar con la inicialización
+            } else if (hoursSinceUpdate > 24) { // Más de 1 día pero menos de 7
+              console.log('\n⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('⚠️ SESIÓN ANTIGUA (>24h)');
+              console.log('⚠️ Se intentará conectar pero puede fallar');
+              console.log('💡 Si falla, regenera QR con:');
+              console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+              console.log('⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+              sessionIsOld = true; // Marcar sesión antigua para timeout reducido
             } else {
-              console.log('✅ Sesión reciente - Inicializando automáticamente...');
+              console.log('✅ Sesión reciente (<24h) - Inicializando automáticamente...');
+              sessionIsOld = false;
             }
           }
         } catch (dateError) {
@@ -1429,6 +1442,7 @@ module.exports = {
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,
   whatsappReady,
+  sessionIsOld, // Para ajustar timeout según antigüedad de sesión
   ADMIN_WHATSAPP,
   BUSINESS_NAME,
   cleanup

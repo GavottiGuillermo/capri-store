@@ -36,7 +36,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -2361,29 +2361,40 @@ async function startServer() {
       }
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
-      // Procesar una vez al inicio (después de 120 segundos para que WhatsApp se estabilice completamente)
+      // Procesar una vez al inicio - timeout ajustado según antigüedad de sesión
+      const initialWaitTime = sessionIsOld ? 30 * 1000 : 50 * 1000; // 30s para sesión antigua, 50s para reciente
+      console.log(`⏰ Tiempo de espera inicial: ${sessionIsOld ? '30s (sesión antigua)' : '50s (sesión reciente)'}`);
+      
       setTimeout(async () => {
         console.log('🔄 Procesamiento inicial de notificaciones pendientes...');
         
         // Doble verificación: esperar a que WhatsApp esté realmente listo
         let intentos = 0;
-        while (intentos < 3) { // Máximo 3 intentos (15 segundos adicionales)
+        const maxIntentos = sessionIsOld ? 2 : 3; // Menos intentos si sesión antigua
+        
+        while (intentos < maxIntentos) {
           const estadoWhatsApp = await verificarEstadoWhatsApp();
           if (estadoWhatsApp.disponible) {
             console.log('✅ WhatsApp confirmado disponible para procesamiento inicial');
             break;
           }
-          console.log(`⏳ Esperando WhatsApp... intento ${intentos + 1}/3 (${estadoWhatsApp.razon})`);
+          console.log(`⏳ Esperando WhatsApp... intento ${intentos + 1}/${maxIntentos} (${estadoWhatsApp.razon})`);
           await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
           intentos++;
         }
         
-        // Si tras 3 intentos no está disponible, sugerir regenerar QR
+        // Si tras los intentos no está disponible, sugerir regenerar QR
         const estadoFinal = await verificarEstadoWhatsApp();
         if (!estadoFinal.disponible) {
           console.log('\n⚠️ ═══════════════════════════════════════════════════════');
-          console.log('⚠️ WhatsApp no conectó tras espera de 15 segundos');
-          console.log('💡 Para regenerar QR: GET /whatsapp-regenerar-qr');
+          console.log(`⚠️ WhatsApp no conectó tras espera de ${maxIntentos * 5}s`);
+          if (sessionIsOld) {
+            console.log('⚠️ La sesión guardada es antigua (>24h)');
+            console.log('⚠️ Probablemente expiró y necesita renovarse');
+          }
+          console.log('💡 SOLUCIÓN: Regenerar QR con:');
+          console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+          console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
           console.log('⚠️ ═══════════════════════════════════════════════════════\n');
         }
         
@@ -2392,7 +2403,7 @@ async function startServer() {
         } catch (error) {
           console.error('❌ Error en procesamiento inicial:', error.message);
         }
-      }, 2 * 60 * 1000); // 2 minutos para permitir completa inicialización
+      }, initialWaitTime);
       
       if (whatsappAvailable) {
         console.log(`📲 Usa WhatsApp > Dispositivos Vinculados > Vincular`);

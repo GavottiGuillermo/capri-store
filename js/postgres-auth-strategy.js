@@ -212,7 +212,14 @@ class PostgresAuthStrategy extends RemoteAuth {
   }
 
   async destroy() {
-    console.log('🔚 Cerrando conexión PostgreSQL...');
+    // No cerrar el pool durante regeneración de QR - se reutilizará
+    console.log('🔚 destroy() llamado - Manteniendo pool activo para regeneración');
+    // El pool se cerrará solo cuando termine el proceso Node.js
+  }
+  
+  async forceDestroy() {
+    // Solo para cierre final del servidor
+    console.log('🔚 Cerrando conexión PostgreSQL forzosamente...');
     try {
       if (!this.pool.ended) {
         await this.pool.end();
