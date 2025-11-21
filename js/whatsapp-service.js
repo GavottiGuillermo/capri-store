@@ -127,7 +127,8 @@ const puppeteerArgs = [
   '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ];
 
-const whatsappClient = new Client({
+// Cambiar a let para permitir recreación del cliente en regeneración de QR
+let whatsappClient = new Client({
   authStrategy: authStrategy,
   puppeteer: {
     headless: true,
