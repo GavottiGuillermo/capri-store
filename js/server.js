@@ -1551,7 +1551,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     const businessName = BUSINESS_NAME || 'Tienda Online';
     
     // Mensaje base para el admin
-    let mensajeAdmin = `🛒 *NUEVA COMPRA - ${businessName}* 🛒\n\n` +
+    const tipoNotificacion = esReintento ? '🔄 *REINTENTO DE NOTIFICACIÓN*' : '🛒 *NUEVA COMPRA*';
+    let mensajeAdmin = `${tipoNotificacion} - ${businessName}\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
       `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
@@ -1560,26 +1561,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       `🆔 *Pedido:* ${idPedidoCompleto}\n` +
       `💳 *Pago ID:* ${paymentId}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `✅ *¡Pago confirmado! Proceder con el envío*`;
-    
-    // Si es reintento, agregar instrucciones para enviar al cliente
-    if (esReintento && telefono && telefono.trim()) {
-      const mensajeParaCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
-        `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
-        `📋 *Detalles de tu pedido:*\n` +
-        `🆔 *Número:* ${numeroDisplay || idPedidoCompleto}\n` +
-        `📅 *Fecha:* ${fechaHora}\n` +
-        `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
-        `🛍️ *Productos:*\n${productosTexto}\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `📞 *Te contactaremos pronto para coordinar la entrega*\n\n` +
-        `¡Gracias por elegirnos! 💜`;
-      
-      mensajeAdmin += `\n\n🔄 *REINTENTO - ENVIAR MANUALMENTE AL CLIENTE:*\n` +
-        `📱 *Enviar a:* ${telefono}\n\n` +
-        `📝 *Mensaje para copiar y pegar:*\n` +
-        `${mensajeParaCliente}`;
-    }
+      `✅ *${esReintento ? 'Notificación reenviada al cliente automáticamente' : '¡Pago confirmado! Proceder con el envío'}*`;
     
     console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
     console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
@@ -1608,20 +1590,17 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador:`, resultAdmin.error);
     }
     
-    // 2. ENVIAR CONFIRMACIÓN AL CLIENTE (solo en compras nuevas, no en reintentos)
+    // 2. ENVIAR CONFIRMACIÓN AL CLIENTE (siempre, tanto en compras nuevas como en reintentos)
     let resultCliente = { success: false, error: 'No se intentó enviar' };
     
-    if (esReintento) {
-      console.log(`[${timestamp}] ⏭️ Reintento: NO enviando confirmación al cliente (evitar spam)`);
-      resultCliente = { success: true, error: null, skipped: true };
-    } else if (telefono && telefono.trim()) {
+    if (telefono && telefono.trim()) {
       console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
       
       // Mensaje para el cliente
       const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
         `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
         `📋 *Detalles de tu pedido:*\n` +
-        `🆔 *Número:* ${idPedidoCompleto}\n` +
+        `🆔 *Número:* ${numeroDisplay}\n` +
         `📅 *Fecha:* ${fechaHora}\n` +
         `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
         `🛍️ *Productos:*\n${productosTexto}\n\n` +
