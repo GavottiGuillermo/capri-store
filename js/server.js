@@ -350,9 +350,9 @@ app.get('/health', async (req, res) => {
             console.log(`🔄 Permitir auto-reconexión: ${estadoWhatsApp.permitirAutoReconexion ? '✅ SÍ' : '❌ NO'}`);
             console.log('🔄 ═══════════════════════════════════════════════════════\n');
             
-            // SOLO reconectar si hay sesión válida en BBDD (< 7 días)
+            // SOLO reconectar si hay sesión válida en BBDD del día actual (< 24 horas)
             if (estadoWhatsApp.permitirAutoReconexion) {
-              console.log('✅ Sesión válida detectada - Intentando reconexión automática...');
+              console.log('✅ Sesión válida del día actual detectada - Intentando reconexión automática...');
               try {
                 await inicializarWhatsApp();
                 console.log('✅ Reconexión iniciada - WhatsApp cargará sesión de PostgreSQL');
@@ -361,10 +361,10 @@ app.get('/health', async (req, res) => {
                 console.log('\n📱 Para regenerar QR: GET https://capri-store.onrender.com/whatsapp-regenerar-qr\n');
               }
             } else {
-              console.log('⏭️ Auto-reconexión OMITIDA: No hay sesión válida en BBDD');
+              console.log('⏭️ Auto-reconexión OMITIDA: No hay sesión válida del día actual en BBDD');
               console.log('💡 Razón: ' + (
                 !estadoWhatsApp.tieneSesionEnBBDD ? 'Tabla whatsapp_sessions está vacía' :
-                estadoWhatsApp.sesionEdadDias >= 7 ? `Sesión muy antigua (${estadoWhatsApp.sesionEdadDias.toFixed(1)} días > 7 días)` :
+                estadoWhatsApp.sesionEdadDias >= 1 ? `Sesión antigua (${estadoWhatsApp.sesionEdadDias.toFixed(1)} días > 1 día)` :
                 'Sin sesión válida'
               ));
               console.log('📱 Solución: Escanear QR manualmente con GET /whatsapp-regenerar-qr');
@@ -1188,12 +1188,13 @@ async function verificarEstadoWhatsApp() {
   // NUEVA VALIDACIÓN: Verificar si existe sesión en PostgreSQL antes de permitir reconexión automática
   let tieneSesionEnBBDD = false;
   let sesionEdadDias = null;
+  let sesionEdadHoras = null;
   
   if (!disponible && process.env.DATABASE_URL) {
     try {
       const resultSession = await executeQueryWithRetry(
         pool,
-        'SELECT updated_at FROM whatsapp_sessions WHERE session_name = $1 LIMIT 1',
+        'SELECT updated_at FROM whatsapp_sessions WHERE id = $1 LIMIT 1',
         ['RemoteAuth-capri-store-main'],
         1
       );
@@ -1201,8 +1202,9 @@ async function verificarEstadoWhatsApp() {
       if (resultSession && resultSession.rows && resultSession.rows.length > 0) {
         tieneSesionEnBBDD = true;
         const updatedAt = new Date(resultSession.rows[0].updated_at);
-        sesionEdadDias = (ahora - updatedAt) / (1000 * 60 * 60 * 24);
-        console.log(`📊 Sesión en BBDD encontrada - Edad: ${sesionEdadDias.toFixed(1)} días`);
+        sesionEdadHoras = (ahora - updatedAt) / (1000 * 60 * 60);
+        sesionEdadDias = sesionEdadHoras / 24;
+        console.log(`📊 Sesión en BBDD encontrada - Edad: ${sesionEdadHoras.toFixed(1)} horas (${sesionEdadDias.toFixed(1)} días)`);
       } else {
         console.log('📊 No hay sesión guardada en PostgreSQL');
       }
@@ -1211,8 +1213,8 @@ async function verificarEstadoWhatsApp() {
     }
   }
   
-  // Determinar si se puede permitir auto-reconexión
-  const permitirAutoReconexion = tieneSesionEnBBDD && sesionEdadDias !== null && sesionEdadDias < 7;
+  // Determinar si se puede permitir auto-reconexión: SOLO si sesión es del día actual (< 24 horas)
+  const permitirAutoReconexion = tieneSesionEnBBDD && sesionEdadHoras !== null && sesionEdadHoras < 24;
   
   return {
     disponible,
