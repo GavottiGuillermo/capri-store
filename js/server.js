@@ -1213,7 +1213,7 @@ async function verificarEstadoWhatsApp() {
     }
   }
   
-  // Determinar si se puede permitir auto-reconexión: SOLO si sesión es del día actual (< 24 horas)
+  // sDeterminar si se puede permitir auto-reconexión: SOLO si sesión es del día actual (< 24 horas)
   const permitirAutoReconexion = tieneSesionEnBBDD && sesionEdadHoras !== null && sesionEdadHoras < 24;
   
   return {
