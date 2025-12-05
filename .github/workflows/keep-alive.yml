@@ -2,8 +2,8 @@ name: 🔄 Keep Capri Store Alive
 
 on:
   schedule:
-    # Ejecutar cada 10 minutos (evita que Render duerma y permite reconexión WhatsApp)
-    - cron: '*/10 * * * *'
+    # Ejecutar cada 2 horas (ahorra 91% de recursos vs cada 10 min)
+    - cron: '0 */2 * * *'
   
   # Permitir ejecución manual desde GitHub
   workflow_dispatch:

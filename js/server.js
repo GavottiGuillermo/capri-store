@@ -1733,6 +1733,32 @@ app.post('/webhook', async (req, res) => {
       console.log(`[${timestamp}] 💳 Estado del pago: ${paymentInfo.status}`);
 
       if (paymentInfo.status === 'approved') {
+        // NUEVO: Verificar y reconectar WhatsApp si es necesario
+        console.log(`[${timestamp}] 🔄 Verificando estado de WhatsApp para nueva venta...`);
+        try {
+          const estadoWhatsApp = await verificarEstadoWhatsApp();
+          console.log(`[${timestamp}] - WhatsApp disponible: ${estadoWhatsApp.disponible}`);
+          console.log(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
+          
+          if (!estadoWhatsApp.disponible && estadoWhatsApp.permitirAutoReconexion) {
+            console.log(`[${timestamp}] 🔌 WhatsApp desconectado pero hay sesión válida - Reconectando...`);
+            try {
+              await inicializarWhatsApp();
+              console.log(`[${timestamp}] ✅ WhatsApp reconectado exitosamente`);
+              // Esperar 3 segundos para que se estabilice
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            } catch (reconnectError) {
+              console.error(`[${timestamp}] ❌ Error reconectando WhatsApp:`, reconnectError.message);
+              console.log(`[${timestamp}] ⚠️ Notificación quedará pendiente para reintento`);
+            }
+          } else if (!estadoWhatsApp.disponible) {
+            console.log(`[${timestamp}] ⚠️ WhatsApp no disponible y sin sesión válida para auto-reconectar`);
+            console.log(`[${timestamp}] 💡 Notificación quedará como pendiente para cuando WhatsApp se conecte`);
+          }
+        } catch (estadoError) {
+          console.error(`[${timestamp}] ⚠️ Error verificando estado WhatsApp:`, estadoError.message);
+        }
+        
         // Extraer datos del comprador desde metadata o payer
         let customerData = {};
         try {
