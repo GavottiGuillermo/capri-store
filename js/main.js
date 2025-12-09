@@ -10,10 +10,12 @@ let paginaActualProductos = 1;
 
 //  Cargar productos desde productos.json del bucket
 async function cargarProductosCapri() {
-  const urlJson = 'https://storage.googleapis.com/imagenes-web-capri/productos.json';
+  // Agregar timestamp para evitar caché del navegador
+  const timestamp = new Date().getTime();
+  const urlJson = `https://storage.googleapis.com/imagenes-web-capri/productos.json?t=${timestamp}`;
   let productos = [];
   try {
-    const resp = await fetch(urlJson);
+    const resp = await fetch(urlJson, { cache: 'no-store' });
     
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
@@ -33,25 +35,32 @@ async function cargarProductosCapri() {
     const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
       ? 'https://capri-store.onrender.com'
       : '';
-    const respAg = await fetch(`${API_BASE}/stock-agotado`, { cache: 'no-store' });
+    console.log('📦 Solicitando stock agotado desde backend...');
+    const respAg = await fetch(`${API_BASE}/stock-agotado?t=${timestamp}`, { cache: 'no-store' });
     if (respAg.ok) {
       const js = await respAg.json();
       if (Array.isArray(js.ids)) {
         soldOutIds = js.ids;
+        console.log(`✅ Stock agotado obtenido: ${soldOutIds.length} productos sin stock`);
         localStorage.setItem('agotados', JSON.stringify(soldOutIds)); // servidor es autoridad
         localStorage.setItem('agotados_last_sync', String(Date.now()));
       }
     } else {
+      console.warn('⚠️ Backend no respondió OK, usando caché local');
       // Fallback a cache local
       const cached = JSON.parse(localStorage.getItem('agotados') || '[]');
       soldOutIds = Array.isArray(cached) ? cached : [];
+      console.log(`📦 Usando caché: ${soldOutIds.length} productos sin stock`);
     }
   } catch (e) {
-    console.warn('No se pudo obtener stock agotado, usando cache local si existe:', e.message);
+    console.warn('⚠️ Error al obtener stock agotado:', e.message);
+    console.log('📦 Intentando usar caché local...');
     const cached = JSON.parse(localStorage.getItem('agotados') || '[]');
     soldOutIds = Array.isArray(cached) ? cached : [];
+    console.log(`📦 Caché cargado: ${soldOutIds.length} productos sin stock`);
   }
   window.__CAPRI_SOLD_OUT__ = new Set(soldOutIds);
+  console.log(`🎯 Estado final: ${window.__CAPRI_SOLD_OUT__.size} productos marcados como sin stock`);
 
   // Separar novedades y productos con la nueva lógica
   // Novedades: categoría "novedades" O que contenga "-Novedad"
@@ -84,17 +93,47 @@ async function cargarProductosCapri() {
 async function refrescarStock() {
   try {
     const link = document.getElementById('link-refrescar');
-    if (link) { link.textContent = 'Actualizando...'; link.style.pointerEvents = 'none'; }
+    if (link) { link.textContent = '🔄 Actualizando...'; link.style.pointerEvents = 'none'; }
     const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
       ? 'https://capri-store.onrender.com'
       : '';
-    const respAg = await fetch(`${API_BASE}/stock-agotado`, { cache: 'no-store' });
+    const timestamp = new Date().getTime();
+    console.log('🔄 Refrescando stock desde servidor...');
+    const respAg = await fetch(`${API_BASE}/stock-agotado?t=${timestamp}`, { cache: 'no-store' });
     if (respAg.ok) {
       const js = await respAg.json();
       const ids = Array.isArray(js.ids) ? js.ids : [];
+      console.log(`✅ Stock actualizado: ${ids.length} productos sin stock`);
       localStorage.setItem('agotados', JSON.stringify(ids));
       localStorage.setItem('agotados_last_sync', String(Date.now()));
       window.__CAPRI_SOLD_OUT__ = new Set(ids);
+      
+      // Recargar productos.json para obtener nuevos productos
+      const timestampProductos = new Date().getTime();
+      const urlJson = `https://storage.googleapis.com/imagenes-web-capri/productos.json?t=${timestampProductos}`;
+      const respProductos = await fetch(urlJson, { cache: 'no-store' });
+      if (respProductos.ok) {
+        const productos = await respProductos.json();
+        console.log(`✅ Productos recargados: ${productos.length} items`);
+        
+        // Actualizar listas de productos
+        todasLasNovedades = productos.filter(p => {
+          if (!p.categoria) return false;
+          const categoria = p.categoria.toLowerCase();
+          return categoria === 'novedades' || categoria.includes('-novedad');
+        });
+        todosLosProductos = productos.filter(p => p.categoria && p.categoria.toLowerCase() !== 'novedades');
+        productosFiltrados = categoriaActiva === 'todos' ? [...todosLosProductos] : 
+          todosLosProductos.filter(p => {
+            if (!p.categoria) return false;
+            const categoriaProducto = p.categoria.toLowerCase();
+            const categoriaBuscada = categoriaActiva.toLowerCase();
+            if (categoriaProducto === categoriaBuscada) return true;
+            const categoriaBase = categoriaProducto.split('-')[0];
+            return categoriaBase === categoriaBuscada;
+          });
+      }
+      
       // Re-renderizar secciones
       const novedadesList = document.getElementById('novedades-list');
       const productosList = document.getElementById('productos-list');
@@ -104,6 +143,9 @@ async function refrescarStock() {
       paginaActualProductos = 1;
       await renderizarNovedades();
       await renderizarProductos();
+      console.log('✅ Actualización completada');
+    } else {
+      console.error('❌ Error al actualizar stock:', respAg.status);
     }
   } finally {
     const link = document.getElementById('link-refrescar');
