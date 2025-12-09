@@ -342,12 +342,14 @@ async function crearTarjetaProducto(prod, tipo) {
     
     // Extraer información entre llaves en formato secuencial
     // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
+    // NOTA: Todos los campos son opcionales excepto nombre
     const matches = txt.match(/\{([^}]+)\}/g);
     
-    if (matches && matches.length >= 3) {
-      nombre = matches[0].replace(/[{}]/g, '').trim();
-      textoTarjeta = matches[1].replace(/[{}]/g, '').trim();
-      precio = matches[2].replace(/[{}]/g, '').trim();
+    if (matches && matches.length >= 1) {
+      // Extraer campos disponibles, permitiendo que estén vacíos
+      nombre = matches[0] ? matches[0].replace(/[{}]/g, '').trim() : '';
+      textoTarjeta = matches[1] ? matches[1].replace(/[{}]/g, '').trim() : '';
+      precio = matches[2] ? matches[2].replace(/[{}]/g, '').trim() : '';
     } else {
       nombre = '';
       textoTarjeta = '';
@@ -551,15 +553,17 @@ function verDetalleCapri(prod) {
   fetch(prod.txt).then(r => r.text()).then(txt => {
     // Extraer información entre llaves en formato secuencial
     // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
+    // NOTA: Todos los campos son opcionales
     const matches = txt.match(/\{([^}]+)\}/g);
     
     let nombre = '', textoTarjeta = '', precio = '', talle = '', detalle = '';
-    if (matches && matches.length >= 5) {
-      nombre = matches[0].replace(/[{}]/g, '').trim();
-      textoTarjeta = matches[1].replace(/[{}]/g, '').trim();
-      precio = matches[2].replace(/[{}]/g, '').trim();
-      talle = matches[3].replace(/[{}]/g, '').trim();
-      detalle = matches[4].replace(/[{}]/g, '').trim();
+    if (matches && matches.length >= 1) {
+      // Extraer solo los campos disponibles, permitiendo que estén vacíos
+      nombre = matches[0] ? matches[0].replace(/[{}]/g, '').trim() : '';
+      textoTarjeta = matches[1] ? matches[1].replace(/[{}]/g, '').trim() : '';
+      precio = matches[2] ? matches[2].replace(/[{}]/g, '').trim() : '';
+      talle = matches[3] ? matches[3].replace(/[{}]/g, '').trim() : '';
+      detalle = matches[4] ? matches[4].replace(/[{}]/g, '').trim() : '';
     }
     
     const productoDetalle = {
