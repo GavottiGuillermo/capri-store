@@ -283,14 +283,8 @@ async function renderizarProductos() {
 
   // PREVENIR MOVIMIENTOS BRUSCOS - Solo limpiar si es la primera página
   if (paginaActualProductos === 1) {
-    // Aplicar transición suave antes de limpiar
-    productosList.style.transition = 'opacity 0.3s ease';
-    productosList.style.opacity = '0.7';
-    
-    setTimeout(() => {
-      productosList.innerHTML = '';
-      productosList.style.opacity = '1';
-    }, 150);
+    // Limpiar inmediatamente sin animación para evitar que los productos desaparezcan
+    productosList.innerHTML = '';
   }
 
   let productosRenderizados = 0;
