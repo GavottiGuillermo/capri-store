@@ -410,14 +410,19 @@ async function crearTarjetaProducto(prod, tipo) {
   const borderClass = tipo === 'novedad' ? 'border-rosado' : 'border-vino-tinto';
   const btnClass = 'btn-vino-tinto';
   
+  // Filtrar valores null o "null" como string
+  const nombreFinal = (nombre && nombre !== 'null') ? nombre : '';
+  const textoFinal = (textoTarjeta && textoTarjeta !== 'null') ? textoTarjeta : '';
+  const precioFinal = (precio && precio !== 'null') ? precio : '';
+  
   return `
     <div class="${colClass} mb-4">
       <div class="card card-product ${borderClass} rounded-lg shadow h-100 progressive-reveal visible animate-delay-1 border-2" style="border: 0.125rem solid var(--rosado) !important; position: relative;">
-        <img src="${prod.imagen}" class="card-img-top" alt="${nombre || ''}" style="height: 250px; object-fit: cover;">
+        <img src="${prod.imagen}" class="card-img-top" alt="${nombreFinal}" style="height: 250px; object-fit: cover;">
         <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-vino-tinto font-weight-bold">${nombre || ''}</h5>
-          <p class="card-text text-muted mb-2">${textoTarjeta || ''}</p>
-          <span class="text-rosado font-weight-bold h5 mb-3">${precio ? '$' + precio + ' ARS' : ''}</span>
+          <h5 class="card-title text-vino-tinto font-weight-bold">${nombreFinal}</h5>
+          ${textoFinal ? `<p class="card-text text-muted mb-2">${textoFinal}</p>` : ''}
+          ${precioFinal ? `<span class="text-rosado font-weight-bold h5 mb-3">$${precioFinal} ARS</span>` : ''}
         </div>
         <div class="card-footer bg-white border-0">
           <button class="btn ${btnClass} btn-block ver-detalle-btn" data-producto='${JSON.stringify(prod)}'>Ver detalle</button>
