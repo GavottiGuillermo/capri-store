@@ -25,7 +25,26 @@ document.addEventListener('DOMContentLoaded', async function() {
       document.getElementById('mainImage').alt = nombre;
       document.getElementById('nombre-producto').textContent = nombre;
       document.getElementById('precio-producto').textContent = precio ? ('$' + precio + ' ARS') : '';
-      document.querySelector('.descripcion-producto').textContent = textoTarjeta;
+      
+      // Solo mostrar descripción si hay contenido válido
+      const descElement = document.querySelector('.descripcion-producto');
+      if (textoTarjeta && textoTarjeta !== 'null' && textoTarjeta.trim() !== '') {
+        descElement.textContent = textoTarjeta;
+        descElement.style.display = 'block';
+      } else {
+        descElement.style.display = 'none';
+      }
+      
+      // Solo mostrar sección de detalles si hay contenido válido
+      const seccionDetalles = document.getElementById('seccion-detalles');
+      const detalleContenido = document.getElementById('detalle-contenido');
+      if (detalle && detalle !== 'null' && detalle.trim() !== '') {
+        detalleContenido.textContent = detalle;
+        seccionDetalles.style.display = 'block';
+      } else {
+        seccionDetalles.style.display = 'none';
+      }
+      
       // Configurar talle y cantidad fijos
       const selectTalle = document.getElementById('size');
       const inputCantidad = document.getElementById('quantity');

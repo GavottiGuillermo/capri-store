@@ -321,6 +321,13 @@ async function renderizarProductos() {
         const m = path.match(/\/(\d+)-[^/]+/);
         const id = m && m[1] ? parseInt(m[1], 10) : null;
         
+        console.log(`[DEBUG] Procesando producto:`, {
+          path,
+          id,
+          estaEnSinStock: id && window.__CAPRI_SOLD_OUT__ ? window.__CAPRI_SOLD_OUT__.has(id) : false,
+          totalSinStock: window.__CAPRI_SOLD_OUT__ ? window.__CAPRI_SOLD_OUT__.size : 0
+        });
+        
         if (!id) {
           console.warn('[PRODUCTOS] No se pudo extraer id_articulo para', prod, 'path:', path);
         } else {
@@ -343,6 +350,8 @@ async function renderizarProductos() {
               badge.style.zIndex = '15';
               card.appendChild(badge);
             }
+          } else {
+            console.log(`[PRODUCTOS] Producto id=${id} CON STOCK disponible`);
           }
         }
       } catch (e) {
