@@ -510,6 +510,9 @@ function actualizarMenuActivo(categoria) {
     case 'vestidos': menuId = 'menu-vestidos'; break;
     case 'accesorios': menuId = 'menu-accesorios'; break;
     case 'remeras': menuId = 'menu-remeras'; break;
+    case 'bodys': menuId = 'menu-bodys'; break;
+    case 'conjuntos': menuId = 'menu-conjuntos'; break;
+    case 'shorts': menuId = 'menu-shorts'; break;
   }
   
   if (menuId) {
