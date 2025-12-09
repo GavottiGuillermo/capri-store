@@ -325,56 +325,15 @@ app.get('/health', async (req, res) => {
     console.log('🏥 Health check manual solicitado desde:', req.ip);
   }
   
-  // SOLO intentar reconexión si viene de GitHub Actions
-  if (whatsappAvailable && isGitHubActions) {
-    const now = Date.now();
-    
-    // Si han pasado 10 minutos desde el último intento
-    if ((now - lastReconnectAttempt) > RECONNECT_INTERVAL) {
-      lastReconnectAttempt = now;
-      
-      // Verificar estado en background
-      setImmediate(async () => {
-        try {
-          const estadoWhatsApp = await verificarEstadoWhatsApp();
-          
-          // Solo intentar reconectar si NO está disponible Y hay sesión válida en BBDD
-          if (!estadoWhatsApp.disponible) {
-            console.log('\n🔄 ═══════════════════════════════════════════════════════');
-            console.log('🔄 KEEP-ALIVE (GitHub): WhatsApp desconectado');
-            console.log(`🔄 Razón: ${estadoWhatsApp.razon}`);
-            console.log(`🔄 Sesión en BBDD: ${estadoWhatsApp.tieneSesionEnBBDD ? '✅ SÍ' : '❌ NO'}`);
-            if (estadoWhatsApp.sesionEdadDias !== null) {
-              console.log(`🔄 Edad de sesión: ${estadoWhatsApp.sesionEdadDias.toFixed(1)} días`);
-            }
-            console.log(`🔄 Permitir auto-reconexión: ${estadoWhatsApp.permitirAutoReconexion ? '✅ SÍ' : '❌ NO'}`);
-            console.log('🔄 ═══════════════════════════════════════════════════════\n');
-            
-            // SOLO reconectar si hay sesión válida en BBDD del día actual (< 24 horas)
-            if (estadoWhatsApp.permitirAutoReconexion) {
-              console.log('✅ Sesión válida del día actual detectada - Intentando reconexión automática...');
-              try {
-                await inicializarWhatsApp();
-                console.log('✅ Reconexión iniciada - WhatsApp cargará sesión de PostgreSQL');
-              } catch (reconnectError) {
-                console.error('❌ Error en reconexión automática:', reconnectError.message);
-                console.log('\n📱 Para regenerar QR: GET https://capri-store.onrender.com/whatsapp-regenerar-qr\n');
-              }
-            } else {
-              console.log('⏭️ Auto-reconexión OMITIDA: No hay sesión válida del día actual en BBDD');
-              console.log('💡 Razón: ' + (
-                !estadoWhatsApp.tieneSesionEnBBDD ? 'Tabla whatsapp_sessions está vacía' :
-                estadoWhatsApp.sesionEdadDias >= 1 ? `Sesión antigua (${estadoWhatsApp.sesionEdadDias.toFixed(1)} días > 1 día)` :
-                'Sin sesión válida'
-              ));
-              console.log('📱 Solución: Escanear QR manualmente con GET /whatsapp-regenerar-qr');
-            }
-          }
-        } catch (checkError) {
-          console.error('⚠️ Error verificando estado WhatsApp:', checkError.message);
-        }
-      });
-    }
+  // ⚠️ CAMBIO IMPORTANTE: ELIMINADA auto-reconexión desde /health
+  // RAZÓN: Evitar consultas costosas a base de datos Neon desde keep-alive
+  // NUEVO COMPORTAMIENTO:
+  // - Keep-alive solo mantiene Render activo (NO consulta BBDD)
+  // - WhatsApp se reconecta automáticamente cuando llega una nueva venta
+  // - Para reconexión manual: usar /whatsapp-regenerar-qr
+  
+  if (isGitHubActions || isAutomatedCheck) {
+    console.log('💡 Keep-alive ejecutado (sin consulta a BBDD)');
   }
   
   res.json({ 
@@ -394,6 +353,11 @@ app.get('/health', async (req, res) => {
       simplified: true,
       single_instance: true,
       postgresql_sessions: !!process.env.DATABASE_URL
+    },
+    keep_alive_info: {
+      no_db_queries: true,
+      auto_reconnect: 'Deshabilitado desde keep-alive para ahorrar recursos Neon',
+      reconnect_trigger: 'WhatsApp se reconecta automáticamente en nuevas ventas'
     }
   });
 });
@@ -1238,10 +1202,17 @@ async function procesarNotificacionesPendientes() {
   const timestamp = new Date().toISOString();
   
   try {
-    // Verificar si WhatsApp está disponible
+    // OPTIMIZACIÓN: Verificar primero si WhatsApp está disponible SIN consultar BBDD
+    // Solo si está disponible, entonces proceder a consultar notificaciones pendientes
+    if (!whatsappAvailable || !whatsappReady) {
+      // No hacer logs cada 3 minutos, solo cuando sea relevante
+      return;
+    }
+    
+    // Si WhatsApp está disponible, ahora sí verificar estado completo (puede consultar BBDD si es necesario)
     const estadoWhatsApp = await verificarEstadoWhatsApp();
     if (!estadoWhatsApp.disponible) {
-      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible para reintentos: ${estadoWhatsApp.razon}`);
+      console.log(`[${timestamp}] ⏭️ WhatsApp conectado pero no operativo: ${estadoWhatsApp.razon}`);
       return;
     }
     

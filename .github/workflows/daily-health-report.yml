@@ -18,75 +18,88 @@ jobs:
         run: |
           echo "📊 ===== REPORTE DIARIO DE SALUD - CAPRI STORE ====="
           echo "📅 Fecha: $(date)"
+          echo "💡 IMPORTANTE: Reporte no consulta base de datos Neon (ahorro de costos)"
           echo ""
           
-          # Health Check Principal
+          # Health Check Principal (usa /ping para evitar consultas a BBDD)
           echo "🔍 1. HEALTH CHECK PRINCIPAL"
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/health)
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/ping)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
           if [ $http_code -eq 200 ]; then
-            echo "✅ Servicio respondiendo correctamente"
-            echo "$body" | head -20
+            echo "✅ Servicio Render respondiendo correctamente"
+            if command -v jq &> /dev/null; then
+              uptime=$(echo "$body" | jq -r '.uptime // 0')
+              whatsapp=$(echo "$body" | jq -r '.whatsapp_ready // false')
+              echo "⏱️  Uptime: $uptime segundos"
+              echo "📱 WhatsApp: $whatsapp"
+            else
+              echo "$body" | head -10
+            fi
           else
             echo "❌ PROBLEMA: Servicio no responde (Status: $http_code)"
           fi
           
           echo ""
-          echo "🔍 2. ESTADO DE WHATSAPP"
-          # WhatsApp Status Check
+          echo "🔍 2. ESTADO DE WHATSAPP (solo lectura)"
+          # NOTA: /whatsapp-status NO consulta BBDD, solo lee el estado del cliente
           response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/whatsapp-status)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
           if [ $http_code -eq 200 ]; then
             echo "✅ Estado de WhatsApp obtenido"
-            echo "$body" | head -15
+            if command -v jq &> /dev/null; then
+              ready=$(echo "$body" | jq -r '.whatsapp_ready // false')
+              state=$(echo "$body" | jq -r '.state // "UNKNOWN"')
+              echo "📱 Ready: $ready"
+              echo "📊 State: $state"
+            else
+              echo "$body" | head -10
+            fi
           else
-            echo "❌ PROBLEMA: No se pudo obtener estado de WhatsApp"
+            echo "⚠️ No se pudo obtener estado de WhatsApp"
           fi
           
           echo ""
-          echo "🔍 3. MEMORIA Y PERFORMANCE"
-          # Memory Status
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/memory-status)
-          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
+          echo "🔍 3. TEST DE ENDPOINTS PÚBLICOS"
           
-          if [ $http_code -eq 200 ]; then
-            echo "✅ Información de memoria obtenida"
-            echo "$body" | head -10
-          else
-            echo "❌ PROBLEMA: No se pudo obtener información de memoria"
-          fi
-          
-          echo ""
-          echo "🔍 4. TEST DE ENDPOINTS CRÍTICOS"
-          
-          # Test Contact Info
+          # Test Contact Info (no usa BBDD)
           echo "📞 Contact Info:"
-          curl -s https://capri-store.onrender.com/contact-info | head -5
+          contact_status=$(curl -s -o /dev/null -w "%{http_code}" https://capri-store.onrender.com/contact-info)
+          if [ $contact_status -eq 200 ]; then
+            echo "✅ Endpoint funcional"
+          else
+            echo "❌ Status: $contact_status"
+          fi
           
           echo ""
           echo "📦 Stock Status:"
-          curl -s https://capri-store.onrender.com/stock-agotado | head -3
+          stock_status=$(curl -s -o /dev/null -w "%{http_code}" https://capri-store.onrender.com/stock-agotado)
+          if [ $stock_status -eq 200 ]; then
+            echo "✅ Endpoint funcional"
+          else
+            echo "❌ Status: $stock_status"
+          fi
           
           echo ""
           echo "=================================================="
           echo "📊 REPORTE COMPLETADO"
           echo "⏰ Próximo reporte: mañana a las 9:00 AM UTC"
-          echo "🔄 Keep-alive activo cada 12 minutos"
+          echo "🔄 Keep-alive activo cada 2 horas"
+          echo "💾 Base de datos Neon: NO consultada (ahorro de costos)"
           echo "=================================================="
 
       - name: 🚨 Alert on Issues
         run: |
           echo "🚨 Verificando si hay problemas críticos..."
           
-          # Verificar si el servicio principal responde
-          if ! curl -f -s https://capri-store.onrender.com/health > /dev/null; then
+          # Verificar si el servicio principal responde (usando /ping para no consultar BBDD)
+          if ! curl -f -s https://capri-store.onrender.com/ping > /dev/null; then
             echo "🚨 ALERTA CRÍTICA: Servicio principal no responde"
             exit 1
           fi
           
           echo "✅ No se detectaron problemas críticos"
+          echo "💾 Verificación sin consumo de base de datos Neon"

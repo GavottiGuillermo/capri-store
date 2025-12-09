@@ -65,116 +65,87 @@ function makeRequest(path, description, method = 'GET') {
 // Ping básico para mantener despierto
 async function keepAlive() {
   try {
-    await makeRequest('/ping', 'Keep-alive ping silencioso');
+    await makeRequest('/ping', 'Keep-alive ping (mantiene Render activo)');
   } catch (error) {
     console.error('❌ Keep-alive falló:', error.message);
   }
 }
 
-// Verificar salud del sistema
+// Verificar estado del servicio sin consumir BBDD
 async function healthCheck() {
   try {
-    const health = await makeRequest('/ping', 'Health check silencioso');
+    const health = await makeRequest('/ping', 'Health check del servicio');
+    const timestamp = new Date().toISOString();
+    
+    console.log(`\n[${timestamp}] 📊 REPORTE DE ESTADO:`);
+    console.log(`   🖥️  Servicio Render: ✅ ACTIVO`);
+    console.log(`   ⏱️  Uptime: ${health.uptime || 0} segundos`);
     
     if (health.whatsapp_ready) {
-      console.log('   📱 WhatsApp: ✅ CONECTADO');
+      console.log('   📱 WhatsApp: ✅ CONECTADO y listo');
     } else {
       console.log('   📱 WhatsApp: ⚠️ NO CONECTADO');
-      
-      // Si WhatsApp no está conectado, intentar obtener estado detallado
-      try {
-        const status = await makeRequest('/whatsapp-status', 'WhatsApp status check');
-        
-        if (status.qr_generated) {
-          console.log('   📱 Estado: QR generado - necesita escaneo');
-        } else if (status.auth_folder && status.auth_folder.exists) {
-          console.log('   📱 Estado: Sesión existe pero no conectada - posible expiración');
-        } else {
-          console.log('   📱 Estado: No hay sesión - necesita configuración inicial');
-        }
-      } catch (statusError) {
-        console.error('   ❌ Error obteniendo estado WhatsApp:', statusError.message);
-      }
+      console.log('   💡 Para conectar: Accede a /whatsapp-status y escanea el QR');
     }
+    
+    console.log('   💾 Base de datos: NO SE CONSULTA (ahorro de recursos Neon)');
+    console.log('   ✅ Keep-alive cumplió su función\n');
     
   } catch (error) {
     console.error('❌ Health check falló:', error.message);
   }
 }
 
-// Verificar y mantener WhatsApp activo
-async function whatsappMaintenance() {
+// Función simplificada que SOLO muestra estado sin intervenir
+async function checkWhatsAppStatus() {
   try {
-    console.log('🔧 Ejecutando mantenimiento de WhatsApp...');
+    const timestamp = new Date().toISOString();
+    console.log(`\n[${timestamp}] 📱 VERIFICACIÓN WHATSAPP (solo lectura):`);
     
-    const status = await makeRequest('/whatsapp-status', 'WhatsApp maintenance check');
+    const status = await makeRequest('/whatsapp-status', 'Estado WhatsApp');
     
-    if (!status.whatsapp_ready && !status.client_ready) {
-      console.log('⚠️ WhatsApp no está listo - verificando causa...');
-      
-      // Verificar si es problema de QR timeout o sesión expirada
-      if (status.state && (status.state.includes('UNPAIRED') || status.state.includes('TIMEOUT'))) {
-        console.log('🔄 Detectado QR timeout o sesión expirada - iniciando limpieza automática...');
-        
-        try {
-          const cleanResult = await makeRequest('/limpiar-sesiones-whatsapp', 'Auto-regeneración QR', 'POST');
-          
-          if (cleanResult.success) {
-            console.log('✅ Regeneración automática de QR iniciada exitosamente');
-            console.log('📱 Se generará nuevo QR en ~10-15 segundos');
-          } else {
-            console.error('❌ Error en regeneración automática:', cleanResult.error);
-            
-            // Fallback: intentar endpoint de forzado completo
-            console.log('🔄 Intentando reinicio completo como fallback...');
-            await makeRequest('/whatsapp-force-restart', 'Forzar reinicio completo', 'POST');
-          }
-        } catch (regenerationError) {
-          console.error('❌ Error en regeneración automática:', regenerationError.message);
-        }
-      }
-      // Si hay sesión pero no está conectado, puede ser expiración
-      else if (status.auth_folder && status.auth_folder.exists && !status.qr_generated) {
-        console.log('🔄 Posible sesión expirada - intentando limpieza completa...');
-        
-        try {
-          await makeRequest('/limpiar-sesiones-whatsapp', 'Limpiar sesión expirada', 'POST');
-          console.log('✅ Limpieza de sesión expirada iniciada');
-        } catch (cleanError) {
-          console.error('❌ Error en limpieza de sesión:', cleanError.message);
-        }
-      }
-      else {
-        console.log('ℹ️ WhatsApp requiere configuración inicial o escaneo manual de QR');
-      }
-    } else if (status.whatsapp_ready || status.client_ready) {
-      console.log('✅ WhatsApp funcionando correctamente');
+    if (status.whatsapp_ready || status.client_ready) {
+      console.log('   ✅ WhatsApp: FUNCIONANDO correctamente');
+      console.log('   📞 Estado: Listo para enviar mensajes');
+    } else if (status.qr_generated) {
+      console.log('   ⏳ WhatsApp: QR generado, esperando escaneo');
+      console.log('   💡 Acción: Escanea el QR desde /whatsapp-status');
+    } else if (status.state === 'NOT_INITIALIZED') {
+      console.log('   💤 WhatsApp: No inicializado (modo ahorro)');
+      console.log('   💡 Se inicializará automáticamente cuando llegue una venta');
     } else {
-      console.log('⚠️ Estado WhatsApp indeterminado - no se requiere acción automática');
+      console.log('   ⚠️ WhatsApp: Requiere atención manual');
+      console.log('   💡 Accede a /whatsapp-status para ver detalles');
     }
     
+    console.log('   ℹ️  Keep-alive NO hace cambios automáticos\n');
+    
   } catch (error) {
-    console.error('❌ Mantenimiento WhatsApp falló:', error.message);
+    console.error('❌ Verificación WhatsApp falló:', error.message);
   }
 }
 
 // Iniciar keep-alive
-console.log('🚀 Iniciando rutinas de mantenimiento...');
+console.log('🚀 Iniciando rutinas de monitoreo...');
+console.log('💡 IMPORTANTE: Keep-alive NO consume base de datos Neon');
+console.log('💡 Solo mantiene Render activo y muestra estado del servicio\n');
 
 // Ping cada 14 minutos para evitar que Render duerma el servicio
 setInterval(keepAlive, PING_INTERVAL);
 
-// Health check cada 5 minutos
-setInterval(healthCheck, HEALTH_CHECK_INTERVAL);
+// Health check cada 2 horas (solo lectura, no consume BBDD)
+const HEALTH_INTERVAL = 2 * 60 * 60 * 1000; // 2 horas
+setInterval(healthCheck, HEALTH_INTERVAL);
 
-// Mantenimiento de WhatsApp cada 30 minutos
-setInterval(whatsappMaintenance, WHATSAPP_CHECK_INTERVAL);
+// Verificación de estado WhatsApp cada 2 horas (solo lectura)
+const STATUS_CHECK_INTERVAL = 2 * 60 * 60 * 1000; // 2 horas
+setInterval(checkWhatsAppStatus, STATUS_CHECK_INTERVAL);
 
 // Ejecutar checks iniciales
 setTimeout(async () => {
-  console.log('🔄 Ejecutando checks iniciales...');
+  console.log('🔄 Ejecutando check inicial...');
   await healthCheck();
-  await whatsappMaintenance();
+  await checkWhatsAppStatus();
 }, 5000);
 
 // Mantener el script corriendo

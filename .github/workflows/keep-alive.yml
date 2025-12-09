@@ -2,7 +2,7 @@ name: 🔄 Keep Capri Store Alive
 
 on:
   schedule:
-    # Ejecutar cada 2 horas (ahorra 91% de recursos vs cada 10 min)
+    # Ejecutar cada 2 horas (ahorra recursos de Neon y Render)
     - cron: '0 */2 * * *'
   
   # Permitir ejecución manual desde GitHub
@@ -11,55 +11,34 @@ on:
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     
     steps:
-      - name: 🔄 Keep-Alive Health Check (triggers auto-reconnect)
+      - name: 🔄 Keep-Alive Ping (sin consulta a BBDD)
         run: |
-          echo "🔄 Keep-alive con reconexión automática de WhatsApp..."
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" -H "User-Agent: GitHub-Actions-Keep-Alive" https://capri-store.onrender.com/health)
+          echo "🔄 Ejecutando keep-alive para mantener Render activo..."
+          echo "💡 IMPORTANTE: NO consulta base de datos Neon (ahorro de costos)"
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" -H "User-Agent: GitHub-Actions-Keep-Alive" https://capri-store.onrender.com/ping)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
           echo "📊 Status Code: $http_code"
           
           if [ $http_code -eq 200 ]; then
-            echo "✅ Servicio activo (WhatsApp intentará reconexión automática si es necesario)"
+            echo "✅ Servicio Render: ACTIVO"
             
-            # Extraer estado de WhatsApp
+            # Extraer estado de WhatsApp (sin iniciar reconexión)
             if command -v jq &> /dev/null; then
               whatsapp_ready=$(echo "$body" | jq -r '.whatsapp_ready // false')
+              uptime=$(echo "$body" | jq -r '.uptime // 0')
               echo "📱 WhatsApp: $whatsapp_ready"
+              echo "⏱️  Uptime: $uptime segundos"
             fi
+            
+            echo "💾 Base de datos Neon: NO CONSULTADA (ahorro de recursos)"
           else
             echo "❌ Servicio no responde"
             exit 1
-          fi
-
-      - name: 📊 Memory Check
-        run: |
-          echo "📊 Verificando uso de memoria..."
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" https://capri-store.onrender.com/memory-status)
-          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-          body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
-          
-          echo "📊 Memory Status Code: $http_code"
-          echo "📄 Memory Response: $body"
-          
-          if [ $http_code -eq 200 ]; then
-            echo "✅ Información de memoria obtenida"
-            
-            # Extraer porcentaje de uso si está disponible
-            if command -v jq &> /dev/null; then
-              usage_percent=$(echo "$body" | jq -r '.render_info.usage_percent // "N/A"')
-              echo "📊 Uso de memoria: $usage_percent%"
-              
-              if [ "$usage_percent" != "N/A" ] && [ "$usage_percent" -gt 85 ]; then
-                echo "⚠️ USO DE MEMORIA ALTO: $usage_percent%"
-              fi
-            fi
-          else
-            echo "⚠️ No se pudo obtener información de memoria"
           fi
 
       - name: 🎯 Summary
@@ -67,8 +46,10 @@ jobs:
           echo ""
           echo "🎯 ===== RESUMEN DE KEEP-ALIVE ====="
           echo "📅 Fecha: $(date)"
-          echo "🔄 Servicio mantenido activo exitosamente"
-          echo "📱 Auto-reconexión WhatsApp: cada 10 min si desconectado"
-          echo "⏰ Próxima ejecución: en 10 minutos"
+          echo "✅ Servicio Render mantenido activo"
+          echo "💾 Base de datos Neon: NO consumida"
+          echo "📱 WhatsApp: Se reconecta automáticamente en nuevas ventas"
+          echo "⏰ Próxima ejecución: en 2 horas"
           echo "🌐 URL: https://capri-store.onrender.com"
+          echo "💡 Para reconexión manual: /whatsapp-regenerar-qr"
           echo "=================================="
