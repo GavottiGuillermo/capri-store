@@ -7,7 +7,7 @@ function prepararItemsParaMP(cartItems) {
       // Normalizar caracteres especiales (tildes, ñ, etc.)
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover diacríticos
       .replace(/ñ/gi, 'n') // Reemplazar ñ
-      .replace(/[<>"'`\\]/g, '') // Remover caracteres peligrosos
+      .replace(/[<>"'`\\()\[\]:;]/g, '') // Remover paréntesis, corchetes, dos puntos
       .replace(/\s+/g, ' ') // Normalizar espacios
       .trim()
       .substring(0, 256); // Límite de MercadoPago
@@ -316,7 +316,7 @@ async function iniciarProcesoPago() {
     return String(texto)
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/ñ/gi, 'n')
-      .replace(/[<>"'`\\]/g, '')
+      .replace(/[<>"'`\\()\[\]:;]/g, '')
       .trim()
       .substring(0, 256);
   };

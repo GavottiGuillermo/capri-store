@@ -1025,9 +1025,24 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
         .replace(/[<>]/g, '') // Remover < >
         .replace(/["'`]/g, '') // Remover comillas
         .replace(/\\/g, '') // Remover backslashes
+        .replace(/[():;]/g, '') // Remover paréntesis, dos puntos
         .trim()
         .substring(0, 600); // Limitar longitud
     };
+
+    // Separar código de área del teléfono (formato: 5491165031329 -> 54 11 65031329)
+    const telefonoStr = String(datosComprador.telefono || '').replace(/\D/g, '');
+    let areaCode = '';
+    let phoneNumber = telefonoStr;
+    
+    // Si el teléfono empieza con 549 (Argentina con WhatsApp), separar código
+    if (telefonoStr.startsWith('549')) {
+      areaCode = '11'; // Código de área de Buenos Aires
+      phoneNumber = telefonoStr.substring(4); // Remover 549 + código área
+    } else if (telefonoStr.startsWith('54')) {
+      areaCode = '11';
+      phoneNumber = telefonoStr.substring(4);
+    }
 
     const preferenceData = {
       items: items.map(item => ({
@@ -1040,10 +1055,10 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       payer: {
         name: sanitizeString(datosComprador.nombre || '').substring(0, 256),
         surname: sanitizeString(datosComprador.apellido || '').substring(0, 256),
-        email: `${datosComprador.telefono}@whatsapp.temp`,
+        email: `cliente${telefonoStr}@mp.com.ar`, // Email válido con dominio argentino
         phone: {
-          area_code: '',
-          number: String(datosComprador.telefono || '').substring(0, 20)
+          area_code: areaCode,
+          number: phoneNumber.substring(0, 15)
         }
       },
       back_urls: {
