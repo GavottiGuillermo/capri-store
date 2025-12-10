@@ -1255,19 +1255,27 @@ async function procesarNotificacionesPendientes() {
   const timestamp = new Date().toISOString();
   
   try {
+    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}`);
+    
     // OPTIMIZACIÓN: Verificar primero si WhatsApp está disponible SIN consultar BBDD
     // Solo si está disponible, entonces proceder a consultar notificaciones pendientes
     if (!whatsappAvailable || !whatsappReady) {
-      // No hacer logs cada 3 minutos, solo cuando sea relevante
+      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}`);
       return;
     }
     
+    console.log(`[${timestamp}] ✅ WhatsApp disponible - verificando estado completo...`);
+    
     // Si WhatsApp está disponible, ahora sí verificar estado completo (puede consultar BBDD si es necesario)
     const estadoWhatsApp = await verificarEstadoWhatsApp();
+    console.log(`[${timestamp}] 🔍 Estado WhatsApp:`, estadoWhatsApp);
+    
     if (!estadoWhatsApp.disponible) {
       console.log(`[${timestamp}] ⏭️ WhatsApp conectado pero no operativo: ${estadoWhatsApp.razon}`);
       return;
     }
+    
+    console.log(`[${timestamp}] ✅ WhatsApp operativo - buscando notificaciones pendientes...`);
     
     // Buscar productos con notificación pendiente
     const resultPendientes = await executeQueryWithRetry(

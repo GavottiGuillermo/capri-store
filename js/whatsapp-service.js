@@ -446,6 +446,30 @@ whatsappClient.on('ready', async () => {
           console.error('❌ Error en limpieza de memoria:', error.message);
         }
       }, 15 * 60 * 1000); // 15 minutos
+
+      // Keep-alive de WhatsApp - enviar mensaje cada 30 minutos para mantener sesión activa
+      if (ADMIN_WHATSAPP) {
+        console.log(`💚 Keep-alive WhatsApp configurado - mensaje cada 30 min a ${ADMIN_WHATSAPP}`);
+        setInterval(async () => {
+          try {
+            if (whatsappReady) {
+              const adminNumber = ADMIN_WHATSAPP.replace(/\D/g, '');
+              const chatId = `${adminNumber}@c.us`;
+              const timestamp = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+              const mensaje = `💚 Keep-alive WhatsApp - ${timestamp}`;
+              
+              await whatsappClient.sendMessage(chatId, mensaje);
+              console.log(`💚 Keep-alive enviado a ${ADMIN_WHATSAPP} - ${timestamp}`);
+            } else {
+              console.log('⏭️ Keep-alive omitido - WhatsApp no listo');
+            }
+          } catch (error) {
+            console.error('❌ Error en keep-alive WhatsApp:', error.message);
+          }
+        }, 30 * 60 * 1000); // 30 minutos
+      } else {
+        console.warn('⚠️ ADMIN_WHATSAPP no configurado - keep-alive deshabilitado');
+      }
     }
     
   } catch (error) {
