@@ -1053,13 +1053,12 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       },
       auto_return: 'approved',
       notification_url: `https://capri-store.onrender.com/webhook`,
+      // Metadata simplificado al mínimo para evitar problemas de CSP con MercadoPago
       metadata: {
-        tipo_entrega: sanitizeString(datosComprador.tipoEntrega || 'retiro'),
-        costo_envio: Number(datosComprador.costoEnvio || 0),
-        datos_envio: sanitizeString(JSON.stringify(datosComprador.datosEnvio || {})),
-        telefono: String(datosComprador.telefono).substring(0, 20),
-        timestamp: new Date().toISOString()
-      }
+        telefono: String(datosComprador.telefono).replace(/\D/g, '').substring(0, 15)
+      },
+      // Guardar el resto de la información en external_reference (campo seguro)
+      external_reference: `TEL${datosComprador.telefono}_${Date.now()}`
     };
     
     console.log('📋 Creando preferencia con', items.length, 'items');
