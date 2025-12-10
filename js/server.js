@@ -1080,9 +1080,13 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
         pending: `${baseUrl}/pending.html`
       },
       auto_return: 'approved',
-      notification_url: `https://capri-store.onrender.com/webhook`
-      // ELIMINADOS metadata y external_reference para evitar bug CSP de MercadoPago
-      // La info del teléfono está en payer.phone de todas formas
+      notification_url: `https://capri-store.onrender.com/webhook`,
+      // Metadata simplificado para identificación en webhook
+      metadata: {
+        telefono: String(datosComprador.telefono).replace(/\D/g, '').substring(0, 15)
+      },
+      // External reference para tracking adicional
+      external_reference: `TEL${datosComprador.telefono}_${Date.now()}`
     };
     
     // LOG DETALLADO DE LA PREFERENCIA
