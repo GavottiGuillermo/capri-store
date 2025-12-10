@@ -80,6 +80,15 @@ function configurarEventListeners() {
   if (overlay) {
     overlay.addEventListener('click', closeCartSidenav);
   }
+
+  // Event listener para botón "Seguir Comprando"
+  const seguirComprandoBtn = document.getElementById('seguirComprandoBtn');
+  if (seguirComprandoBtn) {
+    seguirComprandoBtn.addEventListener('click', function() {
+      closeCartSidenav();
+      window.location.href = 'index.html';
+    });
+  }
 }
 
 // Guardar el carrito en localStorage

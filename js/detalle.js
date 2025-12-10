@@ -276,6 +276,15 @@ document.addEventListener('DOMContentLoaded', async function() {
 // Lógica de agregar al carrito desde el detalle
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Event listener para botón "Seguir Comprando"
+  const seguirComprandoBtn = document.getElementById('seguirComprandoBtn');
+  if (seguirComprandoBtn) {
+    seguirComprandoBtn.addEventListener('click', function() {
+      if (typeof closeCartSidenav === 'function') closeCartSidenav();
+      window.location.href = 'index.html';
+    });
+  }
+
   const btnAgregar = document.getElementById('btnAgregarCarrito');
   const selectTalle = document.getElementById('size');
   const inputCantidad = document.getElementById('quantity');
