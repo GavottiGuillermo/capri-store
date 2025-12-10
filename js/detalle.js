@@ -659,9 +659,9 @@ function mostrarPopup(mensaje, tipo = 'success') {
   popup.id = "popup-carrito";
   popup.style.cssText = `
     position: fixed;
-    top: 50%;
+    top: 30px;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.8);
+    transform: translateX(-50%) scale(0.8);
     background: ${config.bg};
     color: ${config.color};
     padding: 20px 28px;
@@ -702,13 +702,13 @@ function mostrarPopup(mensaje, tipo = 'success') {
   // Animar aparición con rebote elegante
   requestAnimationFrame(() => {
     popup.style.opacity = '1';
-    popup.style.transform = 'translate(-50%, -50%) scale(1)';
+    popup.style.transform = 'translateX(-50%) scale(1)';
   });
   
   // Animar desaparición
   setTimeout(() => {
     popup.style.opacity = '0';
-    popup.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    popup.style.transform = 'translateX(-50%) scale(0.9)';
     setTimeout(() => popup.remove(), 500);
   }, 3500);
 }
