@@ -1,5 +1,18 @@
 // === PREPARAR ITEMS PARA MERCADO PAGO ===
 function prepararItemsParaMP(cartItems) {
+  // Función para sanitizar strings y evitar problemas con CSP de MercadoPago
+  const sanitizarTexto = (texto) => {
+    if (!texto) return 'Producto';
+    return String(texto)
+      // Normalizar caracteres especiales (tildes, ñ, etc.)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover diacríticos
+      .replace(/ñ/gi, 'n') // Reemplazar ñ
+      .replace(/[<>"'`\\]/g, '') // Remover caracteres peligrosos
+      .replace(/\s+/g, ' ') // Normalizar espacios
+      .trim()
+      .substring(0, 256); // Límite de MercadoPago
+  };
+
   return cartItems.map(item => {
     // Usar id_articulo si está presente, si no, intentar extraerlo del path de la imagen
     let id = item.id_articulo || item.id;
@@ -8,7 +21,7 @@ function prepararItemsParaMP(cartItems) {
     }
     return {
       id: id || undefined,
-      title: item.nombre,
+      title: sanitizarTexto(item.nombre),
       quantity: item.cantidad,
       currency_id: 'ARS',
       unit_price: Number(item.precio)
@@ -297,9 +310,20 @@ async function iniciarProcesoPago() {
       referencias: formData.get('referencias')
     };
   }
+  // Sanitizar datos del comprador
+  const sanitizarNombre = (texto) => {
+    if (!texto) return '';
+    return String(texto)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/ñ/gi, 'n')
+      .replace(/[<>"'`\\]/g, '')
+      .trim()
+      .substring(0, 256);
+  };
+
   const checkoutData = {
-    nombre: formData.get('nombre'),
-    apellido: formData.get('apellido'),
+    nombre: sanitizarNombre(formData.get('nombre')),
+    apellido: sanitizarNombre(formData.get('apellido')),
     telefono: formData.get('telefono'),
     tipoEntrega: tipoEntrega,
     datosEnvio: datosEnvio,
