@@ -273,9 +273,10 @@
                 <div class="invalid-feedback">Por favor ingresa un correo válido.</div>
               </div>
               <div class="col-md-6 mb-3">
-                <label class="font-weight-bold text-vino-tinto" for="telefono">Teléfono *</label>
-                <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="+54 9 11 1234 5678" required autocomplete="tel">
-                <div class="invalid-feedback">Por favor ingresa tu teléfono.</div>
+                <label class="font-weight-bold text-vino-tinto" for="telefono">Teléfono (WhatsApp) *</label>
+                <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="549 11 1234 5678" required autocomplete="tel" pattern="[0-9+\s-]+">
+                <small class="form-text text-muted">Formato: 549 + código área + número (ej: 549 11 65031329 o 549 3487 123456)</small>
+                <div class="invalid-feedback">Por favor ingresa tu teléfono con formato 549 + código área + número.</div>
               </div>
             </div>
           </section>

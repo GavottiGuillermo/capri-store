@@ -995,12 +995,26 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       });
     }
     
-    // Normalizar teléfono del comprador
-    const telefonoNormalizado = normalizePhoneNumber(datosComprador.telefono);
+    // Normalizar teléfono del comprador y agregar +54 si falta
+    let telefonoInput = String(datosComprador.telefono || '').replace(/\D/g, ''); // Solo dígitos
+    
+    // Agregar 54 (Argentina) si no está presente
+    if (!telefonoInput.startsWith('54')) {
+      // Si empieza con 9 (WhatsApp), agregar 54 antes
+      if (telefonoInput.startsWith('9')) {
+        telefonoInput = '54' + telefonoInput;
+      } else {
+        // Si es número local (ej: 1165031329), agregar 549
+        telefonoInput = '549' + telefonoInput;
+      }
+      console.log('🔄 Teléfono sin código país, agregando 54:', telefonoInput);
+    }
+    
+    const telefonoNormalizado = normalizePhoneNumber(telefonoInput);
     if (!telefonoNormalizado) {
       console.error('❌ Formato de teléfono inválido:', datosComprador.telefono);
       return res.status(400).json({ 
-        error: 'Formato de teléfono inválido' 
+        error: 'Formato de teléfono inválido. Use formato: 549 + código área + número' 
       });
     }
     
