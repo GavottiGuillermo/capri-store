@@ -1030,18 +1030,19 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
         .substring(0, 600); // Limitar longitud
     };
 
-    // Separar código de área del teléfono (formato: 5491165031329 -> 54 11 65031329)
+    // Separar código de país del teléfono
+    // Formato: 5491165031329 -> area_code: '54' (país), number: '1165031329' (con código de ciudad)
     const telefonoStr = String(datosComprador.telefono || '').replace(/\D/g, '');
-    let areaCode = '';
+    let areaCode = '54'; // Código de país Argentina
     let phoneNumber = telefonoStr;
     
-    // Si el teléfono empieza con 549 (Argentina con WhatsApp), separar código
+    // Si el teléfono ya incluye el código de país 54, separarlo
     if (telefonoStr.startsWith('549')) {
-      areaCode = '11'; // Código de área de Buenos Aires
-      phoneNumber = telefonoStr.substring(4); // Remover 549 + código área
+      // Formato WhatsApp: 549 + código área + número
+      phoneNumber = telefonoStr.substring(3); // Remover '549', dejar código área + número
     } else if (telefonoStr.startsWith('54')) {
-      areaCode = '11';
-      phoneNumber = telefonoStr.substring(4);
+      // Formato estándar: 54 + código área + número
+      phoneNumber = telefonoStr.substring(2); // Remover '54', dejar código área + número
     }
 
     const preferenceData = {
