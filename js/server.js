@@ -1070,7 +1070,7 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       payer: {
         name: sanitizeString(datosComprador.nombre || '').substring(0, 256),
         surname: sanitizeString(datosComprador.apellido || '').substring(0, 256),
-        email: `cliente${telefonoStr}@mp.com.ar`, // Email válido con dominio argentino
+        email: datosComprador.email || `cliente${telefonoStr}@mp.com.ar`, // Email real del usuario o fallback
         phone: {
           area_code: areaCode,
           number: phoneNumber.substring(0, 15)
