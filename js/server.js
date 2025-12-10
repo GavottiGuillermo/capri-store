@@ -1061,7 +1061,22 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       external_reference: `TEL${datosComprador.telefono}_${Date.now()}`
     };
     
-    console.log('📋 Creando preferencia con', items.length, 'items');
+    // LOG DETALLADO DE LA PREFERENCIA
+    console.log('=== PREFERENCIA PARA MERCADOPAGO ===');
+    console.log('📋 Total items:', preferenceData.items.length);
+    preferenceData.items.forEach((item, idx) => {
+      console.log(`  Item ${idx + 1}:`, JSON.stringify(item));
+      // Verificar caracteres problemáticos
+      const problematicos = item.title.match(/[^\x00-\x7F]/g);
+      if (problematicos) {
+        console.warn(`  ⚠️ Caracteres no-ASCII en item ${idx + 1}:`, problematicos);
+      }
+    });
+    console.log('👤 Payer:', JSON.stringify(preferenceData.payer));
+    console.log('🔙 Back URLs:', preferenceData.back_urls);
+    console.log('📦 Metadata:', JSON.stringify(preferenceData.metadata));
+    console.log('🔗 External ref:', preferenceData.external_reference);
+    console.log('====================================');
     
     const result = await preference.create({ body: preferenceData });
     

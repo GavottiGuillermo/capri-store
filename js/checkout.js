@@ -336,7 +336,7 @@ async function iniciarProcesoPago() {
   if (costoEnvio > 0) {
     items.push({
       id: 'ENVIO',
-      title: 'Costo de Envío',
+      title: 'Costo de Envio', // Sin tilde
       quantity: 1,
       currency_id: 'ARS',
       unit_price: Number(costoEnvio)
@@ -346,11 +346,26 @@ async function iniciarProcesoPago() {
   const pagarBtn = document.getElementById('iniciarPago');
   pagarBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
   pagarBtn.disabled = true;
-  // LOG: Mostrar datos que se enviarán al backend
-  console.log('[checkout] Enviando a /crear-preferencia:', {
-    items,
-    datosComprador: checkoutData
+  
+  // LOG DETALLADO: Mostrar CADA item individual
+  console.log('=== DATOS PARA MERCADOPAGO ===');
+  console.log('Total items:', items.length);
+  items.forEach((item, index) => {
+    console.log(`Item ${index + 1}:`, {
+      id: item.id,
+      title: item.title,
+      'title_length': item.title.length,
+      'title_chars': item.title.split('').map(c => `${c}(${c.charCodeAt(0)})`).join(','),
+      quantity: item.quantity,
+      unit_price: item.unit_price
+    });
   });
+  console.log('Datos comprador:', {
+    nombre: checkoutData.nombre,
+    apellido: checkoutData.apellido,
+    telefono: checkoutData.telefono
+  });
+  console.log('==============================');
   try {
     // Usar la URL absoluta del backend en Render
     const API_URL = 'https://capri-store.onrender.com/crear-preferencia';
