@@ -9,7 +9,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     try {
       // Obtener los datos actualizados desde el .txt del producto
       const resp = await fetch(producto.txt);
-      const txt = await resp.text();
+      // Forzar decodificación UTF-8
+      const buffer = await resp.arrayBuffer();
+      const decoder = new TextDecoder('utf-8');
+      const txt = decoder.decode(buffer);
       // Extraer información entre llaves en formato secuencial
       // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
       const matches = txt.match(/\{([^}]+)\}/g);

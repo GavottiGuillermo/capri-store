@@ -426,7 +426,10 @@ async function crearTarjetaProducto(prod, tipo) {
   let nombre = '', precio = '', textoTarjeta = '';
   try {
     const txtResp = await fetch(prod.txt);
-    const txt = await txtResp.text();
+    // Forzar decodificación UTF-8
+    const buffer = await txtResp.arrayBuffer();
+    const decoder = new TextDecoder('utf-8');
+    const txt = decoder.decode(buffer);
     console.log('Contenido del .txt:', txt);
     
     // Extraer información entre llaves en formato secuencial
@@ -644,7 +647,14 @@ function obtenerCategoriasDisponibles() {
 // Guardar producto en localStorage y redirigir
 function verDetalleCapri(prod) {
   // Permitir ver el detalle incluso si está sin stock
-  fetch(prod.txt).then(r => r.text()).then(txt => {
+  fetch(prod.txt)
+    .then(r => r.arrayBuffer())
+    .then(buffer => {
+      // Forzar decodificación UTF-8
+      const decoder = new TextDecoder('utf-8');
+      return decoder.decode(buffer);
+    })
+    .then(txt => {
     // Extraer información entre llaves en formato secuencial
     // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
     // NOTA: Todos los campos son opcionales
