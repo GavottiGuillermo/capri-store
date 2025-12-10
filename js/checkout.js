@@ -412,6 +412,34 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   console.log('✅ Checkout inicializado correctamente - Sin animaciones');
+  
+  // Event listeners para el carrito sidebar (sin onclick inline para CSP)
+  const closeCartBtn = document.getElementById('closeCartBtn');
+  const cartSidenavOverlay = document.getElementById('cartSidenavOverlay');
+  const finalizarCompraBtn = document.getElementById('finalizarCompraBtn');
+  const volverInicioBtn = document.getElementById('volverInicioBtn');
+  
+  if (closeCartBtn) {
+    closeCartBtn.addEventListener('click', function() {
+      if (typeof closeCartSidenav === 'function') closeCartSidenav();
+    });
+  }
+  
+  if (cartSidenavOverlay) {
+    cartSidenavOverlay.addEventListener('click', function() {
+      if (typeof closeCartSidenav === 'function') closeCartSidenav();
+    });
+  }
+  
+  if (finalizarCompraBtn) {
+    finalizarCompraBtn.addEventListener('click', function() {
+      if (typeof finalizarCompraSidebar === 'function') finalizarCompraSidebar();
+    });
+  }
+  
+  if (volverInicioBtn) {
+    volverInicioBtn.addEventListener('click', volverAInicio);
+  }
 });
 
 // === FUNCIONES AUXILIARES PARA EL CARRITO ===
