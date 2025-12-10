@@ -457,6 +457,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const closeCartBtn = document.getElementById('closeCartBtn');
   const cartSidenavOverlay = document.getElementById('cartSidenavOverlay');
   const finalizarCompraBtn = document.getElementById('finalizarCompraBtn');
+  const seguirComprandoBtn = document.getElementById('seguirComprandoBtn');
   const volverInicioBtn = document.getElementById('volverInicioBtn');
   
   if (closeCartBtn) {
@@ -474,6 +475,13 @@ document.addEventListener('DOMContentLoaded', function() {
   if (finalizarCompraBtn) {
     finalizarCompraBtn.addEventListener('click', function() {
       if (typeof finalizarCompraSidebar === 'function') finalizarCompraSidebar();
+    });
+  }
+  
+  if (seguirComprandoBtn) {
+    seguirComprandoBtn.addEventListener('click', function() {
+      if (typeof closeCartSidenav === 'function') closeCartSidenav();
+      window.location.href = 'index.html';
     });
   }
   

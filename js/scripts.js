@@ -438,8 +438,9 @@ function mostrarPopupAnimado(mensaje, tipo = 'success') {
   popup.className = "animate-scale-in";
   popup.style.cssText = `
     position: fixed;
-    top: 30px;
-    right: 30px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
     background: ${config.bg};
     color: ${config.color};
     padding: 20px 28px;
@@ -450,7 +451,6 @@ function mostrarPopupAnimado(mensaje, tipo = 'success') {
     font-size: 1rem;
     font-weight: 500;
     opacity: 0;
-    transform: scale(0.8) translateY(-20px) translateX(20px);
     transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     border: 1px solid rgba(255,255,255,0.2);
     max-width: 350px;
@@ -481,13 +481,13 @@ function mostrarPopupAnimado(mensaje, tipo = 'success') {
   // Animar aparición con rebote elegante
   requestAnimationFrame(() => {
     popup.style.opacity = '1';
-    popup.style.transform = 'scale(1) translateY(0) translateX(0)';
+    popup.style.transform = 'translate(-50%, -50%) scale(1)';
   });
   
   // Animar desaparición
   setTimeout(() => {
     popup.style.opacity = '0';
-    popup.style.transform = 'scale(0.9) translateY(-10px) translateX(10px)';
+    popup.style.transform = 'translate(-50%, -50%) scale(0.9)';
     setTimeout(() => popup.remove(), 500);
   }, 3500);
 }
