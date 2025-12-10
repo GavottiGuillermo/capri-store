@@ -1045,18 +1045,16 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
     };
 
     // Separar código de país del teléfono
-    // Formato: 5491165031329 -> area_code: '54' (país), number: '1165031329' (con código de ciudad)
+    // Formato MercadoPago: area_code='54', number='9 + código área + número'
+    // Ejemplo: 5491165031329 -> area_code: '54', number: '91165031329'
     const telefonoStr = String(datosComprador.telefono || '').replace(/\D/g, '');
     let areaCode = '54'; // Código de país Argentina
     let phoneNumber = telefonoStr;
     
     // Si el teléfono ya incluye el código de país 54, separarlo
-    if (telefonoStr.startsWith('549')) {
-      // Formato WhatsApp: 549 + código área + número
-      phoneNumber = telefonoStr.substring(3); // Remover '549', dejar código área + número
-    } else if (telefonoStr.startsWith('54')) {
-      // Formato estándar: 54 + código área + número
-      phoneNumber = telefonoStr.substring(2); // Remover '54', dejar código área + número
+    if (telefonoStr.startsWith('54')) {
+      // Remover solo '54' del inicio, dejar el resto (incluyendo el 9 de WhatsApp)
+      phoneNumber = telefonoStr.substring(2); // '5491165031329' -> '91165031329'
     }
 
     const preferenceData = {
