@@ -339,16 +339,15 @@ whatsappClient.on('ready', async () => {
     const now = Date.now();
     if (now - lastCallbackExecution > CALLBACK_DEBOUNCE_MS) {
       lastCallbackExecution = now;
-      console.log('🔄 Programando callback para notificaciones pendientes en 5 segundos...');
-      // Usar setTimeout con delay para asegurar que whatsappReady esté completamente configurado
-      setTimeout(() => {
+      console.log('🔄 Ejecutando callback para notificaciones pendientes (ahora que ready=true)...');
+      // Ejecutar inmediatamente ya que ready=true está garantizado
+      setImmediate(async () => {
         try {
-          console.log('🔄 Ejecutando callback para notificaciones pendientes...');
-          onWhatsAppReadyCallback();
+          await onWhatsAppReadyCallback();
         } catch (error) {
           console.error('❌ Error en callback de notificaciones pendientes:', error);
         }
-      }, 5000); // 5 segundos de delay
+      });
     } else {
       console.log('⏳ Callback omitido - ejecutado recientemente (debounce)');
     }

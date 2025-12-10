@@ -1251,16 +1251,24 @@ async function verificarEstadoWhatsApp() {
 
 // Función para marcar conexión exitosa
 // Función para procesar notificaciones pendientes
-async function procesarNotificacionesPendientes() {
+async function procesarNotificacionesPendientes(reintentos = 0) {
   const timestamp = new Date().toISOString();
   
   try {
-    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}`);
+    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}, reintentos: ${reintentos}`);
     
     // OPTIMIZACIÓN: Verificar primero si WhatsApp está disponible SIN consultar BBDD
     // Solo si está disponible, entonces proceder a consultar notificaciones pendientes
     if (!whatsappAvailable || !whatsappReady) {
-      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}`);
+      // Si no está listo y es el primer intento, reintentar después de 10 segundos
+      if (reintentos === 0) {
+        console.log(`[${timestamp}] ⏳ WhatsApp no listo aún - reintentando en 10 segundos...`);
+        setTimeout(() => {
+          procesarNotificacionesPendientes(1);
+        }, 10000);
+        return;
+      }
+      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible después de reintento - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}`);
       return;
     }
     
