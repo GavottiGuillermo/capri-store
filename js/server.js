@@ -1018,21 +1018,32 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
     // Crear la preferencia de MercadoPago
     const preference = new Preference(client);
     
+    // Función helper para sanitizar strings (remover caracteres que pueden causar problemas con CSP)
+    const sanitizeString = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/[<>]/g, '') // Remover < >
+        .replace(/["'`]/g, '') // Remover comillas
+        .replace(/\\/g, '') // Remover backslashes
+        .trim()
+        .substring(0, 600); // Limitar longitud
+    };
+
     const preferenceData = {
       items: items.map(item => ({
-        id: String(item.id || 'producto'),
-        title: item.title || item.nombre || 'Producto',
+        id: String(item.id || 'producto').substring(0, 50),
+        title: sanitizeString(item.title || item.nombre || 'Producto').substring(0, 256),
         quantity: Number(item.quantity || item.cantidad || 1),
         currency_id: 'ARS',
         unit_price: Number(item.unit_price || item.precio || 0)
       })),
       payer: {
-        name: datosComprador.nombre || '',
-        surname: datosComprador.apellido || '',
-        email: `${datosComprador.telefono}@whatsapp.temp`, // Email temporal generado del teléfono
+        name: sanitizeString(datosComprador.nombre || '').substring(0, 256),
+        surname: sanitizeString(datosComprador.apellido || '').substring(0, 256),
+        email: `${datosComprador.telefono}@whatsapp.temp`,
         phone: {
           area_code: '',
-          number: String(datosComprador.telefono || '')
+          number: String(datosComprador.telefono || '').substring(0, 20)
         }
       },
       back_urls: {
@@ -1043,10 +1054,10 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       auto_return: 'approved',
       notification_url: `https://capri-store.onrender.com/webhook`,
       metadata: {
-        tipo_entrega: datosComprador.tipoEntrega || 'retiro',
-        costo_envio: datosComprador.costoEnvio || 0,
-        datos_envio: JSON.stringify(datosComprador.datosEnvio || {}),
-        telefono: datosComprador.telefono,
+        tipo_entrega: sanitizeString(datosComprador.tipoEntrega || 'retiro'),
+        costo_envio: Number(datosComprador.costoEnvio || 0),
+        datos_envio: sanitizeString(JSON.stringify(datosComprador.datosEnvio || {})),
+        telefono: String(datosComprador.telefono).substring(0, 20),
         timestamp: new Date().toISOString()
       }
     };
