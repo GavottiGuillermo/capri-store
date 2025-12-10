@@ -8,6 +8,39 @@ const ITEMS_POR_PAGINA_PRODUCTOS = 8; // 2 filas de 4 productos
 let paginaActualNovedades = 1;
 let paginaActualProductos = 1;
 
+// Orden alfabético de categorías (mismo orden que en el menú)
+const ORDEN_CATEGORIAS = [
+  'accesorios',
+  'bodys',
+  'conjuntos',
+  'minis',
+  'pantalones',
+  'polleras',
+  'remeras',
+  'shorts',
+  'tops',
+  'vestidos'
+];
+
+// Función para ordenar productos por categoría
+function ordenarPorCategoria(productos) {
+  return productos.sort((a, b) => {
+    // Extraer categoría base (antes del guión)
+    const catA = (a.categoria || '').toLowerCase().split('-')[0];
+    const catB = (b.categoria || '').toLowerCase().split('-')[0];
+    
+    // Obtener índice en el orden de categorías
+    const indexA = ORDEN_CATEGORIAS.indexOf(catA);
+    const indexB = ORDEN_CATEGORIAS.indexOf(catB);
+    
+    // Si una categoría no está en el orden, ponerla al final
+    const ordenA = indexA === -1 ? 999 : indexA;
+    const ordenB = indexB === -1 ? 999 : indexB;
+    
+    return ordenA - ordenB;
+  });
+}
+
 //  Cargar productos desde productos.json del bucket
 async function cargarProductosCapri() {
   // Agregar timestamp para evitar caché del navegador
@@ -73,6 +106,9 @@ async function cargarProductosCapri() {
   // Todos los productos (incluyendo los que tienen "-Novedad")
   todosLosProductos = productos.filter(p => p.categoria && p.categoria.toLowerCase() !== 'novedades');
   
+  // Ordenar productos por categoría alfabéticamente
+  todosLosProductos = ordenarPorCategoria(todosLosProductos);
+  
   // Inicializar productos filtrados con todos los productos
   productosFiltrados = [...todosLosProductos];
   
@@ -80,6 +116,12 @@ async function cargarProductosCapri() {
 
   // Actualizar navegación
   actualizarNavegacion();
+
+  // Limpiar contenedores antes de renderizar (igual que en refrescarStock)
+  const novedadesList = document.getElementById('novedades-list');
+  const productosList = document.getElementById('productos-list');
+  if (novedadesList) novedadesList.innerHTML = '';
+  if (productosList) productosList.innerHTML = '';
 
   // Renderizar la primera página
   await renderizarNovedades();
@@ -123,6 +165,8 @@ async function refrescarStock() {
           return categoria === 'novedades' || categoria.includes('-novedad');
         });
         todosLosProductos = productos.filter(p => p.categoria && p.categoria.toLowerCase() !== 'novedades');
+        // Ordenar productos por categoría alfabéticamente
+        todosLosProductos = ordenarPorCategoria(todosLosProductos);
         productosFiltrados = categoriaActiva === 'todos' ? [...todosLosProductos] : 
           todosLosProductos.filter(p => {
             if (!p.categoria) return false;
