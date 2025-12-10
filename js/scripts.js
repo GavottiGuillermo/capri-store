@@ -281,7 +281,9 @@ function actualizarCartSidenav() {
       finalizarBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3';
       finalizarBtn.textContent = 'Carrito Vacío';
       finalizarBtn.disabled = true;
-      finalizarBtn.onclick = null;
+      // Remover event listeners existentes clonando el nodo
+      const newBtn = finalizarBtn.cloneNode(true);
+      finalizarBtn.parentNode.replaceChild(newBtn, finalizarBtn);
       console.log('✅ Botón actualizado a estado vacío');
     }
     
@@ -329,16 +331,21 @@ function actualizarCartSidenav() {
       finalizarBtn.className = 'btn btn-vino-tinto btn-block font-weight-bold py-3';
       finalizarBtn.textContent = 'Comenzar Compra';
       finalizarBtn.disabled = false;
-      finalizarBtn.onclick = function() {
+      // Remover listeners previos y agregar nuevo
+      const newBtn = finalizarBtn.cloneNode(true);
+      finalizarBtn.parentNode.replaceChild(newBtn, finalizarBtn);
+      newBtn.addEventListener('click', function() {
         window.location.href = 'checkout.html';
-      };
+      });
       console.log('✅ Botón actualizado a estado con productos');
     } else {
       // Carrito vacío - botón rosado y deshabilitado
       finalizarBtn.className = 'btn btn-rosado btn-block font-weight-bold py-3';
       finalizarBtn.textContent = 'Carrito Vacío';
       finalizarBtn.disabled = true;
-      finalizarBtn.onclick = null;
+      // Remover event listeners clonando el nodo
+      const newBtn = finalizarBtn.cloneNode(true);
+      finalizarBtn.parentNode.replaceChild(newBtn, finalizarBtn);
       console.log('✅ Botón actualizado a estado vacío (final)');
     }
   }

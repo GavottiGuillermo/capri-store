@@ -144,18 +144,18 @@ async function setupContactLinks() {
         } else {
           console.error('❌ Número de WhatsApp inválido (longitud):', cleanNumber, 'Longitud:', cleanNumber.length);
           whatsappLink.href = '#';
-          whatsappLink.onclick = () => {
+          whatsappLink.addEventListener('click', (e) => {
+            e.preventDefault();
             alert(`Error: Número de WhatsApp no válido. Recibido: "${contactInfo.whatsapp}" (limpio: "${cleanNumber}")`);
-            return false;
-          };
+          });
         }
       } else {
         console.error('❌ No se recibió número de WhatsApp del servidor');
         whatsappLink.href = '#';
-        whatsappLink.onclick = () => {
+        whatsappLink.addEventListener('click', (e) => {
+          e.preventDefault();
           alert('Error: No hay número de WhatsApp configurado en el servidor');
-          return false;
-        };
+        });
       }
     } else {
       console.error('❌ Elemento whatsappLink no encontrado en el DOM');
@@ -193,19 +193,19 @@ function setupFallbackContactLinks(error = null) {
   const whatsappLink = document.getElementById('whatsappLink');
   if (whatsappLink) {
     whatsappLink.href = '#';
-    whatsappLink.onclick = () => {
+    whatsappLink.addEventListener('click', (e) => {
+      e.preventDefault();
       alert(errorMessage);
-      return false;
-    };
+    });
   }
   
   const instagramLink = document.getElementById('instagramLink');
   if (instagramLink) {
     instagramLink.href = '#';
-    instagramLink.onclick = () => {
+    instagramLink.addEventListener('click', (e) => {
+      e.preventDefault();
       alert(errorMessage);
-      return false;
-    };
+    });
   }
   
   // Email link - ELIMINADO (no se usa)
