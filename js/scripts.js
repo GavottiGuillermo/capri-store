@@ -279,9 +279,15 @@ function actualizarCartSidenav() {
   }
   
   if (cartItems.length === 0) {
-    lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.<br><button class='btn btn-vino-tinto mt-3' onclick='closeCartSidenav()'>Seguir comprando</button></li>`;
+    lista.innerHTML = `<li class='text-center py-5' style='color:#6b0a0a;'>Tu carrito está vacío.</li>`;
     total.textContent = "$0.00 ARS";
     if (cartCount) cartCount.textContent = "0";
+    
+    // Ocultar botón "Seguir Comprando" cuando carrito está vacío
+    const seguirComprandoBtn = document.getElementById('seguirComprandoBtn');
+    if (seguirComprandoBtn) {
+      seguirComprandoBtn.style.display = 'none';
+    }
     
     // Actualizar botón cuando carrito está vacío
     const finalizarBtn = document.getElementById('finalizarCompraBtn');
@@ -331,6 +337,12 @@ function actualizarCartSidenav() {
     });
   });
   guardarCarrito();
+  // Mostrar botón "Seguir Comprando" cuando hay productos
+  const seguirComprandoBtn = document.getElementById('seguirComprandoBtn');
+  if (seguirComprandoBtn) {
+    seguirComprandoBtn.style.display = 'block';
+  }
+
   // Cambiar el texto, color y acción del botón de compra según el estado del carrito
   const finalizarBtn = document.getElementById('finalizarCompraBtn');
   console.log('🔍 Botón encontrado (final función):', finalizarBtn);
