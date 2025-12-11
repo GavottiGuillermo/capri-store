@@ -41,13 +41,23 @@ console.log(`🗄️ Estrategia de autenticación: ${usePostgresAuth ? 'PostgreS
 
 // Configurar estrategia de autenticación
 let authStrategy;
+const CLIENT_ID = 'capri-store-main'; // Definir como constante para evitar undefined
+
 try {
   if (usePostgresAuth) {
     console.log('🔐 Configurando autenticación PostgreSQL...');
+    console.log(`📝 Client ID: ${CLIENT_ID}`);
+    
     authStrategy = new PostgresAuthStrategy({
-      clientId: 'capri-store-main',
+      clientId: CLIENT_ID,
       dataPath: './temp-auth/'
     });
+    
+    // Verificar que el authStrategy fue creado correctamente
+    if (!authStrategy) {
+      throw new Error('authStrategy es null después de creación');
+    }
+    
     console.log('✅ PostgresAuthStrategy creado exitosamente');
     // Resetear contador de QR para PostgreSQL
     qrAttempts = 0;
@@ -66,7 +76,8 @@ try {
   }
 } catch (authError) {
   console.error('❌ ERROR creando AuthStrategy:', authError.message);
-  console.log('🔄 Fallback a LocalAuth...');
+  console.error('Stack:', authError.stack);
+  console.log('🔄 Fallback a LocalAuth sin session...');
   
   // Fallback a LocalAuth si PostgreSQL falla
   const { LocalAuth } = require('whatsapp-web.js');
@@ -78,6 +89,12 @@ try {
     dataPath: authPath
   });
   console.log('✅ Fallback LocalAuth creado exitosamente');
+}
+
+// Verificación final de authStrategy
+if (!authStrategy) {
+  console.error('❌ CRÍTICO: authStrategy es null después de todos los intentos');
+  throw new Error('No se pudo crear ninguna estrategia de autenticación');
 }
 
 console.log('🔧 Creando cliente WhatsApp...');
@@ -524,13 +541,37 @@ whatsappClient.on('disconnected', (reason) => {
       
       // Verificar sesión según el tipo de autenticación
       let sessionExists = false;
+      let sessionIsFromToday = false;
       
       if (usePostgresAuth && authStrategy && authStrategy.store) {
-        // Verificar sesión en PostgreSQL
+        // Verificar sesión en PostgreSQL Y su edad
         console.log(`[${new Date().toISOString()}] 🔍 Verificando sesión en PostgreSQL...`);
         try {
-          sessionExists = await authStrategy.store.sessionExists();
-          console.log(`[${new Date().toISOString()}] 📊 Sesión en PostgreSQL: ${sessionExists ? 'EXISTE' : 'NO EXISTE'}`);
+          const { Pool } = require('pg');
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          
+          const result = await pool.query(
+            'SELECT updated_at FROM whatsapp_sessions WHERE id = $1 LIMIT 1',
+            ['capri-store-main']
+          );
+          
+          if (result && result.rows && result.rows.length > 0) {
+            sessionExists = true;
+            const updatedAt = new Date(result.rows[0].updated_at);
+            const ahora = new Date();
+            const edadHoras = (ahora - updatedAt) / (1000 * 60 * 60);
+            const edadDias = edadHoras / 24;
+            
+            sessionIsFromToday = edadHoras < 24;
+            
+            console.log(`[${new Date().toISOString()}] 📊 Sesión en PostgreSQL: EXISTE`);
+            console.log(`[${new Date().toISOString()}] 📅 Edad: ${edadHoras.toFixed(1)}h (${edadDias.toFixed(1)} días)`);
+            console.log(`[${new Date().toISOString()}] ${sessionIsFromToday ? '✅' : '❌'} Sesión del día actual: ${sessionIsFromToday ? 'SÍ' : 'NO'}`);
+          } else {
+            console.log(`[${new Date().toISOString()}] 📊 Sesión en PostgreSQL: NO EXISTE`);
+          }
+          
+          await pool.end();
         } catch (sessionError) {
           console.error(`[${new Date().toISOString()}] ❌ Error verificando sesión PostgreSQL:`, sessionError.message);
           sessionExists = false;
@@ -541,19 +582,39 @@ whatsappClient.on('disconnected', (reason) => {
         const path = require('path');
         const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
         sessionExists = fs.existsSync(authPath);
+        sessionIsFromToday = sessionExists; // Para LocalAuth, asumimos que sí
         console.log(`[${new Date().toISOString()}] 📊 Carpeta local: ${sessionExists ? 'EXISTE' : 'NO EXISTE'}`);
       }
       
-      if (sessionExists) {
-        console.log(`[${new Date().toISOString()}] ✅ Sesión guardada existe, intentando reconectar...`);
+      if (sessionExists && sessionIsFromToday) {
+        console.log(`[${new Date().toISOString()}] ✅ Sesión válida del día actual - Reconectando...`);
         await whatsappClient.initialize();
         console.log(`[${new Date().toISOString()}] 🔄 Reinicialización completada`);
+      } else if (sessionExists && !sessionIsFromToday) {
+        console.log(`\n${'='.repeat(70)}`);
+        console.log(`❌ SESIÓN ANTIGUA DETECTADA - NO SE RECONECTARÁ AUTOMÁTICAMENTE`);
+        console.log(`${'='.repeat(70)}`);
+        console.log(`\n💡 La sesión tiene más de 24 horas`);
+        console.log(`💡 Solo se reconecta automáticamente con sesiones del día actual\n`);
+        console.log(`📱 Para generar nuevo código QR, ejecuta en PowerShell:\n`);
+        console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
+        console.log(`${'='.repeat(70)}\n`);
       } else {
-        console.log(`[${new Date().toISOString()}] ❌ No hay sesión guardada, se necesitará QR`);
-        console.log(`[${new Date().toISOString()}] 💡 Reinicia manualmente el servidor para generar nuevo QR`);
+        console.log(`\n${'='.repeat(70)}`);
+        console.log(`❌ NO HAY SESIÓN GUARDADA - REQUIERE NUEVO QR`);
+        console.log(`${'='.repeat(70)}`);
+        console.log(`\n📱 Para generar código QR, ejecuta en PowerShell:\n`);
+        console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
+        console.log(`${'='.repeat(70)}\n`);
       }
     } catch (reconnectError) {
       console.error(`[${new Date().toISOString()}] ❌ Error en reconexión automática:`, reconnectError.message);
+      console.log(`\n${'='.repeat(70)}`);
+      console.log(`❌ ERROR EN RECONEXIÓN AUTOMÁTICA`);
+      console.log(`${'='.repeat(70)}`);
+      console.log(`\n📱 Para generar nuevo código QR, ejecuta en PowerShell:\n`);
+      console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
+      console.log(`${'='.repeat(70)}\n`);
     }
   }, 30000);
 });

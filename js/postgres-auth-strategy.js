@@ -154,30 +154,51 @@ class PostgreSQLStore {
  */
 class PostgresAuthStrategy extends RemoteAuth {
   constructor(options = {}) {
+    // Validar que options existe y tiene clientId
+    if (!options || typeof options !== 'object') {
+      throw new Error('PostgresAuthStrategy: options debe ser un objeto');
+    }
+    
+    if (!options.clientId || typeof options.clientId !== 'string') {
+      throw new Error('PostgresAuthStrategy: clientId es requerido y debe ser string');
+    }
+    
+    // Validar DATABASE_URL
+    if (!process.env.DATABASE_URL) {
+      throw new Error('PostgresAuthStrategy: DATABASE_URL no está configurado');
+    }
+    
     // Configurar conexión a PostgreSQL
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
     });
     
-    const clientId = options.clientId || 'default';
+    const clientId = options.clientId;
     const store = new PostgreSQLStore(pool, clientId);
+    
+    // Validar que dataPath existe
+    const dataPath = options.dataPath || './temp-auth/';
+    if (!dataPath || typeof dataPath !== 'string') {
+      throw new Error('PostgresAuthStrategy: dataPath inválido');
+    }
     
     // Configurar RemoteAuth con store personalizado
     const remoteAuthOptions = {
       store: store,
       backupSyncIntervalMs: 120000, // 2 minutos para pruebas más rápidas
-      dataPath: options.dataPath || './temp-auth/'
+      dataPath: dataPath
     };
     
     super(remoteAuthOptions);
     
     this.clientId = clientId;
-    this.dataPath = options.dataPath || './';
+    this.dataPath = dataPath;
     this.pool = pool;
     this.store = store;
     
     console.log('📦 PostgresAuthStrategy inicializado para cliente:', this.clientId);
+    console.log('📁 Data path:', this.dataPath);
     console.log('⏰ Intervalo de sincronización: 2 minutos');
   }
 

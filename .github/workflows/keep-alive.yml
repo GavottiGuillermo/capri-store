@@ -2,8 +2,8 @@ name: 🔄 Keep Capri Store Alive
 
 on:
   schedule:
-    # Ejecutar cada 2 horas (ahorra recursos de Neon y Render)
-    - cron: '0 */2 * * *'
+    # Ejecutar cada 30 minutos para mantener sesión WhatsApp activa
+    - cron: '*/30 * * * *'
   
   # Permitir ejecución manual desde GitHub
   workflow_dispatch:
@@ -14,28 +14,25 @@ jobs:
     timeout-minutes: 5
     
     steps:
-      - name: 🔄 Keep-Alive Ping (sin consulta a BBDD)
+      - name: 🔄 Keep-Alive + Mensaje WhatsApp Admin
         run: |
-          echo "🔄 Ejecutando keep-alive para mantener Render activo..."
-          echo "💡 IMPORTANTE: NO consulta base de datos Neon (ahorro de costos)"
-          response=$(curl -s -w "HTTPSTATUS:%{http_code}" -H "User-Agent: GitHub-Actions-Keep-Alive" https://capri-store.onrender.com/ping)
+          echo "🔄 Ejecutando keep-alive cada 30 min para mantener sesión WhatsApp..."
+          response=$(curl -s -w "HTTPSTATUS:%{http_code}" -H "User-Agent: GitHub-Actions-Keep-Alive" https://capri-store.onrender.com/whatsapp-keep-alive)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
           
           echo "📊 Status Code: $http_code"
           
           if [ $http_code -eq 200 ]; then
-            echo "✅ Servicio Render: ACTIVO"
+            echo "✅ Servicio activo"
             
-            # Extraer estado de WhatsApp (sin iniciar reconexión)
+            # Extraer estado de WhatsApp
             if command -v jq &> /dev/null; then
               whatsapp_ready=$(echo "$body" | jq -r '.whatsapp_ready // false')
-              uptime=$(echo "$body" | jq -r '.uptime // 0')
+              mensaje_enviado=$(echo "$body" | jq -r '.mensaje_enviado // false')
               echo "📱 WhatsApp: $whatsapp_ready"
-              echo "⏱️  Uptime: $uptime segundos"
+              echo "💬 Mensaje al admin: $mensaje_enviado"
             fi
-            
-            echo "💾 Base de datos Neon: NO CONSULTADA (ahorro de recursos)"
           else
             echo "❌ Servicio no responde"
             exit 1
@@ -47,7 +44,8 @@ jobs:
           echo "🎯 ===== RESUMEN DE KEEP-ALIVE ====="
           echo "📅 Fecha: $(date)"
           echo "✅ Servicio Render mantenido activo"
-          echo "💾 Base de datos Neon: NO consumida"
+          echo "📱 WhatsApp: Mensaje periódico enviado al admin"
+          echo "⏰ Próxima ejecución: en 30 minutos"
           echo "📱 WhatsApp: Se reconecta automáticamente en nuevas ventas"
           echo "⏰ Próxima ejecución: en 2 horas"
           echo "🌐 URL: https://capri-store.onrender.com"

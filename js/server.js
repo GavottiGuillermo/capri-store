@@ -44,6 +44,39 @@ const crypto = require('crypto');
 // Cargar variables de entorno desde .env en la carpeta padre
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+// ===============================
+// MANEJADORES GLOBALES DE ERRORES
+// ===============================
+process.on('uncaughtException', (error) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', error.message);
+  console.error('Stack:', error.stack);
+  
+  // Si es error de ENOENT en temp-auth, no crashear el servidor
+  if (error.code === 'ENOENT' && error.path && error.path.includes('temp-auth')) {
+    console.log('⚠️ Error de sesión temporal detectado - servidor continúa funcionando');
+    console.log('💡 WhatsApp puede necesitar regenerar QR: /whatsapp-regenerar-qr');
+    return;
+  }
+  
+  // Para otros errores críticos, loguear pero intentar continuar
+  console.error('⚠️ Error crítico - intentando continuar operación...');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ UNHANDLED REJECTION en:', promise);
+  console.error('Razón:', reason);
+  
+  // Si es error de WhatsApp, no crashear
+  if (reason && reason.message && (
+    reason.message.includes('temp-auth') ||
+    reason.message.includes('wwebjs') ||
+    reason.message.includes('Session closed')
+  )) {
+    console.log('⚠️ Error de WhatsApp detectado - servidor continúa funcionando');
+    return;
+  }
+});
+
 // Logging inicial para debugging
 console.log('🔧 Variables de entorno cargadas:');
 console.log('- NODE_ENV:', process.env.NODE_ENV);
@@ -370,6 +403,106 @@ app.get('/ping', async (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
     whatsapp_ready: whatsappAvailable ? whatsappReady : false
+  });
+});
+
+// ===============================
+// ENDPOINT PARA KEEP-ALIVE CON MENSAJE WHATSAPP
+// ===============================
+app.get('/whatsapp-keep-alive', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 💚 Keep-Alive WhatsApp ejecutándose...`);
+  
+  let mensajeEnviado = false;
+  let whatsappStatus = 'desconectado';
+  
+  try {
+    // Verificar estado de WhatsApp
+    const estadoWhatsApp = await verificarEstadoWhatsApp();
+    
+    if (estadoWhatsApp.disponible && whatsappReady) {
+      whatsappStatus = 'conectado';
+      
+      // Enviar mensaje periódico al administrador para mantener sesión activa
+      if (ADMIN_WHATSAPP) {
+        const ahora = new Date();
+        const horaFormato = ahora.toLocaleString('es-AR', {
+          timeZone: 'America/Argentina/Buenos_Aires',
+          hour: '2-digit',
+          minute: '2-digit',
+          day: '2-digit',
+          month: '2-digit'
+        });
+        
+        const mensaje = `🟢 *Sistema Activo* - ${horaFormato}\n\n` +
+          `✅ WhatsApp conectado\n` +
+          `⏱️ Uptime: ${Math.floor(process.uptime() / 60)} min\n` +
+          `💾 Memoria: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n\n` +
+          `_Keep-alive automático cada 30 min_`;
+        
+        try {
+          const resultado = await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
+          mensajeEnviado = resultado.success;
+          
+          if (resultado.success) {
+            console.log(`[${timestamp}] ✅ Mensaje keep-alive enviado al administrador`);
+          } else {
+            console.log(`[${timestamp}] ⚠️ No se pudo enviar mensaje keep-alive: ${resultado.error}`);
+          }
+        } catch (error) {
+          console.error(`[${timestamp}] ❌ Error enviando mensaje keep-alive:`, error.message);
+        }
+      }
+    } else {
+      whatsappStatus = 'desconectado';
+      console.log(`[${timestamp}] ⚠️ WhatsApp no disponible - Estado: ${estadoWhatsApp.razon}`);
+      
+      // Intentar reconectar si hay sesión del día actual
+      if (estadoWhatsApp.permitirAutoReconexion) {
+        console.log(`[${timestamp}] 🔄 Intentando reconectar con sesión guardada...`);
+        try {
+          await inicializarWhatsApp();
+          console.log(`[${timestamp}] ✅ Reconexión iniciada`);
+          whatsappStatus = 'reconectando';
+        } catch (reconError) {
+          console.error(`[${timestamp}] ❌ Error en reconexión:`, reconError.message);
+          console.log(`\n${'='.repeat(70)}`);
+          console.log(`⚠️  WHATSAPP NO PUDO RECONECTAR AUTOMÁTICAMENTE`);
+          console.log(`${'='.repeat(70)}`);
+          console.log(`\n📱 Para regenerar código QR, ejecuta en PowerShell:\n`);
+          console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
+          console.log(`${'='.repeat(70)}\n`);
+        }
+      } else {
+        console.log(`\n${'='.repeat(70)}`);
+        console.log(`⚠️  WHATSAPP DESCONECTADO - SIN SESIÓN VÁLIDA`);
+        console.log(`${'='.repeat(70)}`);
+        console.log(`\nRazón: ${estadoWhatsApp.razon}`);
+        
+        if (!estadoWhatsApp.tieneSesionEnBBDD) {
+          console.log(`\n❌ No hay sesión guardada en la base de datos`);
+        } else if (estadoWhatsApp.sesionEdadDias >= 1) {
+          console.log(`\n❌ Sesión muy antigua (${estadoWhatsApp.sesionEdadDias.toFixed(1)} días)`);
+          console.log(`💡 Solo se reconecta automáticamente si la sesión es del mismo día (<24h)`);
+        }
+        
+        console.log(`\n📱 Para generar nuevo código QR, ejecuta en PowerShell:\n`);
+        console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
+        console.log(`${'='.repeat(70)}\n`);
+      }
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en keep-alive:`, error.message);
+  }
+  
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    whatsapp_ready: whatsappAvailable ? whatsappReady : false,
+    whatsapp_status: whatsappStatus,
+    mensaje_enviado: mensajeEnviado
   });
 });
 
