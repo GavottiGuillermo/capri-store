@@ -383,23 +383,19 @@ whatsappClient.on('ready', async () => {
   console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
   marcarConexionExitosa();
   
-  // Procesar notificaciones pendientes en background (con debounce)
+  // Procesar notificaciones pendientes en background
   if (onWhatsAppReadyCallback) {
-    const now = Date.now();
-    if (now - lastCallbackExecution > CALLBACK_DEBOUNCE_MS) {
-      lastCallbackExecution = now;
-      console.log('🔄 Ejecutando callback para notificaciones pendientes (ahora que ready=true)...');
-      // Ejecutar inmediatamente ya que ready=true está garantizado
-      setImmediate(async () => {
-        try {
-          await onWhatsAppReadyCallback();
-        } catch (error) {
-          console.error('❌ Error en callback de notificaciones pendientes:', error);
-        }
-      });
-    } else {
-      console.log('⏳ Callback omitido - ejecutado recientemente (debounce)');
-    }
+    console.log('🔄 Ejecutando callback para notificaciones pendientes (WhatsApp ready confirmado)...');
+    // Ejecutar inmediatamente ya que ready=true está garantizado
+    setImmediate(async () => {
+      try {
+        await onWhatsAppReadyCallback();
+        // Actualizar timestamp SOLO después de ejecución exitosa
+        lastCallbackExecution = Date.now();
+      } catch (error) {
+        console.error('❌ Error en callback de notificaciones pendientes:', error);
+      }
+    });
   }
   
   // Verificar estado real
