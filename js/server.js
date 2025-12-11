@@ -346,28 +346,12 @@ let lastReconnectAttempt = 0;
 const RECONNECT_INTERVAL = 10 * 60 * 1000; // 10 minutos entre intentos
 
 app.get('/health', async (req, res) => {
-  // Detectar si es un health check de GitHub Actions
-  const isGitHubActions = req.headers['user-agent']?.includes('GitHub-Actions');
-  const isAutomatedCheck = req.ip && (
-    req.ip.includes('10.219.') ||  // IP interna de Render
-    req.ip.includes('::ffff:10.219.')
-  );
+  // ⚠️ ENDPOINT SILENCIOSO - Sin logs para evitar spam
+  // Usado por Render para health checks automáticos cada 5 min
+  // Para WhatsApp keep-alive con mensaje al admin, usar /whatsapp-keep-alive
   
-  // Solo hacer log si es manual (no automatizado)
-  if (!isAutomatedCheck && !isGitHubActions) {
-    console.log('🏥 Health check manual solicitado desde:', req.ip);
-  }
-  
-  // ⚠️ CAMBIO IMPORTANTE: ELIMINADA auto-reconexión desde /health
-  // RAZÓN: Evitar consultas costosas a base de datos Neon desde keep-alive
-  // NUEVO COMPORTAMIENTO:
-  // - Keep-alive solo mantiene Render activo (NO consulta BBDD)
-  // - WhatsApp se reconecta automáticamente cuando llega una nueva venta
-  // - Para reconexión manual: usar /whatsapp-regenerar-qr
-  
-  if (isGitHubActions || isAutomatedCheck) {
-    console.log('💡 Keep-alive ejecutado (sin consulta a BBDD)');
-  }
+  // NOTA: Render llama a este endpoint cada 5 minutos desde su configuración
+  // No se puede cambiar la frecuencia desde código, solo desde el dashboard de Render
   
   res.json({ 
     status: 'OK', 
