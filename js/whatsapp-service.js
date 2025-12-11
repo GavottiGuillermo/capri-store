@@ -529,6 +529,40 @@ whatsappClient.on('authenticated', () => {
   // FALLBACK: Marcar conexión exitosa aquí también por si 'ready' no se dispara
   console.log('🎯 FALLBACK: Marcando conexión desde evento authenticated');
   marcarConexionExitosa();
+  
+  // FALLBACK: Esperar 3 segundos y verificar si ready se disparó
+  setTimeout(async () => {
+    if (!whatsappReady) {
+      console.log('⚠️ FALLBACK: Evento ready no se disparó - forzando activación');
+      
+      try {
+        const state = await whatsappClient.getState();
+        console.log(`📊 Estado del cliente: ${state}`);
+        
+        if (state === 'CONNECTED') {
+          console.log('✅ Cliente conectado - activando whatsappReady manualmente');
+          whatsappReady = true;
+          
+          // Ejecutar callback de notificaciones pendientes
+          if (onWhatsAppReadyCallback) {
+            console.log('🔄 FALLBACK: Ejecutando callback de notificaciones pendientes...');
+            setImmediate(async () => {
+              try {
+                await onWhatsAppReadyCallback();
+                lastCallbackExecution = Date.now();
+              } catch (error) {
+                console.error('❌ Error en callback (fallback):', error);
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error en fallback de authenticated:', error.message);
+      }
+    } else {
+      console.log('✅ Evento ready ya se disparó - fallback no necesario');
+    }
+  }, 3000);
 });
 
 whatsappClient.on('auth_failure', (msg) => {
