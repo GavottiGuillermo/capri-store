@@ -320,6 +320,38 @@ if (usePostgresAuth) {
               // Inicializar WhatsApp automáticamente
               await whatsappClient.initialize();
               console.log('🔄 WhatsApp inicializado - Esperando conexión automática con sesión guardada');
+              
+              // Verificar estado después de 5 segundos
+              setTimeout(async () => {
+                try {
+                  const state = await whatsappClient.getState();
+                  console.log(`\n📊 Verificación post-inicialización:`);
+                  console.log(`   Estado del cliente: ${state}`);
+                  console.log(`   whatsappReady flag: ${whatsappReady}`);
+                  
+                  // Si el cliente está conectado pero el flag es false, corregirlo
+                  if (state === 'CONNECTED' && !whatsappReady) {
+                    console.log(`\n⚠️ DETECTADO: Cliente conectado pero flag false - Corrigiendo...`);
+                    whatsappReady = true;
+                    marcarConexionExitosa();
+                    console.log(`✅ Flag corregido - whatsappReady: ${whatsappReady}`);
+                    
+                    // Ejecutar callback de notificaciones pendientes
+                    if (onWhatsAppReadyCallback) {
+                      console.log('🔄 Ejecutando callback de notificaciones pendientes...');
+                      setImmediate(async () => {
+                        try {
+                          await onWhatsAppReadyCallback();
+                        } catch (error) {
+                          console.error('❌ Error en callback:', error);
+                        }
+                      });
+                    }
+                  }
+                } catch (stateError) {
+                  console.error('❌ Error verificando estado post-init:', stateError.message);
+                }
+              }, 5000);
             } else {
               console.warn('⚠️ Sesión guardada pero muy pequeña - puede estar corrupta');
               console.log('💡 Usa /whatsapp-regenerar-qr para generar nuevo QR');
