@@ -814,6 +814,10 @@ async function cleanup() {
 
 // Función para inicializar WhatsApp (simplificada sin Instance Lock)
 async function inicializarWhatsApp() {
+  console.log('🔵 inicializarWhatsApp() LLAMADA');
+  console.log('📍 Stack trace:');
+  console.trace();
+  
   try {
     // VALIDACIÓN PREVIA: Verificar si WhatsApp ya está conectado
     if (whatsappReady && whatsappClient) {
@@ -881,12 +885,18 @@ async function inicializarWhatsApp() {
         console.error('❌ Error en segundo intento:', retryError.message);
         // Si falla el retry, entonces sí podría ser sesión corrupta
         console.log('🔄 Segundo intento falló - Ahora sí limpiando sesión...');
+        console.log('🔴 IMPORTANTE: Se va a limpiar sesión por segundo intento fallido');
+        console.log('📍 Stack trace del punto de decisión:');
+        console.trace();
       }
     }
     
     if (isSessionError && usePostgresAuth) {
       console.log('🔄 DETECTADO: Error de sesión genuinamente corrupta');
       console.log('🧹 Intentando limpiar sesión automáticamente...');
+      console.log('🔴 IMPORTANTE: Se va a llamar a authStrategy.logout()');
+      console.log('📍 Stack trace del punto de decisión:');
+      console.trace();
       
       try {
         // Limpiar sesión de PostgreSQL automáticamente
