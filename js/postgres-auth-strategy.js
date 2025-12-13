@@ -223,15 +223,26 @@ class PostgresAuthStrategy extends RemoteAuth {
   }
 
   async logout() {
-    console.log('🗑️ Eliminando datos de sesión de PostgreSQL...');
+    console.log('🗑️ logout() llamado - IGNORANDO (no eliminar sesión automáticamente)');
     console.log('📍 Stack trace de quien llamó logout():');
     console.trace();
-    return await this.store.delete({});
+    console.log('💡 La sesión se mantendrá en PostgreSQL para reconexión');
+    // NO eliminar la sesión - whatsapp-web.js llama esto automáticamente
+    // y no queremos perder la sesión guardada
+    return true;
   }
 
   async clearSessionOnly() {
     console.log('🧹 Limpiando solo datos de sesión (manteniendo pool activo)...');
     console.log('📍 Stack trace de quien llamó clearSessionOnly():');
+    console.trace();
+    return await this.store.delete({});
+  }
+  
+  async forceLogout() {
+    // Nuevo método para REALMENTE eliminar la sesión cuando lo necesitemos
+    console.log('🗑️ FORZADO: Eliminando datos de sesión de PostgreSQL...');
+    console.log('📍 Stack trace de quien llamó forceLogout():');
     console.trace();
     return await this.store.delete({});
   }

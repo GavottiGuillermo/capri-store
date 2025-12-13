@@ -680,14 +680,14 @@ async function inicializarWhatsApp() {
     if (isSessionError && usePostgresAuth) {
       console.log('🔄 DETECTADO: Error de sesión genuinamente corrupta');
       console.log('🧹 Intentando limpiar sesión automáticamente...');
-      console.log('🔴 IMPORTANTE: Se va a llamar a authStrategy.logout()');
+      console.log('🔴 IMPORTANTE: Se va a llamar a authStrategy.forceLogout()');
       console.log('📍 Stack trace del punto de decisión:');
       console.trace();
       
       try {
         // Limpiar sesión de PostgreSQL automáticamente
-        if (authStrategy && authStrategy.logout) {
-          await authStrategy.logout();
+        if (authStrategy && authStrategy.forceLogout) {
+          await authStrategy.forceLogout();
           console.log('✅ Sesión PostgreSQL limpiada automáticamente');
           
           // Esperar 3 segundos y reintentar inicialización
@@ -1020,10 +1020,10 @@ async function limpiarSesionCorrupta() {
     }
     
     // Si usamos PostgreSQL, limpiar la sesión de la base de datos
-    if (usePostgresAuth && authStrategy && authStrategy.logout) {
+    if (usePostgresAuth && authStrategy && authStrategy.forceLogout) {
       console.log(`[${timestamp}] 🗄️ Eliminando sesión de PostgreSQL...`);
       try {
-        await authStrategy.logout();
+        await authStrategy.forceLogout();
         console.log(`[${timestamp}] ✅ Sesión eliminada de PostgreSQL`);
       } catch (dbError) {
         console.error(`[${timestamp}] ❌ Error eliminando sesión de PostgreSQL:`, dbError.message);
@@ -1077,8 +1077,8 @@ async function limpiarSesionPostgreSQL() {
   }
   
   try {
-    if (authStrategy && authStrategy.logout) {
-      await authStrategy.logout();
+    if (authStrategy && authStrategy.forceLogout) {
+      await authStrategy.forceLogout();
       console.log(`[${timestamp}] ✅ Sesión eliminada de PostgreSQL exitosamente`);
       
       return {
@@ -1251,8 +1251,8 @@ async function limpiarSesionesCompleto() {
         // Usar clearSessionOnly en lugar de logout para no cerrar el pool
         if (authStrategy.clearSessionOnly) {
           await authStrategy.clearSessionOnly();
-        } else if (authStrategy.logout) {
-          await authStrategy.logout();
+        } else if (authStrategy.forceLogout) {
+          await authStrategy.forceLogout();
         }
         console.log(`[${timestamp}] ✅ PostgreSQL limpiado`);
       } catch (dbError) {
