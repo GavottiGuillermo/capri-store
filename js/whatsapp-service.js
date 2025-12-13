@@ -10,7 +10,8 @@ let whatsappReady = false;
 let qrGenerated = false;
 let qrAttempts = 0;
 const MAX_QR_ATTEMPTS = 5;
-let sessionIsOld = false; // Bandera para sesiones >24h // Resetear a límite normal después de fix
+let sessionIsOld = false; // Bandera para sesiones >24h
+let isConnecting = false; // 🔒 Flag para bloquear otros procesos durante conexión
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -38,6 +39,16 @@ function setWhatsAppReady(value) {
   whatsappReady = value;
   console.log(`🔧 FORZADO whatsappReady = ${whatsappReady}`);
   return whatsappReady;
+}
+
+// 🔒 Funciones para gestionar el estado de conexión
+function setIsConnecting(value) {
+  isConnecting = value;
+  console.log(`🔒 Estado isConnecting establecido a: ${value}`);
+}
+
+function getIsConnecting() {
+  return isConnecting;
 }
 
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
@@ -197,8 +208,9 @@ function registrarEventosWhatsApp(client) {
   client.removeAllListeners('loading_screen');
   console.log('✅ Listeners antiguos removidos');
   
-  // Evento QR
+  // 🔒 Evento QR - MARCAR INICIO DE PROCESO DE CONEXIÓN
   client.on('qr', (qr) => {
+    setIsConnecting(true); // 🔒 Bloquear otros procesos durante conexión
     qrAttempts++;
     
     if (qrAttempts > MAX_QR_ATTEMPTS) {
@@ -266,6 +278,13 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
+    // ⏳ ESPERAR 10 SEGUNDOS para asegurar que la sesión se guarde completamente
+    console.log('⏳ Esperando 10 segundos para finalizar proceso de conexión...');
+    setTimeout(() => {
+      setIsConnecting(false); // 🔓 Desbloquear sistema
+      console.log('✅ Proceso de conexión completado - Sistema desbloqueado');
+    }, 10000);
+    
     // Marcar conexión exitosa para verificación de disponibilidad
     console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
     marcarConexionExitosa();
@@ -304,6 +323,12 @@ function registrarEventosWhatsApp(client) {
   // Evento authenticated
   client.on('authenticated', () => {
     console.log('🔐 WhatsApp autenticado correctamente');
+    console.log('🔒 isConnecting:', isConnecting);
+    
+    // Asegurarse de que isConnecting esté en true
+    if (!isConnecting) {
+      setIsConnecting(true);
+    }
     
     // FALLBACK: Marcar conexión exitosa aquí también por si 'ready' no se dispara
     console.log('🎯 FALLBACK: Marcando conexión desde evento authenticated');
@@ -351,6 +376,7 @@ function registrarEventosWhatsApp(client) {
     console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
     whatsappReady = false;
     qrGenerated = false;
+    setIsConnecting(false); // 🔓 Desbloquear si se desconecta
     
     // Si la desconexión es por sesión inválida, avisar
     if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
@@ -1425,6 +1451,15 @@ async function verificarConexionCompleta() {
   }
 }
 
+// Función para obtener el estado actual de whatsappReady (siempre actualizado)
+function getWhatsAppReady() {
+  return whatsappReady;
+}
+
+function getIsConnecting() {
+  return isConnecting;
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -1440,10 +1475,11 @@ module.exports = {
   forzarGuardadoSesion,
   marcarConexionExitosa,
   setWhatsAppReady,  // Nueva función para forzar estado
+  getWhatsAppReady,  // Nueva función getter para obtener valor actualizado
+  getIsConnecting,   // 🔒 Nueva función getter para verificar si está conectando
   setOnWhatsAppReadyCallback,
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,
-  whatsappReady,
   sessionIsOld, // Para ajustar timeout según antigüedad de sesión
   ADMIN_WHATSAPP,
   BUSINESS_NAME,

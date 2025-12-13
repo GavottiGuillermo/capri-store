@@ -36,7 +36,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, getWhatsAppReady, getIsConnecting, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -402,6 +402,18 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
   let accionRealizada = 'ninguna';
   
   try {
+    // 🔒 PROTECCIÓN: No hacer nada si está en proceso de conexión
+    if (whatsappAvailable && getIsConnecting()) {
+      console.log(`[${timestamp}] 🔒 WhatsApp en proceso de conexión - Keep-alive esperando...`);
+      return res.json({
+        success: true,
+        mensaje: 'WhatsApp conectando - esperando finalización',
+        timestamp: new Date().toISOString(),
+        whatsapp_status: 'conectando',
+        accion: 'esperando'
+      });
+    }
+    
     // Paso 1: Verificar si WhatsApp está completamente conectado
     console.log(`[${timestamp}] 🔍 Paso 1: Verificando estado completo de WhatsApp...`);
     
@@ -668,11 +680,13 @@ app.get('/whatsapp-status', async (req, res) => {
     
     // Detectar si está en modo lazy loading
     const isLazyLoading = status.state === 'NOT_INITIALIZED';
+    const isConnecting = getIsConnecting(); // 🔒 Estado de conexión
     
     res.json({
       whatsapp_ready: whatsappReady,
       client_ready: status.whatsapp_ready || false,
       state: status.state || 'UNKNOWN',
+      is_connecting: isConnecting, // 🔒 Indica si está en proceso de conexión
       lazy_loading: isLazyLoading,
       qr_generated: status.qr_code ? true : false,
       auth_folder: {
@@ -703,6 +717,17 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
   console.log('🔄 Solicitud de regeneración de QR desde:', req.ip);
   
   try {
+    // 🔒 PROTECCIÓN: No permitir regenerar QR si está en proceso de conexión
+    if (whatsappAvailable && getIsConnecting()) {
+      console.log('🔒 WhatsApp en proceso de conexión - No se puede regenerar QR');
+      return res.status(409).json({
+        success: false,
+        error: 'WhatsApp conectando',
+        message: 'Espera a que termine el proceso de conexión actual',
+        estado: 'conectando'
+      });
+    }
+    
     if (!whatsappAvailable) {
       return res.status(503).json({
         success: false,
