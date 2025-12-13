@@ -36,7 +36,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, getWhatsAppReady, getIsConnecting, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, getWhatsAppReady, getIsConnecting, setIsConnecting, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -716,16 +716,34 @@ app.get('/whatsapp-status', async (req, res) => {
 app.get('/whatsapp-regenerar-qr', async (req, res) => {
   console.log('🔄 Solicitud de regeneración de QR desde:', req.ip);
   
+  // Parámetro opcional para forzar regeneración
+  const force = req.query.force === 'true';
+  
   try {
-    // 🔒 PROTECCIÓN: No permitir regenerar QR si está en proceso de conexión
-    if (whatsappAvailable && getIsConnecting()) {
+    // 🔒 PROTECCIÓN: No permitir regenerar QR si está en proceso de conexión (a menos que force=true)
+    if (whatsappAvailable && getIsConnecting() && !force) {
       console.log('🔒 WhatsApp en proceso de conexión - No se puede regenerar QR');
+      const whatsappStatus = await getWhatsAppStatus();
       return res.status(409).json({
         success: false,
         error: 'WhatsApp conectando',
-        message: 'Espera a que termine el proceso de conexión actual',
-        estado: 'conectando'
+        message: 'El sistema está en proceso de conexión. Espera 30-60 segundos o usa force=true',
+        estado: 'conectando',
+        client_state: whatsappStatus.client_state || 'UNKNOWN',
+        solucion: {
+          opcion1: 'Espera 30-60 segundos y reintenta',
+          opcion2: 'Usa: GET /whatsapp-regenerar-qr?force=true para forzar',
+          curl: 'curl "https://capri-store.onrender.com/whatsapp-regenerar-qr?force=true"',
+          powershell: 'Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr?force=true" -Method GET'
+        }
       });
+    }
+    
+    if (force && getIsConnecting()) {
+      console.log('⚠️ FORCE MODE: Forzando regeneración a pesar de isConnecting=true');
+      // Forzar reset del flag
+      setIsConnecting(false);
+      console.log('🔓 isConnecting forzado a false');
     }
     
     if (!whatsappAvailable) {

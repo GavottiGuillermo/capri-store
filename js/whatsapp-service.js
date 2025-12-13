@@ -1446,6 +1446,7 @@ module.exports = {
   setWhatsAppReady,  // Nueva función para forzar estado
   getWhatsAppReady,  // Nueva función getter para obtener valor actualizado
   getIsConnecting,   // 🔒 Nueva función getter para verificar si está conectando
+  setIsConnecting,   // 🔒 Nueva función setter para forzar reset del flag
   setOnWhatsAppReadyCallback,
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,
