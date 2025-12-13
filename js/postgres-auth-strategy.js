@@ -224,11 +224,15 @@ class PostgresAuthStrategy extends RemoteAuth {
 
   async logout() {
     console.log('🗑️ Eliminando datos de sesión de PostgreSQL...');
+    console.log('📍 Stack trace de quien llamó logout():');
+    console.trace();
     return await this.store.delete({});
   }
 
   async clearSessionOnly() {
     console.log('🧹 Limpiando solo datos de sesión (manteniendo pool activo)...');
+    console.log('📍 Stack trace de quien llamó clearSessionOnly():');
+    console.trace();
     return await this.store.delete({});
   }
 
