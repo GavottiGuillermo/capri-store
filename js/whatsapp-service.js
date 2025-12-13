@@ -33,6 +33,13 @@ function marcarConexionExitosa() {
   console.log(`🎯 Estado whatsappReady: ${whatsappReady}`);
 }
 
+// Función para forzar el estado de whatsappReady (útil para correcciones automáticas)
+function setWhatsAppReady(value) {
+  whatsappReady = value;
+  console.log(`🔧 FORZADO whatsappReady = ${whatsappReady}`);
+  return whatsappReady;
+}
+
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
 
 // Verificar si tenemos conexión a PostgreSQL
@@ -1362,6 +1369,7 @@ module.exports = {
   sincronizarEstadoWhatsApp,
   forzarGuardadoSesion,
   marcarConexionExitosa,
+  setWhatsAppReady,  // Nueva función para forzar estado
   setOnWhatsAppReadyCallback,
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,

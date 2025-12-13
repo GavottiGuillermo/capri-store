@@ -414,6 +414,25 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
         const whatsappStatusObj = await getWhatsAppStatus();
         estadoDetallado = whatsappStatusObj;
         
+        // CORRECCIÓN AUTOMÁTICA: Si cliente está CONNECTED pero whatsappReady es false, corregir
+        if (whatsappStatusObj.client_state === 'CONNECTED' && !whatsappStatusObj.whatsapp_ready) {
+          console.log(`[${timestamp}] 🔧 CORRECCIÓN: Cliente CONNECTED pero whatsappReady=false - Forzando corrección...`);
+          try {
+            // Importar y usar setWhatsAppReady
+            const { setWhatsAppReady, marcarConexionExitosa } = require('./whatsapp-service');
+            setWhatsAppReady(true);
+            await marcarConexionExitosa();
+            console.log(`[${timestamp}] ✅ whatsappReady forzado a true`);
+            
+            // Re-obtener estado actualizado
+            const whatsappStatusActualizado = await getWhatsAppStatus();
+            estadoDetallado = whatsappStatusActualizado;
+            console.log(`[${timestamp}] 📊 Estado actualizado:`, whatsappStatusActualizado);
+          } catch (correccionError) {
+            console.error(`[${timestamp}] ❌ Error corrigiendo whatsappReady:`, correccionError.message);
+          }
+        }
+        
         // Considerar conectado solo cuando TODAS las variables relevantes sean true
         todasLasVariablesOK = 
           whatsappStatusObj.whatsapp_ready === true &&
@@ -575,7 +594,7 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
-    whatsapp_ready: todasLasVariablesOK || false,
+    whatsapp_ready: whatsappStatus === 'conectado' || whatsappStatus === 'enviando',
     whatsapp_status: whatsappStatus,
     mensaje_enviado: mensajeEnviado,
     accion_realizada: accionRealizada
