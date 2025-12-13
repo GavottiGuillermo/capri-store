@@ -301,6 +301,76 @@ function registrarEventosWhatsApp(client) {
     }
   });
   
+  // Evento authenticated
+  client.on('authenticated', () => {
+    console.log('🔐 WhatsApp autenticado correctamente');
+    
+    // FALLBACK: Marcar conexión exitosa aquí también por si 'ready' no se dispara
+    console.log('🎯 FALLBACK: Marcando conexión desde evento authenticated');
+    marcarConexionExitosa();
+    
+    // FALLBACK: Esperar 3 segundos y verificar si ready se disparó
+    setTimeout(async () => {
+      if (!whatsappReady) {
+        console.log('⚠️ FALLBACK: Evento ready no se disparó - forzando activación');
+        
+        try {
+          const state = await client.getState();
+          console.log(`📊 Estado del cliente: ${state}`);
+          
+          if (state === 'CONNECTED') {
+            console.log('✅ Cliente conectado - activando whatsappReady manualmente');
+            whatsappReady = true;
+            
+            // Ejecutar callback de notificaciones pendientes
+            if (onWhatsAppReadyCallback) {
+              console.log('🔄 FALLBACK: Ejecutando callback de notificaciones pendientes...');
+              setImmediate(async () => {
+                try {
+                  await onWhatsAppReadyCallback();
+                  lastCallbackExecution = Date.now();
+                } catch (error) {
+                  console.error('❌ Error en callback (fallback):', error);
+                }
+              });
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error en fallback de authenticated:', error.message);
+        }
+      } else {
+        console.log('✅ Evento ready ya se disparó - fallback no necesario');
+      }
+    }, 3000);
+  });
+  
+  // Evento disconnected
+  client.on('disconnected', (reason) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ⚠️ WhatsApp desconectado - Razón: ${reason}`);
+    console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
+    whatsappReady = false;
+    qrGenerated = false;
+    
+    // Si la desconexión es por sesión inválida, avisar
+    if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
+      console.log(`[${timestamp}] ⚠️ Sesión perdida - Se necesitará escanear QR nuevamente`);
+      return;
+    }
+    
+    // Si es por QR timeout, no hacer reconexión automática inmediata
+    if (reason === 'Max qrcode retries reached') {
+      console.log(`[${timestamp}] ⚠️ QR timeout - Esperando intervención manual o keep-alive`);
+      console.log(`[${timestamp}] 💡 El sistema keep-alive detectará esto y generará nuevo QR`);
+      return;
+    }
+  });
+  
+  // Evento loading_screen
+  client.on('loading_screen', (percent, message) => {
+    console.log('📱 Cargando WhatsApp:', percent + '%', message);
+  });
+  
   // Eventos para autenticación remota (PostgreSQL)
   if (usePostgresAuth) {
     client.on('remote_session_saved', () => {
