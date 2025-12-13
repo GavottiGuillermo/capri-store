@@ -439,18 +439,23 @@ registrarEventosWhatsApp(whatsappClient);
 if (usePostgresAuth) {
   console.log('🔍 Verificando sesión existente en PostgreSQL al arrancar...');
   
-  // AUTO-INICIALIZACIÓN: Intentar conectar con sesión guardada en BBDD
+  // ⛔ AUTO-INICIALIZACIÓN DESHABILITADA
+  // Para evitar errores de memoria en Render (512MB), WhatsApp NO se inicializa automáticamente
+  // Use el endpoint /whatsapp-regenerar-qr para inicializar manualmente
   (async function autoInicializarConSesion() {
     try {
-      console.log('🔍 DIAGNÓSTICO: Verificando existencia de sesión en PostgreSQL...');
+      console.log('\n' + '='.repeat(70));
+      console.log('⛔ AUTO-INICIALIZACIÓN DESHABILITADA');
+      console.log('='.repeat(70));
+      console.log('🔍 Verificando si hay sesión guardada en PostgreSQL...');
+      
       const sessionExists = await authStrategy.store.sessionExists();
-      console.log('📊 DIAGNÓSTICO: Sesión existente:', sessionExists ? '✅ SÍ' : '❌ NO');
+      console.log('📊 Sesión existente:', sessionExists ? '✅ SÍ' : '❌ NO');
       
       if (sessionExists) {
-        console.log('🎉 ¡Hay sesión guardada! Verificando vigencia...');
+        console.log('📱 Hay sesión guardada en la base de datos');
         
-        // Verificar fecha de la sesión
-        let hoursSinceUpdate = null;
+        // Verificar antigüedad de la sesión
         try {
           const sessionInfo = await authStrategy.store.pool.query(
             'SELECT updated_at, created_at FROM whatsapp_sessions WHERE id = $1',
@@ -460,130 +465,37 @@ if (usePostgresAuth) {
           if (sessionInfo.rows.length > 0) {
             const lastUpdate = new Date(sessionInfo.rows[0].updated_at || sessionInfo.rows[0].created_at);
             const now = new Date();
-            hoursSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60);
+            const hoursSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60);
             
-            console.log(`📅 Última actualización de sesión: ${lastUpdate.toISOString()}`);
-            console.log(`⏰ Horas transcurridas: ${Math.round(hoursSinceUpdate)}h`);
+            console.log(`📅 Última actualización: ${lastUpdate.toISOString()}`);
+            console.log(`⏰ Antigüedad: ${Math.round(hoursSinceUpdate)}h (${Math.round(hoursSinceUpdate/24)}d)`);
             
-            // Evaluar si intentar auto-conexión
-            if (hoursSinceUpdate > 168) { // 7 días
-              console.log('\n❌ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-              console.log('❌ SESIÓN EXPIRADA (>7 días)');
-              console.log('❌ NO se intentará auto-conexión');
-              console.log('💡 SOLUCIÓN: Regenerar QR con:');
-              console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-              console.log('❌ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-              return; // No intentar inicializar
-              
-            } else if (hoursSinceUpdate > 24) { // Más de 1 día pero menos de 7
-              console.log('\n⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-              console.log('⚠️ SESIÓN ANTIGUA (>24h)');
-              console.log('⚠️ NO se intentará auto-conexión en startup');
-              console.log('💡 Keep-alive verificará y mostrará instrucciones si es necesario');
-              console.log('⚠️ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-              return; // No intentar inicializar
-              
-            } else {
-              console.log('✅ Sesión reciente (<24h) - Intentando auto-conexión...');
+            if (hoursSinceUpdate < 24) {
               sessionIsOld = false;
+              console.log('✅ Sesión reciente (<24h)');
+            } else if (hoursSinceUpdate < 168) {
+              sessionIsOld = true;
+              console.log('⚠️ Sesión antigua (1-7 días)');
+            } else {
+              sessionIsOld = true;
+              console.log('❌ Sesión expirada (>7 días)');
             }
           }
         } catch (dateError) {
-          console.warn('⚠️ No se pudo verificar fecha de sesión:', dateError.message);
-          console.log('🔄 Intentando conexión de todas formas...');
+          console.warn('⚠️ No se pudo verificar antigüedad:', dateError.message);
         }
-        
-        // Si llegamos aquí, intentar auto-conexión con sesión guardada
-        try {
-          console.log('🔍 Verificando tamaño de sesión guardada...');
-          const sessionData = await authStrategy.store.extract();
-          
-          if (sessionData) {
-            const size = JSON.stringify(sessionData).length;
-            console.log('📊 Tamaño de sesión:', size, 'chars');
-            
-            if (size > 5000) {
-              console.log('\n' + '='.repeat(70));
-              console.log('🚀 INICIANDO AUTO-CONEXIÓN CON SESIÓN GUARDADA');
-              console.log('='.repeat(70));
-              
-              // Inicializar WhatsApp automáticamente
-              console.log('🔵 Llamando a whatsappClient.initialize()...');
-              try {
-                await whatsappClient.initialize();
-                console.log('✅ whatsappClient.initialize() completado exitosamente');
-                console.log('🔄 WhatsApp inicializado - Esperando conexión automática...');
-              } catch (initError) {
-                console.error('❌ ERROR en whatsappClient.initialize():', initError.message);
-                console.error('📍 Stack trace del error de inicialización:');
-                console.error(initError.stack);
-                throw initError; // Re-lanzar para que el catch externo lo maneje
-              }
-              
-              // Verificar estado después de 10 segundos
-              setTimeout(async () => {
-                try {
-                  const state = await whatsappClient.getState();
-                  console.log(`\n📊 Verificación post-inicialización:`);
-                  console.log(`   Estado del cliente: ${state}`);
-                  console.log(`   whatsappReady flag: ${whatsappReady}`);
-                  
-                  if (state === 'CONNECTED' && !whatsappReady) {
-                    console.log(`\n⚠️ DETECTADO: Cliente conectado pero flag false - Corrigiendo...`);
-                    whatsappReady = true;
-                    marcarConexionExitosa();
-                    console.log(`✅ Flag corregido - WhatsApp CONECTADO automáticamente!`);
-                    
-                    // Ejecutar callback de notificaciones pendientes
-                    if (onWhatsAppReadyCallback) {
-                      setImmediate(async () => {
-                        try {
-                          await onWhatsAppReadyCallback();
-                        } catch (error) {
-                          console.error('❌ Error en callback:', error);
-                        }
-                      });
-                    }
-                  } else if (state === 'CONNECTED') {
-                    console.log('✅ WhatsApp CONECTADO automáticamente al arrancar!');
-                  } else {
-                    console.log(`⏳ Estado: ${state} - Puede necesitar más tiempo o QR`);
-                  }
-                } catch (stateError) {
-                  console.error('❌ Error verificando estado post-init:', stateError.message);
-                }
-              }, 10000);
-              
-            } else {
-              console.warn('⚠️ Sesión muy pequeña - puede estar corrupta');
-              console.log('💡 Keep-alive verificará y mostrará instrucciones');
-            }
-          } else {
-            console.warn('⚠️ No se pudo extraer sesión');
-          }
-        } catch (extractError) {
-          console.error('❌ Error en auto-conexión:', extractError.message);
-          console.error('📍 Stack trace completo del error:');
-          console.error(extractError.stack);
-          console.log('💡 Keep-alive verificará y mostrará instrucciones si es necesario');
-        }
-        
       } else {
-        console.log('\n' + '='.repeat(70));
-        console.log('💤 NO HAY SESIÓN GUARDADA EN BBDD');
-        console.log('='.repeat(70));
-        console.log('\n📱 Para conectar WhatsApp, ejecuta:');
-        console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-        console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n');
-        console.log('💡 Keep-alive verificará cada 10 min y mostrará instrucciones');
-        console.log('='.repeat(70) + '\n');
+        console.log('📱 NO hay sesión guardada en la base de datos');
       }
       
+      console.log('\n💡 Para inicializar WhatsApp, usa:');
+      console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+      console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
+      console.log('\n🔄 Keep-alive (cada 10 min) mostrará instrucciones si es necesario');
+      console.log('='.repeat(70) + '\n');
+      
     } catch (error) {
-      console.error('❌ Error en auto-inicialización:', error.message);
-      console.error('📍 Stack trace del error principal:');
-      console.error(error.stack);
-      console.log('💡 Keep-alive se encargará de gestionar la conexión');
+      console.error('❌ Error verificando sesión:', error.message);
     }
   })();
   
