@@ -393,8 +393,17 @@ if (usePostgresAuth) {
               console.log('='.repeat(70));
               
               // Inicializar WhatsApp automáticamente
-              await whatsappClient.initialize();
-              console.log('🔄 WhatsApp inicializado - Esperando conexión automática...');
+              console.log('🔵 Llamando a whatsappClient.initialize()...');
+              try {
+                await whatsappClient.initialize();
+                console.log('✅ whatsappClient.initialize() completado exitosamente');
+                console.log('🔄 WhatsApp inicializado - Esperando conexión automática...');
+              } catch (initError) {
+                console.error('❌ ERROR en whatsappClient.initialize():', initError.message);
+                console.error('📍 Stack trace del error de inicialización:');
+                console.error(initError.stack);
+                throw initError; // Re-lanzar para que el catch externo lo maneje
+              }
               
               // Verificar estado después de 10 segundos
               setTimeout(async () => {
@@ -439,6 +448,8 @@ if (usePostgresAuth) {
           }
         } catch (extractError) {
           console.error('❌ Error en auto-conexión:', extractError.message);
+          console.error('📍 Stack trace completo del error:');
+          console.error(extractError.stack);
           console.log('💡 Keep-alive verificará y mostrará instrucciones si es necesario');
         }
         
@@ -455,6 +466,8 @@ if (usePostgresAuth) {
       
     } catch (error) {
       console.error('❌ Error en auto-inicialización:', error.message);
+      console.error('📍 Stack trace del error principal:');
+      console.error(error.stack);
       console.log('💡 Keep-alive se encargará de gestionar la conexión');
     }
   })();
