@@ -1460,8 +1460,13 @@ async function limpiarSesionesCompleto() {
         }
       });
       
-    console.log(`[${timestamp}] ℹ️ Eventos ya configurados globalmente - no es necesario reconfigurarlos`);
-      console.log(`[${timestamp}] ✅ Cliente recreado e inicializado - QR se generará automáticamente`);
+      console.log(`[${timestamp}] ℹ️ Eventos ya configurados globalmente - se aplicarán al nuevo cliente`);
+      
+      // IMPORTANTE: Inicializar el cliente para que genere el QR
+      console.log(`[${timestamp}] 🚀 Inicializando cliente para generar QR...`);
+      await whatsappClient.initialize();
+      
+      console.log(`[${timestamp}] ✅ Cliente inicializado - QR se generará automáticamente`);
     } catch (recreateError) {
       console.error(`[${timestamp}] ❌ Error recreando cliente: ${recreateError.message}`);
       throw recreateError;
