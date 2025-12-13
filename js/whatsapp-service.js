@@ -271,6 +271,11 @@ function registrarEventosWhatsApp(client) {
       console.error('');
       console.error('💡 El contador se reseteará automáticamente al conectar exitosamente');
       console.error(`${'='.repeat(70)}\n`);
+      
+      // 🔓 CRÍTICO: Resetear isConnecting para permitir reintentos posteriores
+      setIsConnecting(false);
+      console.error('🔓 isConnecting reseteado - puedes reintentar con /whatsapp-regenerar-qr');
+      
       return;
     }
     
@@ -480,6 +485,8 @@ function registrarEventosWhatsApp(client) {
     // Eventos adicionales de RemoteAuth
     client.on('auth_failure', (msg) => {
       console.error('❌ Fallo de autenticación RemoteAuth:', msg);
+      setIsConnecting(false); // 🔓 Desbloquear si falla la autenticación
+      console.error('🔓 isConnecting reseteado debido a fallo de autenticación');
     });
   }
   
