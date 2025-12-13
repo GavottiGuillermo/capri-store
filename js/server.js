@@ -36,7 +36,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, whatsappReady, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -399,15 +399,55 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
   
   let mensajeEnviado = false;
   let whatsappStatus = 'desconectado';
+  let accionRealizada = 'ninguna';
   
   try {
-    // Verificar estado de WhatsApp
-    const estadoWhatsApp = await verificarEstadoWhatsApp();
+    // Paso 1: Verificar si WhatsApp está completamente conectado
+    console.log(`[${timestamp}] 🔍 Paso 1: Verificando estado completo de WhatsApp...`);
     
-    if (estadoWhatsApp.disponible && whatsappReady) {
+    // Verificar todas las variables de estado
+    let todasLasVariablesOK = false;
+    let estadoDetallado = {};
+    
+    if (whatsappAvailable) {
+      try {
+        const whatsappStatusObj = await getWhatsAppStatus();
+        estadoDetallado = whatsappStatusObj;
+        
+        // Considerar conectado solo cuando TODAS las variables relevantes sean true
+        todasLasVariablesOK = 
+          whatsappStatusObj.whatsapp_ready === true &&
+          whatsappStatusObj.client_ready === true &&
+          (whatsappStatusObj.client_state === 'CONNECTED' || whatsappStatusObj.state === 'CONNECTED');
+        
+        console.log(`[${timestamp}] 📊 Estado WhatsApp:`, {
+          whatsapp_ready: whatsappStatusObj.whatsapp_ready,
+          client_ready: whatsappStatusObj.client_ready,
+          client_state: whatsappStatusObj.client_state,
+          todasLasVariablesOK
+        });
+        
+      } catch (statusError) {
+        console.error(`[${timestamp}] ❌ Error obteniendo estado:`, statusError.message);
+        todasLasVariablesOK = false;
+      }
+    }
+    
+    // FLUJO: SI ESTÁ HABILITADO (todas las variables OK)
+    if (todasLasVariablesOK) {
       whatsappStatus = 'conectado';
+      console.log(`[${timestamp}] ✅ WhatsApp CONECTADO - Todas las variables OK`);
       
-      // Enviar mensaje periódico al administrador para mantener sesión activa
+      // 1. Procesar mensajes pendientes
+      console.log(`[${timestamp}] 📤 Procesando mensajes pendientes...`);
+      try {
+        await procesarNotificacionesPendientes();
+        accionRealizada = 'procesados_pendientes';
+      } catch (procesarError) {
+        console.error(`[${timestamp}] ⚠️ Error procesando pendientes:`, procesarError.message);
+      }
+      
+      // 2. Enviar mensaje al administrador (SIEMPRE para mantener sesión activa)
       if (ADMIN_WHATSAPP) {
         const ahora = new Date();
         const horaFormato = ahora.toLocaleString('es-AR', {
@@ -418,11 +458,11 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
           month: '2-digit'
         });
         
-        const mensaje = `🟢 *Sistema Activo* - ${horaFormato}\n\n` +
+        const mensaje = `🟢 *Keep-Alive* - ${horaFormato}\n\n` +
           `✅ WhatsApp conectado\n` +
           `⏱️ Uptime: ${Math.floor(process.uptime() / 60)} min\n` +
           `💾 Memoria: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n\n` +
-          `_Keep-alive automático cada 30 min_`;
+          `_Verificación automática cada 10 min_`;
         
         try {
           const resultado = await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
@@ -430,6 +470,7 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
           
           if (resultado.success) {
             console.log(`[${timestamp}] ✅ Mensaje keep-alive enviado al administrador`);
+            accionRealizada = 'procesados_pendientes_y_mensaje_admin';
           } else {
             console.log(`[${timestamp}] ⚠️ No se pudo enviar mensaje keep-alive: ${resultado.error}`);
           }
@@ -437,56 +478,107 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
           console.error(`[${timestamp}] ❌ Error enviando mensaje keep-alive:`, error.message);
         }
       }
-    } else {
-      whatsappStatus = 'desconectado';
-      console.log(`[${timestamp}] ⚠️ WhatsApp no disponible - Estado: ${estadoWhatsApp.razon}`);
       
-      // Intentar reconectar si hay sesión del día actual
-      if (estadoWhatsApp.permitirAutoReconexion) {
-        console.log(`[${timestamp}] 🔄 Intentando reconectar con sesión guardada...`);
+    } else {
+      // FLUJO: SI NO ESTÁ HABILITADO
+      console.log(`[${timestamp}] ⚠️ WhatsApp NO CONECTADO - Verificando opciones...`);
+      
+      // Verificar si hay sesión guardada en PostgreSQL
+      let tieneSesionEnBBDD = false;
+      let sesionEdadHoras = null;
+      
+      try {
+        const resultSession = await executeQueryWithRetry(
+          pool,
+          'SELECT updated_at FROM whatsapp_sessions WHERE id = $1 LIMIT 1',
+          ['RemoteAuth-capri-store-main'],
+          1
+        );
+        
+        if (resultSession && resultSession.rows && resultSession.rows.length > 0) {
+          tieneSesionEnBBDD = true;
+          const updatedAt = new Date(resultSession.rows[0].updated_at);
+          const ahora = new Date();
+          sesionEdadHoras = (ahora - updatedAt) / (1000 * 60 * 60);
+          
+          console.log(`[${timestamp}] 📊 Sesión en BBDD: ${sesionEdadHoras.toFixed(1)} horas`);
+        } else {
+          console.log(`[${timestamp}] 📊 No hay sesión en BBDD`);
+        }
+      } catch (dbError) {
+        console.error(`[${timestamp}] ❌ Error verificando sesión:`, dbError.message);
+      }
+      
+      // Si hay sesión del mismo día (<24h), intentar conectar
+      if (tieneSesionEnBBDD && sesionEdadHoras !== null && sesionEdadHoras < 24) {
+        console.log(`[${timestamp}] 🔄 Sesión reciente detectada - Intentando reconectar...`);
+        whatsappStatus = 'reconectando';
+        accionRealizada = 'intento_reconexion';
+        
         try {
           await inicializarWhatsApp();
-          console.log(`[${timestamp}] ✅ Reconexión iniciada`);
-          whatsappStatus = 'reconectando';
+          console.log(`[${timestamp}] ✅ Reconexión iniciada - WhatsApp se conectará automáticamente`);
+          
+          // Esperar 10 segundos y verificar si conectó
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          
+          const statusDespuesReconexion = await getWhatsAppStatus();
+          if (statusDespuesReconexion.whatsapp_ready && statusDespuesReconexion.client_ready) {
+            console.log(`[${timestamp}] ✅ Reconexión exitosa!`);
+            whatsappStatus = 'conectado';
+            
+            // Procesar pendientes después de reconectar
+            await procesarNotificacionesPendientes();
+          } else {
+            console.log(`[${timestamp}] ⚠️ Reconexión en proceso... verificar en próximo keep-alive`);
+          }
+          
         } catch (reconError) {
           console.error(`[${timestamp}] ❌ Error en reconexión:`, reconError.message);
-          console.log(`\n${'='.repeat(70)}`);
-          console.log(`⚠️  WHATSAPP NO PUDO RECONECTAR AUTOMÁTICAMENTE`);
-          console.log(`${'='.repeat(70)}`);
-          console.log(`\n📱 Para regenerar código QR, ejecuta en PowerShell:\n`);
-          console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
-          console.log(`${'='.repeat(70)}\n`);
+          accionRealizada = 'fallo_reconexion';
         }
+        
       } else {
+        // No hay sesión o es muy antigua (>24h) - Mostrar log para operador
         console.log(`\n${'='.repeat(70)}`);
-        console.log(`⚠️  WHATSAPP DESCONECTADO - SIN SESIÓN VÁLIDA`);
+        console.log(`📱 WHATSAPP NO CONECTADO - REQUIERE ACCIÓN DEL OPERADOR`);
         console.log(`${'='.repeat(70)}`);
-        console.log(`\nRazón: ${estadoWhatsApp.razon}`);
         
-        if (!estadoWhatsApp.tieneSesionEnBBDD) {
+        if (!tieneSesionEnBBDD) {
           console.log(`\n❌ No hay sesión guardada en la base de datos`);
-        } else if (estadoWhatsApp.sesionEdadDias >= 1) {
-          console.log(`\n❌ Sesión muy antigua (${estadoWhatsApp.sesionEdadDias.toFixed(1)} días)`);
-          console.log(`💡 Solo se reconecta automáticamente si la sesión es del mismo día (<24h)`);
+        } else if (sesionEdadHoras >= 24) {
+          console.log(`\n❌ Sesión antigua detectada (${sesionEdadHoras.toFixed(1)} horas)`);
+          console.log(`⚠️  Solo se reconecta automáticamente con sesiones <24h`);
         }
         
-        console.log(`\n📱 Para generar nuevo código QR, ejecuta en PowerShell:\n`);
+        console.log(`\n📋 PASOS PARA CONECTAR WHATSAPP:\n`);
+        console.log(`1️⃣  Ejecutar Query para generar QR:`);
+        console.log(`   GET https://capri-store.onrender.com/whatsapp-regenerar-qr\n`);
+        console.log(`2️⃣  PowerShell:`);
         console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
+        console.log(`3️⃣  Escanear el QR que aparecerá en los logs`);
+        console.log(`4️⃣  Esperar hasta ver "WhatsApp CONECTADO" en próximo keep-alive\n`);
         console.log(`${'='.repeat(70)}\n`);
+        
+        whatsappStatus = 'desconectado_requiere_operador';
+        accionRealizada = 'log_mostrado_para_operador';
       }
     }
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error en keep-alive:`, error.message);
+    whatsappStatus = 'error';
+    accionRealizada = 'error: ' + error.message;
   }
   
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
-    whatsapp_ready: whatsappAvailable ? whatsappReady : false,
+    whatsapp_ready: todasLasVariablesOK || false,
     whatsapp_status: whatsappStatus,
-    mensaje_enviado: mensajeEnviado
+    mensaje_enviado: mensajeEnviado,
+    accion_realizada: accionRealizada
   });
 });
 
