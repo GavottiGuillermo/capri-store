@@ -170,98 +170,158 @@ let whatsappClient = new Client({
 
 console.log('✅ Cliente WhatsApp creado exitosamente');
 
-// Eventos de WhatsApp
-whatsappClient.on('qr', (qr) => {
-  qrAttempts++;
+// ===============================
+// FUNCIÓN PARA REGISTRAR EVENTOS
+// ===============================
+// Esta función registra todos los eventos del cliente WhatsApp
+// Se llama al crear el cliente inicial y cuando se recrea
+function registrarEventosWhatsApp(client) {
+  console.log('🔧 Registrando eventos de WhatsApp en el cliente...');
   
-  if (qrAttempts > MAX_QR_ATTEMPTS) {
-    console.error(`\n${'='.repeat(70)}`);
-    console.error(`❌ LÍMITE DE QRs ALCANZADO (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
-    console.error(`${'='.repeat(70)}`);
-    console.error('🛑 Se detuvo la generación de QRs para evitar bucle infinito');
-    console.error('');
-    console.error('📋 PASOS PARA SOLUCIONAR:');
-    console.error('');
-    console.error('1️⃣  Verificar que WhatsApp esté abierto en el teléfono');
-    console.error('2️⃣  Verificar conexión a Internet estable');
-    console.error('3️⃣  Esperar 5 minutos antes de reintentar');
-    console.error('4️⃣  Ejecutar nuevamente:');
-    console.error('    GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-    console.error('');
-    console.error('💡 El contador se reseteará automáticamente al conectar exitosamente');
-    console.error(`${'='.repeat(70)}\n`);
-    return;
+  // Evento QR
+  client.on('qr', (qr) => {
+    qrAttempts++;
+    
+    if (qrAttempts > MAX_QR_ATTEMPTS) {
+      console.error(`\n${'='.repeat(70)}`);
+      console.error(`❌ LÍMITE DE QRs ALCANZADO (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
+      console.error(`${'='.repeat(70)}`);
+      console.error('🛑 Se detuvo la generación de QRs para evitar bucle infinito');
+      console.error('');
+      console.error('📋 PASOS PARA SOLUCIONAR:');
+      console.error('');
+      console.error('1️⃣  Verificar que WhatsApp esté abierto en el teléfono');
+      console.error('2️⃣  Verificar conexión a Internet estable');
+      console.error('3️⃣  Esperar 5 minutos antes de reintentar');
+      console.error('4️⃣  Ejecutar nuevamente:');
+      console.error('    GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+      console.error('');
+      console.error('💡 El contador se reseteará automáticamente al conectar exitosamente');
+      console.error(`${'='.repeat(70)}\n`);
+      return;
+    }
+    
+    if (qrGenerated) {
+      console.log(`\n⚠️ QR anterior expiró, generando nuevo código (intento ${qrAttempts}/${MAX_QR_ATTEMPTS})...\n`);
+    }
+    
+    const authType = usePostgresAuth ? 'PostgreSQL (se guardará permanentemente)' : 'Local (temporal)';
+    console.log(`\n🔐 Autenticación: ${authType}\n`);
+    
+    console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+    console.log(`📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! (${qrAttempts}/${MAX_QR_ATTEMPTS}) 📱`);
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+    
+    // Generar QR en la terminal
+    qrcode.generate(qr, { small: true });
+    
+    console.log('\n📲 INSTRUCCIONES PARA EVITAR "NO SE PUDO CONECTAR":');
+    console.log('1️⃣ Abre WhatsApp en tu teléfono');
+    console.log('2️⃣ Asegúrate de tener BUENA conexión WiFi/datos');
+    console.log('3️⃣ Ve a Configuración > Dispositivos vinculados');
+    console.log('4️⃣ Toca "Vincular un dispositivo"');
+    console.log('5️⃣ Escanea LENTAMENTE el QR de arriba ☝️');
+    console.log('6️⃣ ¡ESPERA hasta ver "CONECTADO" sin cerrar nada!');
+    console.log('\n⚠️ TIPS IMPORTANTES:');
+    console.log('• NO cierres WhatsApp mientras escaneas');
+    console.log('• NO salgas de la pantalla de escaneo');
+    console.log('• Espera 10-15 segundos después de escanear');
+    console.log('• Si falla, espera 2 minutos antes de reintentar');
+    console.log('\n🖥️ INFORMACIÓN DEL DISPOSITIVO:');
+    console.log('• Debería aparecer como "Linux Desktop" o "Chrome Linux"');
+    console.log('• Si aparece como "MAC Desktop", la sesión está corrupta');
+    console.log('• User Agent corregido para Render/Linux');
+    console.log('\n⏰ Tienes 60 segundos para escanearlo');
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+    
+    qrGenerated = true;
+  });
+  
+  // Evento ready
+  client.on('ready', async () => {
+    const timestamp = new Date().toLocaleString('es-AR');
+    console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
+    whatsappReady = true;
+    
+    // RESETEAR CONTADOR DE QR cuando se conecta exitosamente
+    qrAttempts = 0;
+    console.log('✅ Contador de QR reseteado - conexión exitosa');
+    
+    // Marcar conexión exitosa para verificación de disponibilidad
+    console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
+    marcarConexionExitosa();
+    
+    // Procesar notificaciones pendientes en background
+    if (onWhatsAppReadyCallback) {
+      console.log('🔄 Ejecutando callback para notificaciones pendientes (WhatsApp ready confirmado)...');
+      setImmediate(async () => {
+        try {
+          await onWhatsAppReadyCallback();
+          lastCallbackExecution = Date.now();
+        } catch (error) {
+          console.error('❌ Error en callback de notificaciones pendientes:', error);
+        }
+      });
+    }
+    
+    // Verificar estado real y mostrar info
+    try {
+      const state = await client.getState();
+      const authInfo = usePostgresAuth ? 'PostgreSQL (Persistente)' : 'Local (Temporal)';
+      
+      console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
+      console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
+      console.log(`📱 Negocio: ${BUSINESS_NAME}`);
+      console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
+      console.log(`🔗 Estado del cliente: ${state}`);
+      console.log(`🗄️ Autenticación: ${authInfo}`);
+      console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
+      console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+    } catch (infoError) {
+      console.log('⚠️ No se pudo obtener info del estado');
+    }
+  });
+  
+  // Eventos para autenticación remota (PostgreSQL)
+  if (usePostgresAuth) {
+    client.on('remote_session_saved', () => {
+      console.log('💾 ✅ Sesión guardada en PostgreSQL exitosamente');
+      console.log('🕐 Timestamp:', new Date().toISOString());
+      
+      if (global.gc) {
+        console.log('🧹 Ejecutando garbage collection después de guardar sesión...');
+        global.gc();
+      }
+    });
+    
+    client.on('remote_session_loaded', () => {
+      console.log('📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
+      console.log('🕐 Timestamp:', new Date().toISOString());
+      console.log('🔄 Intentando reconectar automáticamente...');
+      
+      // Forzar limpieza de memoria después de cargar sesión
+      if (global.gc) {
+        console.log('🧹 Ejecutando garbage collection después de cargar sesión...');
+        global.gc();
+      }
+    });
+    
+    // Eventos adicionales de RemoteAuth
+    client.on('auth_failure', (msg) => {
+      console.error('❌ Fallo de autenticación RemoteAuth:', msg);
+    });
   }
   
-  if (qrGenerated) {
-    console.log(`\n⚠️ QR anterior expiró, generando nuevo código (intento ${qrAttempts}/${MAX_QR_ATTEMPTS})...\n`);
-  }
-  
-  const authType = usePostgresAuth ? 'PostgreSQL (se guardará permanentemente)' : 'Local (temporal)';
-  console.log(`\n🔐 Autenticación: ${authType}\n`);
-  
-  console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
-  console.log(`📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! (${qrAttempts}/${MAX_QR_ATTEMPTS}) 📱`);
-  console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
-  
-  // Generar QR en la terminal
-  qrcode.generate(qr, { small: true });
-  
-  console.log('\n📲 INSTRUCCIONES PARA EVITAR "NO SE PUDO CONECTAR":');
-  console.log('1️⃣ Abre WhatsApp en tu teléfono');
-  console.log('2️⃣ Asegúrate de tener BUENA conexión WiFi/datos');
-  console.log('3️⃣ Ve a Configuración > Dispositivos vinculados');
-  console.log('4️⃣ Toca "Vincular un dispositivo"');
-  console.log('5️⃣ Escanea LENTAMENTE el QR de arriba ☝️');
-  console.log('6️⃣ ¡ESPERA hasta ver "CONECTADO" sin cerrar nada!');
-  console.log('\n⚠️ TIPS IMPORTANTES:');
-  console.log('• NO cierres WhatsApp mientras escaneas');
-  console.log('• NO salgas de la pantalla de escaneo');
-  console.log('• Espera 10-15 segundos después de escanear');
-  console.log('• Si falla, espera 2 minutos antes de reintentar');
-  console.log('\n🖥️ INFORMACIÓN DEL DISPOSITIVO:');
-  console.log('• Debería aparecer como "Linux Desktop" o "Chrome Linux"');
-  console.log('• Si aparece como "MAC Desktop", la sesión está corrupta');
-  console.log('• User Agent corregido para Render/Linux');
-  console.log('\n⏰ Tienes 60 segundos para escanearlo');
-  console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
-  
-  qrGenerated = true;
-});
+  console.log('✅ Eventos de WhatsApp registrados correctamente');
+}
 
-// Eventos para autenticación remota (PostgreSQL)
+// ===============================
+// REGISTRAR EVENTOS EN CLIENTE INICIAL
+// ===============================
+registrarEventosWhatsApp(whatsappClient);
+
+// Verificar si hay sesión guardada e intentar conectar automáticamente (solo para PostgreSQL)
 if (usePostgresAuth) {
-  console.log('🔄 Configurando eventos de PostgreSQL RemoteAuth...');
-  
-  whatsappClient.on('remote_session_saved', () => {
-    console.log('💾 ✅ Sesión guardada en PostgreSQL exitosamente');
-    console.log('🕐 Timestamp:', new Date().toISOString());
-    
-    // Forzar limpieza de memoria después de guardar sesión
-    if (global.gc) {
-      console.log('🧹 Ejecutando garbage collection después de guardar sesión...');
-      global.gc();
-    }
-  });
-  
-  whatsappClient.on('remote_session_loaded', () => {
-    console.log('📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
-    console.log('🕐 Timestamp:', new Date().toISOString());
-    console.log('🔄 Intentando reconectar automáticamente...');
-    
-    // Forzar limpieza de memoria después de cargar sesión
-    if (global.gc) {
-      console.log('🧹 Ejecutando garbage collection después de cargar sesión...');
-      global.gc();
-    }
-  });
-  
-  // Eventos adicionales de RemoteAuth
-  whatsappClient.on('auth_failure', (msg) => {
-    console.error('❌ Fallo de autenticación RemoteAuth:', msg);
-  });
-  
-  // Verificar si hay sesión guardada e intentar conectar automáticamente
   console.log('🔍 Verificando sesión existente en PostgreSQL al arrancar...');
   
   // AUTO-INICIALIZACIÓN: Intentar conectar con sesión guardada en BBDD
@@ -1460,7 +1520,8 @@ async function limpiarSesionesCompleto() {
         }
       });
       
-      console.log(`[${timestamp}] ℹ️ Eventos ya configurados globalmente - se aplicarán al nuevo cliente`);
+      console.log(`[${timestamp}] 🔧 Registrando eventos en el nuevo cliente...`);
+      registrarEventosWhatsApp(whatsappClient);
       
       // IMPORTANTE: Inicializar el cliente para que genere el QR
       console.log(`[${timestamp}] 🚀 Inicializando cliente para generar QR...`);
