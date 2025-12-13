@@ -358,7 +358,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     whatsapp_available: whatsappAvailable,
-    whatsapp_ready: whatsappAvailable ? whatsappReady : false,
+    whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false,
     business_name: BUSINESS_NAME,
     env_vars: {
       admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
@@ -386,7 +386,7 @@ app.get('/ping', async (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
-    whatsapp_ready: whatsappAvailable ? whatsappReady : false
+    whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false
   });
 });
 
@@ -683,7 +683,7 @@ app.get('/whatsapp-status', async (req, res) => {
     const isConnecting = getIsConnecting(); // 🔒 Estado de conexión
     
     res.json({
-      whatsapp_ready: whatsappReady,
+      whatsapp_ready: getWhatsAppReady(),
       client_ready: status.whatsapp_ready || false,
       state: status.state || 'UNKNOWN',
       is_connecting: isConnecting, // 🔒 Indica si está en proceso de conexión
@@ -903,7 +903,7 @@ app.get('/debug', (req, res) => {
     },
     services: {
       whatsapp_available: whatsappAvailable,
-      whatsapp_ready: whatsappAvailable ? whatsappReady : false,
+      whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false,
       database_configured: !!process.env.DATABASE_URL,
       mercadopago_configured: !!process.env.MERCADOPAGO_ACCESS_TOKEN
     },
@@ -996,7 +996,7 @@ app.get('/debug', (req, res) => {
     ],
     whatsapp_info: {
       service_available: whatsappAvailable,
-      client_ready: whatsappAvailable ? whatsappReady : false,
+      client_ready: whatsappAvailable ? getWhatsAppReady() : false,
       admin_configured: !!process.env.ADMIN_WHATSAPP
     }
   });
@@ -1437,7 +1437,7 @@ async function verificarEstadoWhatsApp() {
   } catch (error) {
     console.log(`⚠️ Error obteniendo estado dinámico:`, error.message);
     // Fallback a variables originales
-    serviceReady = whatsappService.whatsappReady || false;
+    serviceReady = getWhatsAppReady() || false;
     ultimaConexion = whatsappService.ultimaConexionExitosa || null;
   }
   
@@ -1495,7 +1495,7 @@ async function verificarEstadoWhatsApp() {
            'Estado desconocido',
     tiempoDesdeUltimaConexion,
     whatsappAvailable,
-    whatsappReady: serviceReady,
+    whatsappReady: getWhatsAppReady(),
     permitirAutoReconexion,
     tieneSesionEnBBDD,
     sesionEdadDias
@@ -1508,11 +1508,11 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
   const timestamp = new Date().toISOString();
   
   try {
-    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}, reintentos: ${reintentos}`);
+    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}, reintentos: ${reintentos}`);
     
     // OPTIMIZACIÓN: Verificar primero si WhatsApp está disponible SIN consultar BBDD
     // Solo si está disponible, entonces proceder a consultar notificaciones pendientes
-    if (!whatsappAvailable || !whatsappReady) {
+    if (!whatsappAvailable || !getWhatsAppReady()) {
       // Si no está listo y es el primer intento, reintentar después de 10 segundos
       if (reintentos === 0) {
         console.log(`[${timestamp}] ⏳ WhatsApp no listo aún - reintentando en 10 segundos...`);
@@ -1521,7 +1521,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         }, 10000);
         return;
       }
-      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible después de reintento - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${whatsappReady}`);
+      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible después de reintento - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}`);
       return;
     }
     
@@ -1742,7 +1742,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     // Log de estado de WhatsApp
     console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
     console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-    console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
+    console.log(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
     console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
     
     if (!whatsappAvailable) {
