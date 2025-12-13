@@ -53,7 +53,7 @@ function getIsConnecting() {
 }
 
 // ⏳ Función para esperar dinámicamente hasta que la sesión se guarde o timeout
-async function esperarGuardadoSesion(maxTimeoutMs = 30000) {
+async function esperarGuardadoSesion(maxTimeoutMs = 60000) {
   const startTime = Date.now();
   const checkIntervalMs = 2000; // Verificar cada 2 segundos
   
@@ -332,11 +332,31 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 30s)
+    // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 60s)
     console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
-    esperarGuardadoSesion(30000).then((sesionGuardada) => {
+    esperarGuardadoSesion(60000).then(async (sesionGuardada) => {
       if (sesionGuardada) {
         console.log('✅ Proceso de conexión completado - Sesión guardada y verificada');
+        
+        // 📱 ENVIAR MENSAJE AL ADMIN confirmando conexión exitosa
+        try {
+          if (ADMIN_WHATSAPP) {
+            const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
+            const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
+              `✅ Capri Store está online\n` +
+              `🕐 ${new Date().toLocaleString('es-AR')}\n` +
+              `🗄️ Sesión guardada en PostgreSQL\n\n` +
+              `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
+            
+            console.log(`📱 Enviando mensaje de confirmación al admin...`);
+            await client.sendMessage(adminNumber, mensajeAdmin);
+            console.log(`✅ Mensaje de confirmación enviado al admin exitosamente`);
+          } else {
+            console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
+          }
+        } catch (mensajeError) {
+          console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
+        }
       } else {
         console.warn('⚠️ Proceso de conexión completado - Sesión NO confirmada (puede necesitar reconexión)');
       }
@@ -379,53 +399,15 @@ function registrarEventosWhatsApp(client) {
     }
   });
   
-  // Evento authenticated
+  // Evento authenticated - Solo para logging, el evento 'ready' es el definitivo
   client.on('authenticated', () => {
     console.log('🔐 WhatsApp autenticado correctamente');
-    console.log('🔒 isConnecting:', isConnecting);
+    console.log('⏳ Esperando evento ready para confirmar conexión completa...');
     
     // Asegurarse de que isConnecting esté en true
     if (!isConnecting) {
       setIsConnecting(true);
     }
-    
-    // FALLBACK: Marcar conexión exitosa aquí también por si 'ready' no se dispara
-    console.log('🎯 FALLBACK: Marcando conexión desde evento authenticated');
-    marcarConexionExitosa();
-    
-    // FALLBACK: Esperar 3 segundos y verificar si ready se disparó
-    setTimeout(async () => {
-      if (!whatsappReady) {
-        console.log('⚠️ FALLBACK: Evento ready no se disparó - forzando activación');
-        
-        try {
-          const state = await client.getState();
-          console.log(`📊 Estado del cliente: ${state}`);
-          
-          if (state === 'CONNECTED') {
-            console.log('✅ Cliente conectado - activando whatsappReady manualmente');
-            whatsappReady = true;
-            
-            // Ejecutar callback de notificaciones pendientes
-            if (onWhatsAppReadyCallback) {
-              console.log('🔄 FALLBACK: Ejecutando callback de notificaciones pendientes...');
-              setImmediate(async () => {
-                try {
-                  await onWhatsAppReadyCallback();
-                  lastCallbackExecution = Date.now();
-                } catch (error) {
-                  console.error('❌ Error en callback (fallback):', error);
-                }
-              });
-            }
-          }
-        } catch (error) {
-          console.error('❌ Error en fallback de authenticated:', error.message);
-        }
-      } else {
-        console.log('✅ Evento ready ya se disparó - fallback no necesario');
-      }
-    }, 3000);
   });
   
   // Evento disconnected
