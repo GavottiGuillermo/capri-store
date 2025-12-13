@@ -12,6 +12,7 @@ let qrAttempts = 0;
 const MAX_QR_ATTEMPTS = 5;
 let sessionIsOld = false; // Bandera para sesiones >24h
 let isConnecting = false; // 🔒 Flag para bloquear otros procesos durante conexión
+let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -49,6 +50,47 @@ function setIsConnecting(value) {
 
 function getIsConnecting() {
   return isConnecting;
+}
+
+// ⏳ Función para esperar dinámicamente hasta que la sesión se guarde o timeout
+async function esperarGuardadoSesion(maxTimeoutMs = 30000) {
+  const startTime = Date.now();
+  const checkIntervalMs = 2000; // Verificar cada 2 segundos
+  
+  console.log(`⏳ Esperando confirmación de guardado de sesión (máx ${maxTimeoutMs/1000}s)...`);
+  
+  return new Promise((resolve) => {
+    const checkInterval = setInterval(async () => {
+      const elapsedTime = Date.now() - startTime;
+      
+      // Verificar si se guardó la sesión
+      try {
+        if (usePostgresAuth && authStrategy && authStrategy.store) {
+          const sessionExists = await authStrategy.store.sessionExists();
+          
+          if (sessionExists) {
+            clearInterval(checkInterval);
+            console.log(`✅ Sesión confirmada en PostgreSQL (después de ${Math.round(elapsedTime/1000)}s)`);
+            resolve(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error verificando sesión: ${error.message}`);
+      }
+      
+      // Timeout alcanzado
+      if (elapsedTime >= maxTimeoutMs) {
+        clearInterval(checkInterval);
+        console.warn(`⚠️ Timeout alcanzado (${maxTimeoutMs/1000}s) - sesión no confirmada en PostgreSQL`);
+        resolve(false);
+        return;
+      }
+      
+      // Log de progreso cada verificación
+      console.log(`⏳ Esperando guardado... ${Math.round(elapsedTime/1000)}s/${maxTimeoutMs/1000}s`);
+    }, checkIntervalMs);
+  });
 }
 
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
@@ -270,7 +312,14 @@ function registrarEventosWhatsApp(client) {
   
   // Evento ready
   client.on('ready', async () => {
+    readyEventCount++; // Incrementar contador
     const timestamp = new Date().toLocaleString('es-AR');
+    
+    if (readyEventCount > 1) {
+      console.warn(`⚠️⚠️⚠️ EVENTO READY DUPLICADO #${readyEventCount} - IGNORANDO para evitar problemas`);
+      return; // Ignorar eventos ready duplicados
+    }
+    
     console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
     whatsappReady = true;
     
@@ -278,12 +327,17 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ⏳ ESPERAR 10 SEGUNDOS para asegurar que la sesión se guarde completamente
-    console.log('⏳ Esperando 10 segundos para finalizar proceso de conexión...');
-    setTimeout(() => {
+    // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 30s)
+    console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
+    esperarGuardadoSesion(30000).then((sesionGuardada) => {
+      if (sesionGuardada) {
+        console.log('✅ Proceso de conexión completado - Sesión guardada y verificada');
+      } else {
+        console.warn('⚠️ Proceso de conexión completado - Sesión NO confirmada (puede necesitar reconexión)');
+      }
       setIsConnecting(false); // 🔓 Desbloquear sistema
-      console.log('✅ Proceso de conexión completado - Sistema desbloqueado');
-    }, 10000);
+      console.log('🔓 Sistema desbloqueado para otras operaciones');
+    });
     
     // Marcar conexión exitosa para verificación de disponibilidad
     console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
@@ -400,8 +454,10 @@ function registrarEventosWhatsApp(client) {
   // Eventos para autenticación remota (PostgreSQL)
   if (usePostgresAuth) {
     client.on('remote_session_saved', () => {
-      console.log('💾 ✅ Sesión guardada en PostgreSQL exitosamente');
+      console.log('\n💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾');
+      console.log('💾 ✅ SESIÓN GUARDADA EN POSTGRESQL EXITOSAMENTE');
       console.log('🕐 Timestamp:', new Date().toISOString());
+      console.log('💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾\n');
       
       if (global.gc) {
         console.log('🧹 Ejecutando garbage collection después de guardar sesión...');
@@ -1182,6 +1238,7 @@ async function limpiarSesionesCompleto() {
     whatsappReady = false;
     qrGenerated = false;
     qrAttempts = 0;
+    readyEventCount = 0; // Resetear contador de eventos ready
     
     console.log(`[${timestamp}] 1️⃣ Limpiando sesión PostgreSQL...`);
     if (usePostgresAuth && authStrategy) {
