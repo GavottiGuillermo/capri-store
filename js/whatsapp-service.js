@@ -53,7 +53,7 @@ function getIsConnecting() {
 }
 
 // ⏳ Función para esperar dinámicamente hasta que la sesión se guarde o timeout
-async function esperarGuardadoSesion(maxTimeoutMs = 60000) {
+async function esperarGuardadoSesion(maxTimeoutMs = 120000) {
   const startTime = Date.now();
   const checkIntervalMs = 2000; // Verificar cada 2 segundos
   
@@ -332,39 +332,46 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 60s)
+    // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 120s)
+    // Razón: RemoteAuth tarda ~77s en guardar (observado en logs)
     console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
+    console.log('⏰ Timeout aumentado a 120s para cubrir tiempo real de guardado');
     
-    esperarGuardadoSesion(60000).then(async (sesionGuardada) => {
+    esperarGuardadoSesion(120000).then(async (sesionGuardada) => {
       if (sesionGuardada) {
-        console.log('✅ Proceso de conexión completado - Sesión guardada y verificada');
-      } else {
-        console.warn('⚠️ Timeout alcanzado (60s) - sesión no confirmada dentro del período');
-        console.log('⚠️ Procediendo a enviar mensaje al admin igualmente (WhatsApp está ready)');
-      }
-      
-      // 📱 ENVIAR MENSAJE AL ADMIN - AQUÍ en vez de esperar remote_session_saved
-      // Razón: remote_session_saved puede no dispararse si hay problemas con RemoteAuth
-      try {
-        if (ADMIN_WHATSAPP && whatsappReady) {
-          const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
-          const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
-            `✅ Capri Store está online\n` +
-            `🕐 ${new Date().toLocaleString('es-AR')}\n` +
-            `📊 Estado: ${sesionGuardada ? 'Sesión guardada en PostgreSQL' : 'Conectado (guardado en progreso)'}\n` +
-            `📊 Sistema completamente operativo\n\n` +
-            `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
-          
-          console.log(`📱 Enviando mensaje de confirmación al admin (${ADMIN_WHATSAPP})...`);
-          await client.sendMessage(adminNumber, mensajeAdmin);
-          console.log(`✅ Mensaje de confirmación enviado al admin exitosamente`);
-        } else if (!ADMIN_WHATSAPP) {
-          console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
-        } else if (!whatsappReady) {
-          console.warn('⚠️ whatsappReady=false - no se puede enviar mensaje');
+        console.log('✅ Proceso de conexión completado - Sesión guardada y verificada en PostgreSQL');
+        
+        // ⏳ ESPERAR 10s para que WhatsApp se estabilice completamente
+        console.log('⏳ Esperando 10s adicionales para estabilización de WhatsApp...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        console.log('✅ WhatsApp estabilizado - procediendo a enviar mensaje');
+        
+        // 📱 ENVIAR MENSAJE AL ADMIN - Solo SI la sesión se guardó exitosamente
+        try {
+          if (ADMIN_WHATSAPP && whatsappReady) {
+            const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
+            const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
+              `✅ Capri Store está online\n` +
+              `🕐 ${new Date().toLocaleString('es-AR')}\n` +
+              `🗄️ Sesión guardada en PostgreSQL\n` +
+              `📊 Sistema completamente operativo\n\n` +
+              `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
+            
+            console.log(`📱 Enviando mensaje de confirmación al admin (${ADMIN_WHATSAPP})...`);
+            await client.sendMessage(adminNumber, mensajeAdmin);
+            console.log(`✅ Mensaje de confirmación enviado al admin exitosamente`);
+          } else if (!ADMIN_WHATSAPP) {
+            console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
+          } else if (!whatsappReady) {
+            console.warn('⚠️ whatsappReady=false - no se puede enviar mensaje');
+          }
+        } catch (mensajeError) {
+          console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
         }
-      } catch (mensajeError) {
-        console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
+      } else {
+        console.error('❌ Timeout alcanzado (120s) - sesión NO se guardó en PostgreSQL');
+        console.error('⚠️ NO se enviará mensaje al admin (sesión no persistente)');
+        console.error('💡 Esto puede indicar un problema con RemoteAuth o permisos de escritura');
       }
       
       setIsConnecting(false); // 🔓 Desbloquear sistema
