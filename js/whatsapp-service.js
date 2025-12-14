@@ -499,14 +499,12 @@ registrarEventosWhatsApp(whatsappClient);
 if (usePostgresAuth) {
   console.log('🔍 Verificando sesión existente en PostgreSQL al arrancar...');
   
-  // ⛔ AUTO-INICIALIZACIÓN DESHABILITADA
-  // Para evitar errores de memoria en Render (512MB), WhatsApp NO se inicializa automáticamente
-  // Use el endpoint /whatsapp-regenerar-qr para inicializar manualmente
+  // ✅ AUTO-INICIALIZACIÓN HABILITADA para sesiones recientes (<24h)
+  // Si hay sesión guardada <24h, se inicializa automáticamente
+  // Si NO hay sesión o es >24h, usar /whatsapp-regenerar-qr
   (async function autoInicializarConSesion() {
     try {
       console.log('\n' + '='.repeat(70));
-      console.log('⛔ AUTO-INICIALIZACIÓN DESHABILITADA');
-      console.log('='.repeat(70));
       console.log('🔍 Verificando si hay sesión guardada en PostgreSQL...');
       
       const sessionExists = await authStrategy.store.sessionExists();
@@ -516,6 +514,7 @@ if (usePostgresAuth) {
         console.log('📱 Hay sesión guardada en la base de datos');
         
         // Verificar antigüedad de la sesión
+        let shouldAutoInit = false;
         try {
           const sessionInfo = await authStrategy.store.pool.query(
             'SELECT updated_at, created_at FROM whatsapp_sessions WHERE id = $1',
@@ -532,25 +531,36 @@ if (usePostgresAuth) {
             
             if (hoursSinceUpdate < 24) {
               sessionIsOld = false;
-              console.log('✅ Sesión reciente (<24h)');
+              shouldAutoInit = true;
+              console.log('✅ Sesión reciente (<24h) - AUTO-INICIALIZANDO...');
             } else if (hoursSinceUpdate < 168) {
               sessionIsOld = true;
-              console.log('⚠️ Sesión antigua (1-7 días)');
+              console.log('⚠️ Sesión antigua (1-7 días) - requiere regenerar QR');
             } else {
               sessionIsOld = true;
-              console.log('❌ Sesión expirada (>7 días)');
+              console.log('❌ Sesión expirada (>7 días) - requiere regenerar QR');
             }
           }
         } catch (dateError) {
           console.warn('⚠️ No se pudo verificar antigüedad:', dateError.message);
         }
+        
+        // 🚀 AUTO-INICIALIZAR si la sesión es reciente
+        if (shouldAutoInit) {
+          console.log('🚀 Inicializando WhatsApp con sesión guardada...');
+          await whatsappClient.initialize();
+          console.log('✅ WhatsApp inicializado - esperando autenticación automática...');
+        } else {
+          console.log('\n💡 Sesión antigua - Para reconectar usa:');
+          console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+        }
       } else {
         console.log('📱 NO hay sesión guardada en la base de datos');
+        console.log('\n💡 Para inicializar WhatsApp, usa:');
+        console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+        console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
       }
       
-      console.log('\n💡 Para inicializar WhatsApp, usa:');
-      console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-      console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
       console.log('\n🔄 Keep-alive (cada 10 min) mostrará instrucciones si es necesario');
       console.log('='.repeat(70) + '\n');
       
