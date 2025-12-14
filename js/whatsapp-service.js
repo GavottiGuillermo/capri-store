@@ -333,15 +333,40 @@ function registrarEventosWhatsApp(client) {
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
     // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 60s)
-    // Nota: El mensaje al admin se enviará en el evento 'remote_session_saved'
     console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
-    esperarGuardadoSesion(60000).then((sesionGuardada) => {
+    
+    esperarGuardadoSesion(60000).then(async (sesionGuardada) => {
       if (sesionGuardada) {
         console.log('✅ Proceso de conexión completado - Sesión guardada y verificada');
       } else {
         console.warn('⚠️ Timeout alcanzado (60s) - sesión no confirmada dentro del período');
-        console.log('ℹ️ El mensaje al admin se enviará cuando se reciba el evento remote_session_saved');
+        console.log('⚠️ Procediendo a enviar mensaje al admin igualmente (WhatsApp está ready)');
       }
+      
+      // 📱 ENVIAR MENSAJE AL ADMIN - AQUÍ en vez de esperar remote_session_saved
+      // Razón: remote_session_saved puede no dispararse si hay problemas con RemoteAuth
+      try {
+        if (ADMIN_WHATSAPP && whatsappReady) {
+          const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
+          const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
+            `✅ Capri Store está online\n` +
+            `🕐 ${new Date().toLocaleString('es-AR')}\n` +
+            `📊 Estado: ${sesionGuardada ? 'Sesión guardada en PostgreSQL' : 'Conectado (guardado en progreso)'}\n` +
+            `📊 Sistema completamente operativo\n\n` +
+            `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
+          
+          console.log(`📱 Enviando mensaje de confirmación al admin (${ADMIN_WHATSAPP})...`);
+          await client.sendMessage(adminNumber, mensajeAdmin);
+          console.log(`✅ Mensaje de confirmación enviado al admin exitosamente`);
+        } else if (!ADMIN_WHATSAPP) {
+          console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
+        } else if (!whatsappReady) {
+          console.warn('⚠️ whatsappReady=false - no se puede enviar mensaje');
+        }
+      } catch (mensajeError) {
+        console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
+      }
+      
       setIsConnecting(false); // 🔓 Desbloquear sistema
       console.log('🔓 Sistema desbloqueado para otras operaciones');
     });
@@ -422,34 +447,12 @@ function registrarEventosWhatsApp(client) {
   
   // Eventos para autenticación remota (PostgreSQL)
   if (usePostgresAuth) {
-    client.on('remote_session_saved', async () => {
+    client.on('remote_session_saved', () => {
       console.log('\n💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾');
       console.log('💾 ✅ SESIÓN GUARDADA EN POSTGRESQL EXITOSAMENTE');
       console.log('🕐 Timestamp:', new Date().toISOString());
       console.log('💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾\n');
-      
-      // 📱 ENVIAR MENSAJE AL ADMIN - AQUÍ es cuando realmente se guardó
-      try {
-        if (ADMIN_WHATSAPP && whatsappReady) {
-          const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
-          const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
-            `✅ Capri Store está online\n` +
-            `🕐 ${new Date().toLocaleString('es-AR')}\n` +
-            `🗄️ Sesión guardada en PostgreSQL\n` +
-            `📊 Sistema completamente operativo\n\n` +
-            `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
-          
-          console.log(`📱 Enviando mensaje de confirmación al admin (${ADMIN_WHATSAPP})...`);
-          await client.sendMessage(adminNumber, mensajeAdmin);
-          console.log(`✅ Mensaje de confirmación enviado al admin exitosamente`);
-        } else if (!ADMIN_WHATSAPP) {
-          console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
-        } else if (!whatsappReady) {
-          console.warn('⚠️ whatsappReady=false - esperando que se active para enviar mensaje');
-        }
-      } catch (mensajeError) {
-        console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
-      }
+      console.log('ℹ️ Mensaje al admin ya enviado en evento ready');
       
       if (global.gc) {
         console.log('🧹 Ejecutando garbage collection después de guardar sesión...');
