@@ -1556,7 +1556,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
     
     console.log(`[${timestamp}] ✅ WhatsApp operativo - buscando notificaciones pendientes...`);
     
-    // Buscar productos con notificación pendiente
+    // Buscar productos con notificación pendiente (TODAS, sin límite de fecha)
     const resultPendientes = await executeQueryWithRetry(
       pool,
       `SELECT 
@@ -1576,18 +1576,17 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
        FROM productos p 
        WHERE p.estado LIKE '%Pendiente%' 
        AND p.whatsapp_notificado = 'False'
-       AND p.pedido_fecha >= NOW() - INTERVAL '24 hours'
        ORDER BY p.pedido_fecha ASC, p.mp_payment_id, p.id_articulo 
-       LIMIT 20`,
+       LIMIT 50`,
       [],
       2
     );
     
-    console.log(`[${timestamp}] 🔍 DEBUG: Query ejecutada para notificaciones pendientes`);
+    console.log(`[${timestamp}] 🔍 DEBUG: Query ejecutada para notificaciones pendientes (sin límite de fecha)`);
     console.log(`[${timestamp}] 🔍 Resultado query:`, resultPendientes?.rows?.length || 0, 'registros encontrados');
     
     if (!resultPendientes || !resultPendientes.rows || resultPendientes.rows.length === 0) {
-      console.log(`[${timestamp}] ✅ No hay notificaciones WhatsApp pendientes (últimas 24h)`);
+      console.log(`[${timestamp}] ✅ No hay notificaciones WhatsApp pendientes`);
       return;
     }
     
