@@ -920,7 +920,7 @@ app.get('/stock-agotado', async (req, res) => {
     console.log('📦 Solicitando stock agotado...');
     
     // Si no hay base de datos, retornar array vacío
-    if (!pool) {
+    if (typeof pool === 'undefined' || !pool) {
       console.warn('⚠️ Base de datos no disponible - retornando stock vacío');
       return res.json({ ids: [] });
     }
@@ -966,7 +966,7 @@ app.get('/stock-producto/:id', async (req, res) => {
     }
     
     // Si no hay base de datos, asumir que está disponible (modo degradado)
-    if (!pool) {
+    if (typeof pool === 'undefined' || !pool) {
       console.warn('⚠️ Base de datos no disponible - retornando disponible por defecto');
       return res.json({ 
         disponible: true, 
@@ -2451,8 +2451,8 @@ async function startServer() {
         console.log(`📱 WhatsApp: No disponible`);
       }
       
-      console.log(`🗄️ Base de datos: ${pool ? 'Conectada' : 'No disponible'}`);
-      console.log(`⚙️ Sistema: Simplificado - Una sola instancia con PostgreSQL sessions`);
+      console.log(`🗄️ Base de datos: ${typeof pool === 'undefined' ? 'No disponible' : (pool ? 'Conectada' : 'No disponible')}`);
+      console.log(`⚙️ Sistema: Simplificado - stateless (LocalAuth) - Postgres session persistence removed`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
       // Iniciar sistema de reintentos de notificaciones WhatsApp
