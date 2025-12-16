@@ -331,7 +331,7 @@ app.get('/health', async (req, res) => {
     deployment: {
       simplified: true,
       single_instance: true,
-      postgresql_sessions: !!process.env.DATABASE_URL
+
     },
     keep_alive_info: {
       no_db_queries: true,
@@ -477,85 +477,7 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
       console.log(`[${timestamp}] ⚠️ WhatsApp NO CONECTADO - Verificando opciones...`);
       
       // Verificar si hay sesión guardada en PostgreSQL
-      let tieneSesionEnBBDD = false;
-      let sesionEdadHoras = null;
-      
-      try {
-        const resultSession = await executeQueryWithRetry(
-          pool,
-          'SELECT updated_at FROM whatsapp_sessions WHERE id = $1 LIMIT 1',
-          ['RemoteAuth-capri-store-main'],
-          1
-        );
-        
-        if (resultSession && resultSession.rows && resultSession.rows.length > 0) {
-          tieneSesionEnBBDD = true;
-          const updatedAt = new Date(resultSession.rows[0].updated_at);
-          const ahora = new Date();
-          sesionEdadHoras = (ahora - updatedAt) / (1000 * 60 * 60);
-          
-          console.log(`[${timestamp}] 📊 Sesión en BBDD: ${sesionEdadHoras.toFixed(1)} horas`);
-        } else {
-          console.log(`[${timestamp}] 📊 No hay sesión en BBDD`);
-        }
-      } catch (dbError) {
-        console.error(`[${timestamp}] ❌ Error verificando sesión:`, dbError.message);
-      }
-      
-      // Si hay sesión del mismo día (<24h), intentar conectar
-      if (tieneSesionEnBBDD && sesionEdadHoras !== null && sesionEdadHoras < 24) {
-        console.log(`[${timestamp}] 🔄 Sesión reciente detectada - Intentando reconectar...`);
-        whatsappStatus = 'reconectando';
-        accionRealizada = 'intento_reconexion';
-        
-        try {
-          await inicializarWhatsApp();
-          console.log(`[${timestamp}] ✅ Reconexión iniciada - WhatsApp se conectará automáticamente`);
-          
-          // Esperar 10 segundos y verificar si conectó
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          
-          const statusDespuesReconexion = await getWhatsAppStatus();
-          if (statusDespuesReconexion.whatsapp_ready && statusDespuesReconexion.client_ready) {
-            console.log(`[${timestamp}] ✅ Reconexión exitosa!`);
-            whatsappStatus = 'conectado';
-            
-            // Procesar pendientes después de reconectar
-            await procesarNotificacionesPendientes();
-          } else {
-            console.log(`[${timestamp}] ⚠️ Reconexión en proceso... verificar en próximo keep-alive`);
-          }
-          
-        } catch (reconError) {
-          console.error(`[${timestamp}] ❌ Error en reconexión:`, reconError.message);
-          accionRealizada = 'fallo_reconexion';
-        }
-        
-      } else {
-        // No hay sesión o es muy antigua (>24h) - Mostrar log para operador
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📱 WHATSAPP NO CONECTADO - REQUIERE ACCIÓN DEL OPERADOR`);
-        console.log(`${'='.repeat(70)}`);
-        
-        if (!tieneSesionEnBBDD) {
-          console.log(`\n❌ No hay sesión guardada en la base de datos`);
-        } else if (sesionEdadHoras >= 24) {
-          console.log(`\n❌ Sesión antigua detectada (${sesionEdadHoras.toFixed(1)} horas)`);
-          console.log(`⚠️  Solo se reconecta automáticamente con sesiones <24h`);
-        }
-        
-        console.log(`\n📋 PASOS PARA CONECTAR WHATSAPP:\n`);
-        console.log(`1️⃣  Ejecutar Query para generar QR:`);
-        console.log(`   GET https://capri-store.onrender.com/whatsapp-regenerar-qr\n`);
-        console.log(`2️⃣  PowerShell:`);
-        console.log(`   Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET\n`);
-        console.log(`3️⃣  Escanear el QR que aparecerá en los logs`);
-        console.log(`4️⃣  Esperar hasta ver "WhatsApp CONECTADO" en próximo keep-alive\n`);
-        console.log(`${'='.repeat(70)}\n`);
-        
-        whatsappStatus = 'desconectado_requiere_operador';
-        accionRealizada = 'log_mostrado_para_operador';
-      }
+
     }
     
   } catch (error) {
@@ -582,18 +504,7 @@ app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
   try {
     console.log('🧹 REINICIO COMPLETO iniciado...');
     
-    // 1. Verificar disponibilidad de servicios
-    const usePostgresAuth = !!(process.env.DATABASE_URL);
-    
-    if (!usePostgresAuth) {
-      return res.json({
-        success: false,
-        error: 'No se está usando autenticación PostgreSQL',
-        current_auth: 'LocalAuth',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
+
     console.log('🔄 Ejecutando limpieza completa...');
     
     // 2. Limpiar sesiones
@@ -870,7 +781,7 @@ app.get('/debug', (req, res) => {
     services: {
       whatsapp_available: whatsappAvailable,
       whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false,
-      database_configured: !!process.env.DATABASE_URL,
+
       mercadopago_configured: !!process.env.MERCADOPAGO_ACCESS_TOKEN
     },
     env_status: {
@@ -940,7 +851,7 @@ app.get('/debug', (req, res) => {
       ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP ? 'CONFIGURADO' : 'NO CONFIGURADO',
       ADMIN_INSTAGRAM: process.env.ADMIN_INSTAGRAM ? 'CONFIGURADO' : 'NO CONFIGURADO',
       MERCADOPAGO_ACCESS_TOKEN: process.env.MERCADOPAGO_ACCESS_TOKEN ? 'CONFIGURADO' : 'NO CONFIGURADO',
-      DATABASE_URL: process.env.DATABASE_URL ? 'CONFIGURADO' : 'NO CONFIGURADO'
+
     },
     endpoints_disponibles: [
       '/health',
@@ -1347,23 +1258,7 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
   }
 });
 
-// ===============================
-// FUNCIONES AUXILIARES PARA BD
-// ===============================
 
-// Función para reintentar queries con backoff exponencial
-async function executeQueryWithRetry(pool, query, params, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await pool.query(query, params);
-    } catch (error) {
-      console.error(`❌ Query falló (intento ${attempt}/${maxRetries}):`, error.message);
-      if (attempt === maxRetries) throw error;
-      // Esperar antes de reintentar (backoff exponencial)
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-    }
-  }
-}
 
 // ===============================
 // ENDPOINTS PRINCIPALES
@@ -1421,36 +1316,9 @@ async function verificarEstadoWhatsApp() {
                     !isNotInitialized && 
                     (serviceReady || tiempoDesdeUltimaConexion < 300);
   
-  // NUEVA VALIDACIÓN: Verificar si existe sesión en PostgreSQL antes de permitir reconexión automática
-  let tieneSesionEnBBDD = false;
-  let sesionEdadDias = null;
-  let sesionEdadHoras = null;
-  
-  if (!disponible && process.env.DATABASE_URL) {
-    try {
-      const resultSession = await executeQueryWithRetry(
-        pool,
-        'SELECT updated_at FROM whatsapp_sessions WHERE id = $1 LIMIT 1',
-        ['RemoteAuth-capri-store-main'],
-        1
-      );
-      
-      if (resultSession && resultSession.rows && resultSession.rows.length > 0) {
-        tieneSesionEnBBDD = true;
-        const updatedAt = new Date(resultSession.rows[0].updated_at);
-        sesionEdadHoras = (ahora - updatedAt) / (1000 * 60 * 60);
-        sesionEdadDias = sesionEdadHoras / 24;
-        console.log(`📊 Sesión en BBDD encontrada - Edad: ${sesionEdadHoras.toFixed(1)} horas (${sesionEdadDias.toFixed(1)} días)`);
-      } else {
-        console.log('📊 No hay sesión guardada en PostgreSQL');
-      }
-    } catch (dbError) {
-      console.log('⚠️ Error verificando sesión en BBDD:', dbError.message);
-    }
-  }
-  
-  // sDeterminar si se puede permitir auto-reconexión: SOLO si sesión es del día actual (< 24 horas)
-  const permitirAutoReconexion = tieneSesionEnBBDD && sesionEdadHoras !== null && sesionEdadHoras < 24;
+  // Comprobación de sesión en base de datos eliminada (stateless/local only)
+  // No permitimos auto-reconexión basada en sesiones guardadas en Postgres
+  const permitirAutoReconexion = false;
   
   return {
     disponible,
@@ -2477,83 +2345,7 @@ app.post('/whatsapp-force-restart', async (req, res) => {
   }
 });
 
-// ===============================
-// ENDPOINT: LIMPIAR SESIONES WHATSAPP EN BD
-// ===============================
-app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
-  console.log('🧹 Solicitud de limpieza de sesiones WhatsApp');
-  
-  try {
-    // Validar que hay conexión a BD
-    if (!pool) {
-      console.error('❌ No hay conexión a base de datos');
-      return res.status(500).json({
-        success: false,
-        error: 'Base de datos no disponible'
-      });
-    }
-    
-    // Consultar sesiones actuales ANTES de limpiar
-    const beforeQuery = await pool.query(`
-      SELECT id, LENGTH(session_data) as tamaño_bytes, created_at, updated_at 
-      FROM whatsapp_sessions
-      ORDER BY id
-    `);
-    
-    console.log('📊 Sesiones ANTES de limpiar:', beforeQuery.rows.length);
-    beforeQuery.rows.forEach(row => {
-      const isCorrupt = row.tamaño_bytes < 1000;
-      console.log(`  - ${row.id}: ${row.tamaño_bytes} bytes ${isCorrupt ? '❌ CORRUPTA' : '✅ VÁLIDA'}`);
-    });
-    
-    // Llamar al stored procedure para limpiar
-    console.log('🔧 Ejecutando sp_limpiar_sesiones_whatsapp()...');
-    await pool.query('CALL sp_limpiar_sesiones_whatsapp()');
-    
-    // Verificar resultado
-    const afterQuery = await pool.query('SELECT COUNT(*) as count FROM whatsapp_sessions');
-    const sesionesRestantes = parseInt(afterQuery.rows[0].count, 10);
-    
-    console.log('✅ Limpieza completada');
-    console.log(`📊 Sesiones DESPUÉS de limpiar: ${sesionesRestantes}`);
-    
-    res.json({
-      success: true,
-      message: 'Sesiones de WhatsApp limpiadas exitosamente',
-      sesiones_antes: beforeQuery.rows.length,
-      sesiones_despues: sesionesRestantes,
-      sesiones_eliminadas: beforeQuery.rows.length - sesionesRestantes,
-      detalle_antes: beforeQuery.rows.map(row => ({
-        id: row.id,
-        tamaño_bytes: row.tamaño_bytes,
-        estado: row.tamaño_bytes < 1000 ? 'CORRUPTA' : 'VÁLIDA',
-        created_at: row.created_at,
-        updated_at: row.updated_at
-      })),
-      siguiente_paso: 'Reinicia el servidor o espera que Render redeploy automáticamente. Luego escanea el QR.'
-    });
-    
-  } catch (error) {
-    console.error('❌ Error limpiando sesiones WhatsApp:', error.message);
-    console.error('Stack:', error.stack);
-    
-    // Verificar si el error es porque el SP no existe
-    if (error.message.includes('does not exist') || error.message.includes('no existe')) {
-      return res.status(500).json({
-        success: false,
-        error: 'El stored procedure sp_limpiar_sesiones_whatsapp no existe en la base de datos',
-        solucion: 'Ejecuta el script database/sp_limpiar_sesiones_whatsapp.sql en la consola de Neon',
-        detalles: error.message
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      error: 'Error al limpiar sesiones',
-      detalles: error.message
-    });
-  }
-});
+
 
 // Función simplificada para optimización de memoria
 function setupMemoryOptimization() {

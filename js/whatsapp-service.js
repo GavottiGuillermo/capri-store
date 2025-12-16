@@ -52,57 +52,15 @@ function getIsConnecting() {
   return isConnecting;
 }
 
-// ⏳ Función para esperar dinámicamente hasta que la sesión se guarde o timeout
-async function esperarGuardadoSesion(maxTimeoutMs = 120000) {
-  const startTime = Date.now();
-  const checkIntervalMs = 2000; // Verificar cada 2 segundos
-  
-  console.log(`⏳ Esperando confirmación de guardado de sesión (máx ${maxTimeoutMs/1000}s)...`);
-  
-  return new Promise((resolve) => {
-    const checkInterval = setInterval(async () => {
-      const elapsedTime = Date.now() - startTime;
-      
-      // Verificar si se guardó la sesión
-      try {
-        if (usePostgresAuth && authStrategy && authStrategy.store) {
-          const sessionExists = await authStrategy.store.sessionExists();
-          
-          if (sessionExists) {
-            clearInterval(checkInterval);
-            console.log(`✅ Sesión confirmada en PostgreSQL (después de ${Math.round(elapsedTime/1000)}s)`);
-            resolve(true);
-            return;
-          }
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error verificando sesión: ${error.message}`);
-      }
-      
-      // Timeout alcanzado
-      if (elapsedTime >= maxTimeoutMs) {
-        clearInterval(checkInterval);
-        console.warn(`⚠️ Timeout alcanzado (${maxTimeoutMs/1000}s) - sesión no confirmada en PostgreSQL`);
-        resolve(false);
-        return;
-      }
-      
-      // Log de progreso cada verificación
-      console.log(`⏳ Esperando guardado... ${Math.round(elapsedTime/1000)}s/${maxTimeoutMs/1000}s`);
-    }, checkIntervalMs);
-  });
-}
+
 
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
 
 
 
-// Solo autenticación local, sin sesiones persistentes ni PostgreSQL
+
 const { LocalAuth } = require('whatsapp-web.js');
 const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
-console.log(`📁 Usando directorio de autenticación: ${authPath}`);
-
-console.log('🔧 Creando cliente WhatsApp...');
 
 // Argumentos de Puppeteer para optimización de memoria
 const puppeteerArgs = [
@@ -159,7 +117,6 @@ let whatsappClient = new Client({
     headless: true,
     args: puppeteerArgs,
     timeout: 60000,
-    // Configuraciones adicionales para reducir memoria
     executablePath: undefined,
     handleSIGINT: false,
     handleSIGTERM: false,
@@ -169,14 +126,11 @@ let whatsappClient = new Client({
     type: 'remote',
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
   },
-  // Configuraciones adicionales para optimizar memoria
-  qrMaxRetries: 3,  // Limitar reintentos de QR
-  authTimeoutMs: 60000,  // Timeout de auth a 60s
-  takeoverOnConflict: true,  // Tomar control si hay otra sesión activa
-  takeoverTimeoutMs: 60000  // Timeout para takeover
+  qrMaxRetries: 3,
+  authTimeoutMs: 60000,
+  takeoverOnConflict: true,
+  takeoverTimeoutMs: 60000
 });
-
-console.log('✅ Cliente WhatsApp creado exitosamente');
 
 // ===============================
 // FUNCIÓN PARA REGISTRAR EVENTOS
@@ -193,8 +147,6 @@ function registrarEventosWhatsApp(client) {
   client.removeAllListeners('authenticated');
   client.removeAllListeners('auth_failure');
   client.removeAllListeners('disconnected');
-  client.removeAllListeners('remote_session_saved');
-  client.removeAllListeners('remote_session_loaded');
   client.removeAllListeners('loading_screen');
   console.log('✅ Listeners antiguos removidos');
   
@@ -231,8 +183,8 @@ function registrarEventosWhatsApp(client) {
       console.log(`\n⚠️ QR anterior expiró, generando nuevo código (intento ${qrAttempts}/${MAX_QR_ATTEMPTS})...\n`);
     }
     
-    const authType = usePostgresAuth ? 'PostgreSQL (se guardará permanentemente)' : 'Local (temporal)';
-    console.log(`\n🔐 Autenticación: ${authType}\n`);
+  
+    console.log('\n🔐 Autenticación: Local (temporal)\n');
     
     console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
     console.log(`📱 ¡CÓDIGO QR PARA WHATSAPP BUSINESS! (${qrAttempts}/${MAX_QR_ATTEMPTS}) 📱`);
@@ -359,7 +311,7 @@ function registrarEventosWhatsApp(client) {
     // Verificar estado real y mostrar info
     try {
       const state = await client.getState();
-      const authInfo = usePostgresAuth ? 'PostgreSQL (Persistente)' : 'Local (Temporal)';
+      const authInfo = 'Local (Temporal)';
       
       console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
       console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
@@ -412,44 +364,7 @@ function registrarEventosWhatsApp(client) {
   client.on('loading_screen', (percent, message) => {
     console.log('📱 Cargando WhatsApp:', percent + '%', message);
   });
-  
-  // Eventos para autenticación remota (PostgreSQL)
-  if (usePostgresAuth) {
-    client.on('remote_session_saved', () => {
-      console.log('\n💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾');
-      console.log('💾 ✅ SESIÓN GUARDADA EN POSTGRESQL EXITOSAMENTE');
-      console.log('🕐 Timestamp:', new Date().toISOString());
-      console.log('💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾💾\n');
-      console.log('ℹ️ Mensaje al admin ya enviado en evento ready');
-      
-      if (global.gc) {
-        console.log('🧹 Ejecutando garbage collection después de guardar sesión...');
-        global.gc();
-      }
-    });
-    
-    client.on('remote_session_loaded', () => {
-      console.log('📥 ✅ Sesión cargada desde PostgreSQL exitosamente');
-      console.log('🕐 Timestamp:', new Date().toISOString());
-      console.log('🔄 Intentando reconectar automáticamente...');
-      
-      // Forzar limpieza de memoria después de cargar sesión
-      if (global.gc) {
-        console.log('🧹 Ejecutando garbage collection después de cargar sesión...');
-        global.gc();
-      }
-    });
-    
-    // Eventos adicionales de RemoteAuth
-    // ℹ️ DESHABILITADO TEMPORALMENTE - Simplificar conexión
-    /*
-    client.on('auth_failure', (msg) => {
-      console.error('❌ Fallo de autenticación RemoteAuth:', msg);
-      setIsConnecting(false); // 🔓 Desbloquear si falla la autenticación
-      console.error('🔓 isConnecting reseteado debido a fallo de autenticación');
-    });
-    */
-  }
+
   
   console.log('✅ Eventos de WhatsApp registrados correctamente');
 }
@@ -459,83 +374,7 @@ function registrarEventosWhatsApp(client) {
 // ===============================
 registrarEventosWhatsApp(whatsappClient);
 
-// Verificar si hay sesión guardada e intentar conectar automáticamente (solo para PostgreSQL)
-if (usePostgresAuth) {
-  console.log('🔍 Verificando sesión existente en PostgreSQL al arrancar...');
-  
-  // ✅ AUTO-INICIALIZACIÓN HABILITADA para sesiones recientes (<24h)
-  // Si hay sesión guardada <24h, se inicializa automáticamente
-  // Si NO hay sesión o es >24h, usar /whatsapp-regenerar-qr
-  (async function autoInicializarConSesion() {
-    try {
-      console.log('\n' + '='.repeat(70));
-      console.log('🔍 Verificando si hay sesión guardada en PostgreSQL...');
-      
-      const sessionExists = await authStrategy.store.sessionExists();
-      console.log('📊 Sesión existente:', sessionExists ? '✅ SÍ' : '❌ NO');
-      
-      if (sessionExists) {
-        console.log('📱 Hay sesión guardada en la base de datos');
-        
-        // Verificar antigüedad de la sesión
-        let shouldAutoInit = false;
-        try {
-          const sessionInfo = await authStrategy.store.pool.query(
-            'SELECT updated_at, created_at FROM whatsapp_sessions WHERE id = $1',
-            [authStrategy.store.clientId]
-          );
-          
-          if (sessionInfo.rows.length > 0) {
-            const lastUpdate = new Date(sessionInfo.rows[0].updated_at || sessionInfo.rows[0].created_at);
-            const now = new Date();
-            const hoursSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60);
-            
-            console.log(`📅 Última actualización: ${lastUpdate.toISOString()}`);
-            console.log(`⏰ Antigüedad: ${Math.round(hoursSinceUpdate)}h (${Math.round(hoursSinceUpdate/24)}d)`);
-            
-            if (hoursSinceUpdate < 24) {
-              sessionIsOld = false;
-              shouldAutoInit = true;
-              console.log('✅ Sesión reciente (<24h) - AUTO-INICIALIZANDO...');
-            } else if (hoursSinceUpdate < 168) {
-              sessionIsOld = true;
-              console.log('⚠️ Sesión antigua (1-7 días) - requiere regenerar QR');
-            } else {
-              sessionIsOld = true;
-              console.log('❌ Sesión expirada (>7 días) - requiere regenerar QR');
-            }
-          }
-        } catch (dateError) {
-          console.warn('⚠️ No se pudo verificar antigüedad:', dateError.message);
-        }
-        
-        // 🚀 AUTO-INICIALIZAR si la sesión es reciente
-        if (shouldAutoInit) {
-          console.log('🚀 Inicializando WhatsApp con sesión guardada...');
-          await whatsappClient.initialize();
-          console.log('✅ WhatsApp inicializado - esperando autenticación automática...');
-        } else {
-          console.log('\n💡 Sesión antigua - Para reconectar usa:');
-          console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-        }
-      } else {
-        console.log('📱 NO hay sesión guardada en la base de datos');
-        console.log('\n💡 Para inicializar WhatsApp, usa:');
-        console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
-        console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
-      }
-      
-      console.log('\n🔄 Keep-alive (cada 2 min) mostrará instrucciones si es necesario');
-      console.log('='.repeat(70) + '\n');
-      
-    } catch (error) {
-      console.error('❌ Error verificando sesión:', error.message);
-    }
-  })();
-  
-} else {
-  console.log('ℹ️ Usando LocalAuth - No hay eventos de sesión remota');
-}
+
 // Cleanup al cerrar el proceso
 process.on('SIGTERM', async () => {
   console.log('\n🛑 SIGTERM recibido - Cerrando gracefully...');
@@ -606,7 +445,7 @@ async function inicializarWhatsApp() {
     
     console.log('🚀 Inicializando WhatsApp Business...');
     
-    console.log('📱 Inicializando cliente WhatsApp con PostgreSQL session persistence...');
+    console.log('📱 Inicializando cliente WhatsApp (LocalAuth stateless)...');
     await whatsappClient.initialize();
     
     console.log('✅ WhatsApp Business inicializado correctamente');
@@ -623,59 +462,6 @@ async function inicializarWhatsApp() {
       error.message.includes('Invalid session') ||
       error.message.includes('Authentication failed')
     );
-    
-    if (isContextError && usePostgresAuth) {
-      console.log('⚠️ DETECTADO: Error de contexto destruido (NO es sesión corrupta)');
-      console.log('🔄 La sesión en PostgreSQL es válida - Solo reiniciando cliente...');
-      console.log('💡 Este error es normal en reinicios de Render');
-      
-      // NO limpiar la sesión - solo reinicializar con nueva instancia
-      console.log('🔄 Reinicializando con sesión existente...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      try {
-        // Crear nueva instancia del cliente pero mantener la sesión
-        console.log('🔄 Creando nueva instancia del cliente WhatsApp...');
-        await whatsappClient.initialize();
-        console.log('✅ WhatsApp reinicializado exitosamente - Sesión conservada');
-        return;
-      } catch (retryError) {
-        console.error('❌ Error en segundo intento:', retryError.message);
-        // Si falla el retry, entonces sí podría ser sesión corrupta
-        console.log('🔄 Segundo intento falló - Ahora sí limpiando sesión...');
-        console.log('🔴 IMPORTANTE: Se va a limpiar sesión por segundo intento fallido');
-        console.log('📍 Stack trace del punto de decisión:');
-        console.trace();
-      }
-    }
-    
-    if (isSessionError && usePostgresAuth) {
-      console.log('🔄 DETECTADO: Error de sesión genuinamente corrupta');
-      console.log('🧹 Intentando limpiar sesión automáticamente...');
-      console.log('🔴 IMPORTANTE: Se va a llamar a authStrategy.forceLogout()');
-      console.log('📍 Stack trace del punto de decisión:');
-      console.trace();
-      
-      try {
-        // Limpiar sesión de PostgreSQL automáticamente
-        if (authStrategy && authStrategy.forceLogout) {
-          await authStrategy.forceLogout();
-          console.log('✅ Sesión PostgreSQL limpiada automáticamente');
-          
-          // Esperar 3 segundos y reintentar inicialización
-          console.log('⏳ Esperando 3 segundos antes de reintentar...');
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          
-          console.log('🔄 Reintentando inicialización con sesión limpia...');
-          await whatsappClient.initialize();
-          
-          console.log('✅ WhatsApp reinicializado exitosamente - Se generará nuevo QR');
-          return;
-        }
-      } catch (retryError) {
-        console.error('❌ Error en reintento de inicialización:', retryError.message);
-      }
-    }
     
     throw error;
   }
@@ -991,16 +777,7 @@ async function limpiarSesionCorrupta() {
       console.log(`[${timestamp}] ⚠️ Error destruyendo cliente:`, destroyError.message);
     }
     
-    // Si usamos PostgreSQL, limpiar la sesión de la base de datos
-    if (usePostgresAuth && authStrategy && authStrategy.forceLogout) {
-      console.log(`[${timestamp}] 🗄️ Eliminando sesión de PostgreSQL...`);
-      try {
-        await authStrategy.forceLogout();
-        console.log(`[${timestamp}] ✅ Sesión eliminada de PostgreSQL`);
-      } catch (dbError) {
-        console.error(`[${timestamp}] ❌ Error eliminando sesión de PostgreSQL:`, dbError.message);
-      }
-    }
+    // No hay limpieza de sesión en base de datos en modo stateless/local
     
     // Eliminar carpeta de autenticación local (por si acaso)
     const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
@@ -1018,7 +795,7 @@ async function limpiarSesionCorrupta() {
     console.log(`[${timestamp}] 🚀 Reinicializando con sesión limpia...`);
     await whatsappClient.initialize();
     
-    const cleanType = usePostgresAuth ? 'PostgreSQL y local' : 'local';
+    const cleanType = 'local';
     return {
       success: true,
       message: `Sesión limpiada (${cleanType}) y reinicializada - Se necesitará escanear QR`,
@@ -1035,46 +812,7 @@ async function limpiarSesionCorrupta() {
   }
 }
 
-// Función específica para limpiar solo PostgreSQL
-async function limpiarSesionPostgreSQL() {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] 🗄️ LIMPIANDO SOLO SESIÓN DE POSTGRESQL...`);
-  
-  if (!usePostgresAuth) {
-    return {
-      success: false,
-      error: 'No se está usando autenticación PostgreSQL',
-      timestamp
-    };
-  }
-  
-  try {
-    if (authStrategy && authStrategy.forceLogout) {
-      await authStrategy.forceLogout();
-      console.log(`[${timestamp}] ✅ Sesión eliminada de PostgreSQL exitosamente`);
-      
-      return {
-        success: true,
-        message: 'Sesión eliminada de PostgreSQL - Reinicia el servidor para reconectar',
-        timestamp
-      };
-    } else {
-      return {
-        success: false,
-        error: 'AuthStrategy no disponible',
-        timestamp
-      };
-    }
-    
-  } catch (error) {
-    console.error(`[${timestamp}] ❌ ERROR limpiando PostgreSQL:`, error.message);
-    return {
-      success: false,
-      error: error.message,
-      timestamp
-    };
-  }
-}
+// (Removed PostgreSQL-specific cleanup - stateless/local only)
 
 // Función para resetear contador QR
 function resetearContadorQR() {
@@ -1151,178 +889,9 @@ async function sincronizarEstadoWhatsApp() {
   }
 }
 
-// Función para forzar guardado inmediato de sesión PostgreSQL
-async function forzarGuardadoSesion() {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] 💾 Forzando guardado inmediato de sesión...`);
-  
-  try {
-    if (!whatsappClient) {
-      return { success: false, error: 'Cliente WhatsApp no disponible' };
-    }
-    
-    if (!usePostgresAuth) {
-      return { success: false, error: 'PostgreSQL no está configurado' };
-    }
-    
-    if (!authStrategy) {
-      return { success: false, error: 'AuthStrategy no disponible' };
-    }
-    
-    // Verificar que esté conectado
-    const state = await whatsappClient.getState();
-    if (state !== 'CONNECTED') {
-      return { success: false, error: `WhatsApp no conectado. Estado: ${state}` };
-    }
-    
-    console.log(`[${timestamp}] 🔄 RemoteAuth maneja el guardado automáticamente...`);
-    
-    try {
-      // RemoteAuth ya guarda la sesión automáticamente cada 2 minutos
-      // y cuando ocurren eventos importantes (authenticated, ready, etc.)
-      // NO debemos interferir con el proceso automático guardando manualmente
-      
-      // Solo retornamos el estado actual
-      console.log(`[${timestamp}] ℹ️ RemoteAuth guardará la sesión según su programación interna`);
-      console.log(`[${timestamp}] ℹ️ Intervalo de guardado: cada 2 minutos`);
-      console.log(`[${timestamp}] ℹ️ La sesión se guarda automáticamente en eventos: authenticated, ready, change_state`);
-      
-      return { 
-        success: true, 
-        message: 'RemoteAuth maneja el guardado automáticamente',
-        note: 'No se requiere guardado manual - RemoteAuth lo gestiona',
-        client_id: authStrategy?.clientId || 'unknown',
-        state: state
-      };
-      
-    } catch (error) {
-      console.error(`[${timestamp}] ❌ Error en forzarGuardadoSesion: ${error.message}`);
-      return { success: false, error: error.message };
-    }
-    
-  } catch (error) {
-    console.error(`[${timestamp}] ❌ Error forzando guardado de sesión: ${error.message}`);
-    return { success: false, error: error.message };
-  }
-}
+// (Removed force-save session function - not applicable in stateless/local mode)
 
-// Función para limpieza completa (combina PostgreSQL + Local + Reinicialización)
-async function limpiarSesionesCompleto() {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] 🧹 LIMPIEZA COMPLETA DE SESIONES INICIADA...`);
-  
-  try {
-    // Resetear flags
-    whatsappReady = false;
-    qrGenerated = false;
-    qrAttempts = 0;
-    readyEventCount = 0; // Resetear contador de eventos ready
-    
-    console.log(`[${timestamp}] 1️⃣ Limpiando sesión PostgreSQL...`);
-    if (usePostgresAuth && authStrategy) {
-      try {
-        // Usar clearSessionOnly en lugar de logout para no cerrar el pool
-        if (authStrategy.clearSessionOnly) {
-          await authStrategy.clearSessionOnly();
-        } else if (authStrategy.forceLogout) {
-          await authStrategy.forceLogout();
-        }
-        console.log(`[${timestamp}] ✅ PostgreSQL limpiado`);
-      } catch (dbError) {
-        console.error(`[${timestamp}] ❌ Error limpiando PostgreSQL: ${dbError.message}`);
-      }
-    }
-    
-    console.log(`[${timestamp}] 2️⃣ Destruyendo cliente...`);
-    try {
-      await whatsappClient.destroy();
-    } catch (destroyError) {
-      console.log(`[${timestamp}] ⚠️ Error destruyendo cliente: ${destroyError.message}`);
-    }
-    
-    console.log(`[${timestamp}] 3️⃣ Limpiando carpeta local...`);
-    const fs = require('fs');
-    const path = require('path');
-    const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : path.join(__dirname, '..', '.wwebjs_auth');
-    
-    if (fs.existsSync(authPath)) {
-      try {
-        fs.rmSync(authPath, { recursive: true, force: true });
-        console.log(`[${timestamp}] ✅ Carpeta local eliminada`);
-      } catch (fsError) {
-        console.error(`[${timestamp}] ❌ Error eliminando carpeta: ${fsError.message}`);
-      }
-    }
-    
-    console.log(`[${timestamp}] 4️⃣ Esperando 5 segundos...`);
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    console.log(`[${timestamp}] 5️⃣ Recreando y reinicializando cliente...`);
-    
-    // Recrear el cliente WhatsApp completo con nueva estrategia
-    try {
-      const { Client } = require('whatsapp-web.js');
-      const PostgresAuthStrategy = require('./postgres-auth-strategy');
-      
-      // Crear nueva estrategia de autenticación
-      console.log('🔧 Recreando estrategia de autenticación PostgreSQL...');
-      authStrategy = new PostgresAuthStrategy({
-        clientId: 'capri-store-main',
-        pgConfig: {
-          host: process.env.DB_HOST,
-          port: process.env.DB_PORT,
-          database: process.env.DB_NAME,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          ssl: {
-            rejectUnauthorized: false
-          }
-        }
-      });
-      
-      // Recrear cliente con eventos
-      whatsappClient = new Client({
-        authStrategy: authStrategy,
-        puppeteer: {
-          headless: true,
-          args: puppeteerArgs
-        }
-      });
-      
-      console.log(`[${timestamp}] 🔧 Registrando eventos en el nuevo cliente...`);
-      registrarEventosWhatsApp(whatsappClient);
-      
-      // IMPORTANTE: Inicializar el cliente para que genere el QR
-      console.log(`[${timestamp}] 🚀 Inicializando cliente para generar QR...`);
-      await whatsappClient.initialize();
-      
-      console.log(`[${timestamp}] ✅ Cliente inicializado - QR se generará automáticamente`);
-    } catch (recreateError) {
-      console.error(`[${timestamp}] ❌ Error recreando cliente: ${recreateError.message}`);
-      throw recreateError;
-    }
-    
-    return {
-      success: true,
-      message: 'Limpieza completa exitosa - Se generará nuevo QR automáticamente',
-      actions_completed: [
-        'Cliente destruido',
-        'PostgreSQL limpiado',
-        'Carpeta local eliminada',
-        'Cliente reinicializado'
-      ],
-      timestamp
-    };
-    
-  } catch (error) {
-    console.error(`[${timestamp}] ❌ ERROR en limpieza completa: ${error.message}`);
-    return {
-      success: false,
-      error: error.message,
-      timestamp
-    };
-  }
-}
+// (Removed comprehensive cleanup that included PostgreSQL-specific logic)
 
 // Función de limpieza proactiva de memoria
 function limpiarMemoriaProactiva() {
@@ -1412,24 +981,21 @@ module.exports = {
   inicializarWhatsApp,
   enviarWhatsApp,
   getWhatsAppStatus,
-  verificarConexionCompleta,  // NUEVA FUNCIÓN
+  verificarConexionCompleta,
   forzarReconexion,
   limpiarSesionCorrupta,
-  limpiarSesionPostgreSQL,
-  limpiarSesionesCompleto,
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
-  forzarGuardadoSesion,
   marcarConexionExitosa,
-  setWhatsAppReady,  // Nueva función para forzar estado
-  getWhatsAppReady,  // Nueva función getter para obtener valor actualizado
-  getIsConnecting,   // 🔒 Nueva función getter para verificar si está conectando
-  setIsConnecting,   // 🔒 Nueva función setter para forzar reset del flag
+  setWhatsAppReady,
+  getWhatsAppReady,
+  getIsConnecting,
+  setIsConnecting,
   setOnWhatsAppReadyCallback,
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,
-  sessionIsOld, // Para ajustar timeout según antigüedad de sesión
+  sessionIsOld,
   ADMIN_WHATSAPP,
-  BUSINESS_NAME,
-  cleanup
+  BUSINESS_NAME
 };
+
