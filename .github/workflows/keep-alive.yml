@@ -2,8 +2,8 @@ name: 🔄 Keep Capri Store Alive
 
 on:
   schedule:
-    # Ejecutar cada 10 minutos para mantener sesión WhatsApp activa
-    - cron: '*/10 * * * *'
+    # Ejecutar cada 5 minutos para mantener sesión WhatsApp activa
+    - cron: '*/5 * * * *'
   
   # Permitir ejecución manual desde GitHub
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: 🔄 Keep-Alive + Mensaje WhatsApp Admin
         run: |
-          echo "🔄 Ejecutando keep-alive cada 10 min para mantener sesión WhatsApp..."
+          echo "🔄 Ejecutando keep-alive cada 5 min para mantener sesión WhatsApp activa..."
           response=$(curl -s -w "HTTPSTATUS:%{http_code}" -H "User-Agent: GitHub-Actions-Keep-Alive" https://capri-store.onrender.com/whatsapp-keep-alive)
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           body=$(echo $response | sed -e 's/HTTPSTATUS:.*//g')
@@ -45,8 +45,8 @@ jobs:
           echo "📅 Fecha: $(date)"
           echo "✅ Servicio Render mantenido activo"
           echo "📱 WhatsApp: Mensaje periódico enviado al admin"
-          echo "⏰ Próxima ejecución: en 10 minutos"
-          echo "🔄 Verificación automática cada 10 min"
+          echo "⏰ Próxima ejecución: en 5 minutos"
+          echo "🔄 Verificación automática cada 5 min"
           echo "🌐 URL: https://capri-store.onrender.com"
           echo "💡 Para reconexión manual: /whatsapp-regenerar-qr"
           echo "=================================="

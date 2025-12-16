@@ -561,7 +561,7 @@ if (usePostgresAuth) {
         console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
       }
       
-      console.log('\n🔄 Keep-alive (cada 10 min) mostrará instrucciones si es necesario');
+      console.log('\n🔄 Keep-alive (cada 5 min) mostrará instrucciones si es necesario');
       console.log('='.repeat(70) + '\n');
       
     } catch (error) {
