@@ -3,6 +3,17 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 
 const cors = require('cors');
 
+// Optional DB objects (may remain null in stateless mode)
+let pool = null;
+
+// Stub for initializeDatabase - will throw if DATABASE_URL not configured
+async function initializeDatabase() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('No DATABASE_URL configured');
+  }
+  // If needed, actual DB init can be implemented here.
+}
+
 // SYSTEM SIMPLIFIED: PostgreSQL session persistence working perfectly - v4.0
 
 // === IMPORTAR WHATSAPP CON MANEJO DE ERRORES ===
