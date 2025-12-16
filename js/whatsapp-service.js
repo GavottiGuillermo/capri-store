@@ -332,11 +332,12 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ℹ️ GUARDADO DE SESIÓN DESHABILITADO TEMPORALMENTE
-    // Enviar mensaje inmediatamente sin esperar guardado PostgreSQL
-    console.log('ℹ️ Modo simplificado: Enviando confirmación sin esperar guardado de sesión...');
+    // ℹ️ MODO SIMPLIFICADO: Sin guardado de sesión, sin mensaje inmediato
+    // El keep-alive (cada 2 min) se encargará de enviar mensajes al admin
+    console.log('ℹ️ Modo ultra-simplificado: Sin guardado de sesión, sin mensaje inmediato');
+    console.log('📲 Keep-alive enviará confirmación al admin en 2 minutos');
     
-    /* DESHABILITADO: Espera de guardado de sesión
+    /* DESHABILITADO: Guardado de sesión y mensaje inmediato
     // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 120s)
     // Razón: RemoteAuth tarda ~77s en guardar (observado en logs)
     console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
@@ -350,7 +351,6 @@ function registrarEventosWhatsApp(client) {
         console.log('⏳ Esperando 10s adicionales para estabilización de WhatsApp...');
         await new Promise(resolve => setTimeout(resolve, 10000));
         console.log('✅ WhatsApp estabilizado - procediendo a enviar mensaje');
-    */
         
         // 📱 ENVIAR MENSAJE AL ADMIN - Modo simplificado
         try {
@@ -373,6 +373,8 @@ function registrarEventosWhatsApp(client) {
         } catch (mensajeError) {
           console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
         }
+      }
+    */
     
     /* DESHABILITADO: Continuación de espera de guardado
       } else {
