@@ -2,8 +2,8 @@ name: 🔄 Keep Capri Store Alive
 
 on:
   schedule:
-    # Ejecutar cada 2 minutos para mantener sesión WhatsApp activa
-    - cron: '*/2 * * * *'
+    # Ejecutar cada 15 minutos para redundancia/monitor externo
+    - cron: '*/15 * * * *'
   
   # Permitir ejecución manual desde GitHub
   workflow_dispatch:
