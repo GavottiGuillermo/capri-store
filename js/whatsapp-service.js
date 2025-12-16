@@ -96,21 +96,11 @@ async function esperarGuardadoSesion(maxTimeoutMs = 120000) {
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
 
 
+
 // Solo autenticación local, sin sesiones persistentes ni PostgreSQL
 const { LocalAuth } = require('whatsapp-web.js');
 const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
 console.log(`📁 Usando directorio de autenticación: ${authPath}`);
-const authStrategy = new LocalAuth({
-  clientId: 'capri-store-session',
-  dataPath: authPath
-});
-console.log('✅ LocalAuth creado exitosamente (sin sesión persistente)');
-
-// Verificación final de authStrategy
-if (!authStrategy) {
-  console.error('❌ CRÍTICO: authStrategy es null después de todos los intentos');
-  throw new Error('No se pudo crear ninguna estrategia de autenticación');
-}
 
 console.log('🔧 Creando cliente WhatsApp...');
 
@@ -161,7 +151,10 @@ const puppeteerArgs = [
 
 // Cambiar a let para permitir recreación del cliente en regeneración de QR
 let whatsappClient = new Client({
-  authStrategy: authStrategy,
+  authStrategy: new LocalAuth({
+    clientId: 'capri-store-session',
+    dataPath: authPath
+  }),
   puppeteer: {
     headless: true,
     args: puppeteerArgs,
