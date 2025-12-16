@@ -1,6 +1,6 @@
 ﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const PostgresAuthStrategy = require('./postgres-auth-strategy');
+
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -95,61 +95,16 @@ async function esperarGuardadoSesion(maxTimeoutMs = 120000) {
 
 console.log('📱 Configurando WhatsApp Business... [v4 - Simplificado sin Instance Lock]');
 
-// Verificar si tenemos conexión a PostgreSQL
-const usePostgresAuth = !!(process.env.DATABASE_URL);
-console.log(`🗄️ Estrategia de autenticación: ${usePostgresAuth ? 'PostgreSQL (Persistente)' : 'Local (Temporal)'}`);
 
-// Configurar estrategia de autenticación
-let authStrategy;
-const CLIENT_ID = 'capri-store-main'; // Definir como constante para evitar undefined
-
-try {
-  if (usePostgresAuth) {
-    console.log('🔐 Configurando autenticación PostgreSQL...');
-    console.log(`📝 Client ID: ${CLIENT_ID}`);
-    
-    authStrategy = new PostgresAuthStrategy({
-      clientId: CLIENT_ID,
-      dataPath: './temp-auth/'
-    });
-    
-    // Verificar que el authStrategy fue creado correctamente
-    if (!authStrategy) {
-      throw new Error('authStrategy es null después de creación');
-    }
-    
-    console.log('✅ PostgresAuthStrategy creado exitosamente');
-    // Resetear contador de QR para PostgreSQL
-    qrAttempts = 0;
-    console.log('🔄 Contador QR reseteado para PostgreSQL');
-  } else {
-    console.log('⚠️ No se encontró DATABASE_URL, usando autenticación local');
-    const { LocalAuth } = require('whatsapp-web.js');
-    const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
-    console.log(`📁 Usando directorio de autenticación: ${authPath}`);
-    
-    authStrategy = new LocalAuth({
-      clientId: 'capri-store-session',
-      dataPath: authPath
-    });
-    console.log('✅ LocalAuth creado exitosamente');
-  }
-} catch (authError) {
-  console.error('❌ ERROR creando AuthStrategy:', authError.message);
-  console.error('Stack:', authError.stack);
-  console.log('🔄 Fallback a LocalAuth sin session...');
-  
-  // Fallback a LocalAuth si PostgreSQL falla
-  const { LocalAuth } = require('whatsapp-web.js');
-  const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
-  console.log(`📁 Fallback - Usando directorio: ${authPath}`);
-  
-  authStrategy = new LocalAuth({
-    clientId: 'capri-store-fallback',
-    dataPath: authPath
-  });
-  console.log('✅ Fallback LocalAuth creado exitosamente');
-}
+// Solo autenticación local, sin sesiones persistentes ni PostgreSQL
+const { LocalAuth } = require('whatsapp-web.js');
+const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
+console.log(`📁 Usando directorio de autenticación: ${authPath}`);
+const authStrategy = new LocalAuth({
+  clientId: 'capri-store-session',
+  dataPath: authPath
+});
+console.log('✅ LocalAuth creado exitosamente (sin sesión persistente)');
 
 // Verificación final de authStrategy
 if (!authStrategy) {

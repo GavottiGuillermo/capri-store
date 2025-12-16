@@ -1,6 +1,6 @@
 const express = require('express');
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
-const { Pool } = require('pg');
+
 const cors = require('cors');
 
 // SYSTEM SIMPLIFIED: PostgreSQL session persistence working perfectly - v4.0
@@ -36,7 +36,7 @@ try {
   };
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, limpiarSesionCorrupta, limpiarSesionPostgreSQL, limpiarSesionesCompleto, resetearContadorQR, sincronizarEstadoWhatsApp, forzarGuardadoSesion, getWhatsAppReady, getIsConnecting, setIsConnecting, sessionIsOld, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -179,45 +179,7 @@ app.get('/test', (req, res) => {
   res.send('Servidor funcionando correctamente!');
 });
 
-// ===============================
-// CONFIGURACIÓN DE BASE DE DATOS
-// ===============================
-let pool;
-async function initializeDatabase() {
-  try {
-    if (process.env.DATABASE_URL) {
-      pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
-      });
-    } else {
-      throw new Error('DATABASE_URL no está configurada');
-    }
 
-    // Probar la conexión
-    const client = await pool.connect();
-    await client.query('SELECT NOW()');
-    client.release();
-
-    // Verificar si existe la columna mp_payment_id
-    const client2 = await pool.connect();
-    const checkColumn = await client2.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'productos' 
-        AND column_name = 'mp_payment_id'
-    `);
-    client2.release();
-
-    if (checkColumn.rows.length === 0) {
-      console.warn('⚠️ Columna mp_payment_id NO existe en tabla productos');
-    }
-
-  } catch (error) {
-    console.error('❌ Error de conexión a PostgreSQL:', error.message);
-    throw error;
-  }
-}
 
 // ===============================
 // CONFIGURACIÓN DE MERCADO PAGO
