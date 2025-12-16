@@ -717,48 +717,34 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
       });
     }
 
-    // Verificar que el servicio tenga los métodos necesarios
-    if (!whatsappService || typeof whatsappService.limpiarSesionesCompleto !== 'function') {
-      return res.status(503).json({
-        success: false,
-        error: 'WhatsApp service incompleto',
-        message: 'El método de limpieza no está disponible',
-        service_loaded: !!whatsappService,
-        method_available: typeof whatsappService?.limpiarSesionesCompleto
-      });
+    // Nueva lógica: destruir cliente y reiniciar para forzar QR
+    console.log('🧹 Iniciando proceso de regeneración QR (stateless)...');
+    try {
+      if (whatsappService && whatsappService.whatsappClient) {
+        await whatsappService.whatsappClient.destroy();
+        console.log('✅ Cliente WhatsApp destruido para regenerar QR');
+      }
+    } catch (e) {
+      console.warn('⚠️ Error destruyendo cliente WhatsApp:', e.message);
     }
-
-    console.log('🧹 Iniciando proceso de regeneración QR...');
-    
-    // PASO 1: Verificar estado inicial
-    console.log('📱 Paso 1: Verificando estado inicial...');
-    
-    // PASO 2: Limpiar sesión completa para forzar QR (sin inicialización previa)
-    console.log('🧹 Paso 2: Limpiando sesión para generar nuevo QR...');
-    const resultado = await whatsappService.limpiarSesionesCompleto();
-    
-    if (resultado && resultado.success) {
-      console.log('✅ Limpieza exitosa - QR se regenerará automáticamente');
+    // Re-crear el cliente WhatsApp (esto generará un nuevo QR en los logs)
+    if (whatsappService && whatsappService.inicializarWhatsApp) {
+      await whatsappService.inicializarWhatsApp();
       res.json({
         success: true,
-        message: 'Sesión limpiada exitosamente - QR se generará automáticamente',
-        details: resultado.message,
+        message: 'Cliente WhatsApp reiniciado. Busca el nuevo QR en los logs del servidor.',
         instructions: [
           '📱 Busca el código QR en los logs del servidor',
           '🔍 Verifica /whatsapp-status en unos segundos para ver el nuevo QR',
           '📲 Escanéalo con WhatsApp > Dispositivos Vinculados > Vincular'
         ],
-        actions_completed: resultado.actions_completed || [],
-        timestamp: resultado.timestamp
+        timestamp: new Date().toISOString()
       });
     } else {
-      console.log('❌ Error en limpieza:', resultado?.error || 'Resultado inválido');
       res.status(500).json({
         success: false,
-        error: resultado?.error || 'Error desconocido en limpieza',
-        message: 'Error al limpiar sesión',
-        resultado_completo: resultado,
-        timestamp: resultado?.timestamp || new Date().toISOString()
+        error: 'No se pudo reiniciar el cliente WhatsApp',
+        timestamp: new Date().toISOString()
       });
     }
     
