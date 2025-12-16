@@ -332,6 +332,11 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
+    // ℹ️ GUARDADO DE SESIÓN DESHABILITADO TEMPORALMENTE
+    // Enviar mensaje inmediatamente sin esperar guardado PostgreSQL
+    console.log('ℹ️ Modo simplificado: Enviando confirmación sin esperar guardado de sesión...');
+    
+    /* DESHABILITADO: Espera de guardado de sesión
     // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 120s)
     // Razón: RemoteAuth tarda ~77s en guardar (observado en logs)
     console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
@@ -345,16 +350,16 @@ function registrarEventosWhatsApp(client) {
         console.log('⏳ Esperando 10s adicionales para estabilización de WhatsApp...');
         await new Promise(resolve => setTimeout(resolve, 10000));
         console.log('✅ WhatsApp estabilizado - procediendo a enviar mensaje');
+    */
         
-        // 📱 ENVIAR MENSAJE AL ADMIN - Solo SI la sesión se guardó exitosamente
+        // 📱 ENVIAR MENSAJE AL ADMIN - Modo simplificado
         try {
           if (ADMIN_WHATSAPP && whatsappReady) {
             const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
             const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
               `✅ Capri Store está online\n` +
               `🕐 ${new Date().toLocaleString('es-AR')}\n` +
-              `🗄️ Sesión guardada en PostgreSQL\n` +
-              `📊 Sistema completamente operativo\n\n` +
+              `📊 Sistema operativo (modo simplificado)\n\n` +
               `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
             
             console.log(`📱 Enviando mensaje de confirmación al admin (${ADMIN_WHATSAPP})...`);
@@ -368,6 +373,8 @@ function registrarEventosWhatsApp(client) {
         } catch (mensajeError) {
           console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
         }
+    
+    /* DESHABILITADO: Continuación de espera de guardado
       } else {
         console.error('❌ Timeout alcanzado (120s) - sesión NO se guardó en PostgreSQL');
         console.error('⚠️ NO se enviará mensaje al admin (sesión no persistente)');
@@ -377,6 +384,10 @@ function registrarEventosWhatsApp(client) {
       setIsConnecting(false); // 🔓 Desbloquear sistema
       console.log('🔓 Sistema desbloqueado para otras operaciones');
     });
+    */
+    
+    setIsConnecting(false); // 🔓 Desbloquear inmediatamente
+    console.log('🔓 Sistema desbloqueado para otras operaciones');
     
     // Marcar conexión exitosa para verificación de disponibilidad
     console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
@@ -480,11 +491,14 @@ function registrarEventosWhatsApp(client) {
     });
     
     // Eventos adicionales de RemoteAuth
+    // ℹ️ DESHABILITADO TEMPORALMENTE - Simplificar conexión
+    /*
     client.on('auth_failure', (msg) => {
       console.error('❌ Fallo de autenticación RemoteAuth:', msg);
       setIsConnecting(false); // 🔓 Desbloquear si falla la autenticación
       console.error('🔓 isConnecting reseteado debido a fallo de autenticación');
     });
+    */
   }
   
   console.log('✅ Eventos de WhatsApp registrados correctamente');
@@ -561,7 +575,7 @@ if (usePostgresAuth) {
         console.log('   PowerShell: Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
       }
       
-      console.log('\n🔄 Keep-alive (cada 5 min) mostrará instrucciones si es necesario');
+      console.log('\n🔄 Keep-alive (cada 2 min) mostrará instrucciones si es necesario');
       console.log('='.repeat(70) + '\n');
       
     } catch (error) {
