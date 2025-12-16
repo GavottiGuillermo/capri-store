@@ -1331,8 +1331,8 @@ async function verificarEstadoWhatsApp() {
     whatsappAvailable,
     whatsappReady: getWhatsAppReady(),
     permitirAutoReconexion,
-    tieneSesionEnBBDD,
-    sesionEdadDias
+    tieneSesionEnBBDD: false,
+    sesionEdadDias: null
   };
 }
 
@@ -1373,9 +1373,14 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
     console.log(`[${timestamp}] ✅ WhatsApp operativo - buscando notificaciones pendientes...`);
     
     // Buscar productos con notificación pendiente (TODAS, sin límite de fecha)
-    const resultPendientes = await executeQueryWithRetry(
-      pool,
-      `SELECT 
+    if (!pool) {
+      console.log(`[${timestamp}] ⚠️ Base de datos no configurada - no se pueden procesar notificaciones pendientes`);
+      return;
+    }
+
+    let resultPendientes;
+    try {
+      resultPendientes = await pool.query(`SELECT 
         p.mp_payment_id, 
         p.id_pedido, 
         p.pedido_nombre_cliente, 
@@ -1393,10 +1398,11 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
        WHERE p.estado LIKE '%Pendiente%' 
        AND p.whatsapp_notificado = 'False'
        ORDER BY p.pedido_fecha ASC, p.mp_payment_id, p.id_articulo 
-       LIMIT 50`,
-      [],
-      2
-    );
+       LIMIT 50`);
+    } catch (dbError) {
+      console.error(`[${timestamp}] ❌ Error consultando notificaciones pendientes:`, dbError.message);
+      return;
+    }
     
     console.log(`[${timestamp}] 🔍 DEBUG: Query ejecutada para notificaciones pendientes (sin límite de fecha)`);
     console.log(`[${timestamp}] 🔍 Resultado query:`, resultPendientes?.rows?.length || 0, 'registros encontrados');
@@ -2461,6 +2467,36 @@ async function startServer() {
           console.error('❌ Error en procesamiento automático de notificaciones:', error.message);
         }
       }, 3 * 60 * 1000); // 3 minutos
+
+      // Keep-alive interno: enviar confirmación al admin cada 2 minutos (si está configurado)
+      let lastKeepAliveSent = 0;
+      const KEEP_ALIVE_INTERVAL = 2 * 60 * 1000; // 2 minutos
+
+      async function sendPeriodicKeepAlive() {
+        try {
+          if (!ADMIN_WHATSAPP) return; // No hay admin configurado
+          if (!whatsappAvailable || !getWhatsAppReady()) return; // No conectado
+
+          const now = Date.now();
+          if (now - lastKeepAliveSent < KEEP_ALIVE_INTERVAL) return; // Ya enviado recientemente
+
+          const mensaje = `✅ Keep-alive automático - ${new Date().toISOString()}\n\nCapri Store: ${BUSINESS_NAME || 'Sin nombre'}`;
+          const resultado = await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
+          if (resultado && resultado.success) {
+            console.log(`[${new Date().toISOString()}] ✅ Keep-alive enviado al admin (${ADMIN_WHATSAPP})`);
+            lastKeepAliveSent = now;
+          } else {
+            console.warn(`[${new Date().toISOString()}] ⚠️ No se pudo enviar keep-alive: ${resultado?.error || 'unknown'}`);
+          }
+        } catch (err) {
+          console.error('❌ Error enviando keep-alive interno:', err.message);
+        }
+      }
+
+      // Iniciar intervalo de keep-alive
+      setInterval(() => {
+        sendPeriodicKeepAlive();
+      }, KEEP_ALIVE_INTERVAL);
       
       if (whatsappAvailable) {
         console.log(`📱 Si WhatsApp no conectó automáticamente, usa: /whatsapp-regenerar-qr`);
