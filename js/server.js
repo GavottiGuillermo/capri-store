@@ -2480,34 +2480,8 @@ async function startServer() {
       }, 3 * 60 * 1000); // 3 minutos
 
       // Keep-alive interno: enviar confirmación al admin cada 2 minutos (si está configurado)
-      let lastKeepAliveSent = 0;
-      const KEEP_ALIVE_INTERVAL = 2 * 60 * 1000; // 2 minutos
-
-      async function sendPeriodicKeepAlive() {
-        try {
-          if (!ADMIN_WHATSAPP) return; // No hay admin configurado
-          if (!whatsappAvailable || !getWhatsAppReady()) return; // No conectado
-
-          const now = Date.now();
-          if (now - lastKeepAliveSent < KEEP_ALIVE_INTERVAL) return; // Ya enviado recientemente
-
-          const mensaje = `✅ Keep-alive automático - ${new Date().toISOString()}\n\nCapri Store: ${BUSINESS_NAME || 'Sin nombre'}`;
-          const resultado = await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
-          if (resultado && resultado.success) {
-            console.log(`[${new Date().toISOString()}] ✅ Keep-alive enviado al admin (${ADMIN_WHATSAPP})`);
-            lastKeepAliveSent = now;
-          } else {
-            console.warn(`[${new Date().toISOString()}] ⚠️ No se pudo enviar keep-alive: ${resultado?.error || 'unknown'}`);
-          }
-        } catch (err) {
-          console.error('❌ Error enviando keep-alive interno:', err.message);
-        }
-      }
-
-      // Iniciar intervalo de keep-alive
-      setInterval(() => {
-        sendPeriodicKeepAlive();
-      }, KEEP_ALIVE_INTERVAL);
+      // Eliminado: Envío automático de mensajes keep-alive desde el servidor.
+      // Ahora el keep-alive y el mensaje al admin solo se ejecutan desde el workflow de GitHub Actions (keep-alive.yml).
       
       if (whatsappAvailable) {
         console.log(`📱 Si WhatsApp no conectó automáticamente, usa: /whatsapp-regenerar-qr`);

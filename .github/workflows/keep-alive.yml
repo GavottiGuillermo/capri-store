@@ -3,7 +3,7 @@ name: 🔄 Keep Capri Store Alive
 on:
   schedule:
     # Ejecutar cada 15 minutos para redundancia/monitor externo
-    - cron: '*/15 * * * *'
+    - cron: '*/2 * * * *'
   
   # Permitir ejecución manual desde GitHub
   workflow_dispatch:
