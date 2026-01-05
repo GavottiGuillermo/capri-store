@@ -232,10 +232,26 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ℹ️ MODO SIMPLIFICADO: Sin guardado de sesión, sin mensaje inmediato
-    // El keep-alive (cada 2 min) se encargará de enviar mensajes al admin
-    console.log('ℹ️ Modo ultra-simplificado: Sin guardado de sesión, sin mensaje inmediato');
-    console.log('📲 Keep-alive enviará confirmación al admin en 2 minutos');
+    // ✅ ENVIAR MENSAJE INMEDIATO AL ADMINISTRADOR tras conexión exitosa
+    if (ADMIN_WHATSAPP) {
+      try {
+        const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
+        const mensajeConexion = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n` +
+          `✅ ${BUSINESS_NAME} está online\n` +
+          `🕐 ${timestamp}\n` +
+          `📱 Sistema operativo\n\n` +
+          `Los clientes ya pueden contactarte por WhatsApp! 🛍️\n\n` +
+          `_El sistema enviará mensajes cada 2 min para mantener la sesión activa_`;
+        
+        console.log(`📱 Enviando mensaje de confirmación inmediato al admin...`);
+        await client.sendMessage(adminNumber, mensajeConexion);
+        console.log(`✅ Mensaje de confirmación enviado al administrador`);
+      } catch (mensajeError) {
+        console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
+      }
+    } else {
+      console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
+    }
     
     /* DESHABILITADO: Guardado de sesión y mensaje inmediato
     // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 120s)
@@ -345,6 +361,18 @@ function registrarEventosWhatsApp(client) {
     whatsappReady = false;
     qrGenerated = false;
     setIsConnecting(false); // 🔓 Desbloquear si se desconecta
+    
+    console.log('\n========================================');
+    console.log('⚠️  WHATSAPP DESCONECTADO');
+    console.log('========================================');
+    console.log('');
+    console.log('Para volver a conectar, sigue estos pasos:');
+    console.log('');
+    console.log('1. Ve a: https://capri-store.onrender.com/whatsapp-regenerar-qr');
+    console.log('2. Escanea el código QR con tu WhatsApp Business');
+    console.log('3. El sistema se reconectará automáticamente');
+    console.log('');
+    console.log('========================================\n');
     
     // Si la desconexión es por sesión inválida, avisar
     if (reason === 'NAVIGATION' || reason === 'LOGOUT') {

@@ -466,7 +466,7 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
           `✅ WhatsApp conectado\n` +
           `⏱️ Uptime: ${Math.floor(process.uptime() / 60)} min\n` +
           `💾 Memoria: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n\n` +
-          `_Verificación automática cada 10 min_`;
+          `_Verificación automática cada 2 min_`;
         
         try {
           const resultado = await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
@@ -2479,9 +2479,9 @@ async function startServer() {
         }
       }, 3 * 60 * 1000); // 3 minutos
 
-      // Keep-alive interno: enviar confirmación al admin cada 2 minutos (si está configurado)
-      // Eliminado: Envío automático de mensajes keep-alive desde el servidor.
-      // Ahora el keep-alive y el mensaje al admin solo se ejecutan desde el workflow de GitHub Actions (keep-alive.yml).
+      // ℹ️ Keep-alive manejado por GitHub Actions (cada 5 min) llamando a /whatsapp-keep-alive
+      // Ese endpoint se encarga de enviar el mensaje al admin y mantener la sesión activa
+      console.log('ℹ️ Keep-alive: Manejado por GitHub Actions cada 5 min');
       
       if (whatsappAvailable) {
         console.log(`📱 Si WhatsApp no conectó automáticamente, usa: /whatsapp-regenerar-qr`);
