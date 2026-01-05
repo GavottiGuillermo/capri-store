@@ -2477,77 +2477,18 @@ async function startServer() {
       console.log(`⚙️ Sistema: Simplificado - stateless (LocalAuth) - Postgres session persistence removed`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
-      // Iniciar sistema de reintentos de notificaciones WhatsApp
-      console.log(`🔄 Configurando sistema de reintentos WhatsApp...`);
-      console.log(`📊 Sistema de tracking WhatsApp v2.1 - Con regeneración segura de QR`);
-      
-      // Procesar notificaciones pendientes cada 3 minutos
-      setInterval(async () => {
-        try {
-          await procesarNotificacionesPendientes();
-        } catch (error) {
-          console.error('❌ Error en procesamiento automático de notificaciones:', error.message);
-        }
-      }, 3 * 60 * 1000); // 3 minutos
-
-      // ℹ️ Keep-alive manejado por GitHub Actions (cada 5 min) llamando a /whatsapp-keep-alive
-      // Ese endpoint se encarga de enviar el mensaje al admin y mantener la sesión activa
-      console.log('ℹ️ Keep-alive: Manejado por GitHub Actions cada 5 min');
+      // ℹ️ Sistema de notificaciones:
+      // - Notificaciones pendientes: Se procesan automáticamente al conectar WhatsApp (evento ready)
+      // - Keep-alive: Manejado por GitHub Actions (cada 5 min) llamando a /whatsapp-keep-alive
+      console.log('📊 Sistema de tracking WhatsApp v2.2');
+      console.log('ℹ️ Notificaciones pendientes: Solo al conectar WhatsApp');
+      console.log('ℹ️ Keep-alive: GitHub Actions cada 5 min');
       
       if (whatsappAvailable) {
         console.log(`📱 Si el QR no aparece, regenera con:`);
         console.log(`   PowerShell: Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
       }
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      
-      // Procesar una vez al inicio - timeout ajustado según antigüedad de sesión
-      const initialWaitTime = sessionIsOld ? 30 * 1000 : 50 * 1000; // 30s para sesión antigua, 50s para reciente
-      console.log(`⏰ Tiempo de espera inicial: ${sessionIsOld ? '30s (sesión antigua)' : '50s (sesión reciente)'}`);
-      
-      setTimeout(async () => {
-        console.log('🔄 Procesamiento inicial de notificaciones pendientes...');
-        
-        // Doble verificación: esperar a que WhatsApp esté realmente listo
-        let intentos = 0;
-        const maxIntentos = sessionIsOld ? 2 : 3; // Menos intentos si sesión antigua
-        
-        while (intentos < maxIntentos) {
-          const estadoWhatsApp = await verificarEstadoWhatsApp();
-          if (estadoWhatsApp.disponible) {
-            console.log('✅ WhatsApp confirmado disponible para procesamiento inicial');
-            break;
-          }
-          console.log(`⏳ Esperando WhatsApp... intento ${intentos + 1}/${maxIntentos} (${estadoWhatsApp.razon})`);
-          await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
-          intentos++;
-        }
-        
-        // Si tras los intentos no está disponible, sugerir regenerar QR
-        const estadoFinal = await verificarEstadoWhatsApp();
-        if (!estadoFinal.disponible) {
-          console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('⚠️  WHATSAPP NO CONECTADO');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log(`⚠️ No conectó tras espera de ${maxIntentos * 5}s`);
-          if (sessionIsOld) {
-            console.log('⚠️ La sesión guardada es antigua (>24h)');
-            console.log('⚠️ Probablemente expiró y necesita renovarse');
-          }
-          console.log('');
-          console.log('💡 Para conectar WhatsApp, ejecuta en PowerShell:');
-          console.log('');
-          console.log('  Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
-          console.log('');
-          console.log('Luego escanea el QR que aparecerá en los logs');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-        }
-        
-        try {
-          await procesarNotificacionesPendientes();
-        } catch (error) {
-          console.error('❌ Error en procesamiento inicial:', error.message);
-        }
-      }, initialWaitTime);
       
       if (whatsappAvailable) {
         console.log(`📲 Usa WhatsApp > Dispositivos Vinculados > Vincular`);
