@@ -418,10 +418,10 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
           }
         }
         
-        // Considerar conectado solo cuando TODAS las variables relevantes sean true
+        // Considerar conectado si whatsapp_ready está en true Y el estado del cliente es CONNECTED
+        // client_ready es opcional (puede ser undefined en algunas implementaciones)
         todasLasVariablesOK = 
           whatsappStatusObj.whatsapp_ready === true &&
-          whatsappStatusObj.client_ready === true &&
           (whatsappStatusObj.client_state === 'CONNECTED' || whatsappStatusObj.state === 'CONNECTED');
         
         console.log(`[${timestamp}] 📊 Estado WhatsApp:`, {
