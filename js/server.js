@@ -2420,37 +2420,20 @@ async function startServer() {
     
     // Inicializar WhatsApp si está disponible
     if (whatsappAvailable) {
-      console.log('📱 Inicializando servicio WhatsApp...');
-      
-      // Detectar reinicios y verificar estado previo
-      const ahora = new Date();
-      const ultimaConexion = whatsappService.ultimaConexionExitosa;
-      const tiempoDesdeUltimaConexion = ultimaConexion ? 
-        Math.floor((ahora - ultimaConexion) / 1000) : 999;
-      
-      if (ultimaConexion && tiempoDesdeUltimaConexion < 300) {
-        console.log(`⚡ REINICIO DETECTADO: Última conexión hace ${tiempoDesdeUltimaConexion}s`);
-        console.log('🔍 Validando estado de WhatsApp antes de reconectar...');
-      }
-      
-      // ✅ Inicializar WhatsApp automáticamente para generar QR
-      console.log('🚀 Inicializando WhatsApp - Generando QR...');
-      try {
-        await inicializarWhatsApp();
-        console.log('✅ WhatsApp inicializado - QR generado en logs');
-      } catch (initError) {
-        console.error('❌ Error inicializando WhatsApp:', initError.message);
-        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('⚠️  WHATSAPP NO PUDO INICIALIZARSE');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('');
-        console.log('Para regenerar QR, ejecuta en PowerShell:');
-        console.log('');
-        console.log('  Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
-        console.log('');
-        console.log('O visita: https://capri-store.onrender.com/whatsapp-regenerar-qr');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-      }
+      console.log('📱 WhatsApp disponible en modo BAJO DEMANDA');
+      console.log('💾 Optimización: WhatsApp NO se inicia automáticamente para ahorrar memoria');
+      console.log('📡 WhatsApp se inicializará solo cuando:');
+      console.log('   - Llegue una compra (webhook de MercadoPago)');
+      console.log('   - O ejecutes manualmente el endpoint de regenerar QR');
+      console.log('');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📱 PARA CONECTAR WHATSAPP AHORA, ejecuta:');
+      console.log('');
+      console.log('  Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
+      console.log('');
+      console.log('Luego escanea el QR que aparecerá en los logs');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('');
     } else {
       console.log('⚠️ WhatsApp no disponible');
     }
@@ -2480,13 +2463,15 @@ async function startServer() {
       // ℹ️ Sistema de notificaciones:
       // - Notificaciones pendientes: Se procesan automáticamente al conectar WhatsApp (evento ready)
       // - Keep-alive: Manejado por GitHub Actions (cada 5 min) llamando a /whatsapp-keep-alive
-      console.log('📊 Sistema de tracking WhatsApp v2.2');
-      console.log('ℹ️ Notificaciones pendientes: Solo al conectar WhatsApp');
-      console.log('ℹ️ Keep-alive: GitHub Actions cada 5 min');
+      console.log('📊 Sistema de tracking WhatsApp v2.3 - Bajo demanda para optimizar memoria');
+      console.log('ℹ️ WhatsApp: Se conecta automáticamente al recibir compras');
+      console.log('ℹ️ Keep-alive: GitHub Actions cada 5 min (reconecta si es necesario)');
       
       if (whatsappAvailable) {
-        console.log(`📱 Si el QR no aparece, regenera con:`);
-        console.log(`   PowerShell: Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`📱 WhatsApp en modo BAJO DEMANDA - Ahorra ${Math.round(150)}MB de RAM`);
+        console.log(`💡 Para conectar manualmente:`);
+        console.log(`   Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
       }
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
