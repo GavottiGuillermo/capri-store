@@ -452,16 +452,32 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
         const client = getWhatsAppClient();
         
         if (client) {
+          console.log(`[${timestamp}] 📱 Cliente WhatsApp disponible - Estado antes de getChats():`);
+          const estadoAntes = await getWhatsAppStatus();
+          console.log(`[${timestamp}]    - whatsapp_ready: ${estadoAntes.whatsapp_ready}`);
+          console.log(`[${timestamp}]    - client_state: ${estadoAntes.client_state}`);
+          console.log(`[${timestamp}]    - isConnecting: ${estadoAntes.isConnecting}`);
+          
           // Obtener chats en background - mantiene sesión sin notificación visible
           await client.getChats();
-          console.log(`[${timestamp}] ✅ Sesión mantenida activa (sin mensaje al admin)`);
+          console.log(`[${timestamp}] ✅ getChats() completado exitosamente`);
+          
+          // Verificar estado después
+          const estadoDespues = await getWhatsAppStatus();
+          console.log(`[${timestamp}] 📊 Estado después de getChats():`);
+          console.log(`[${timestamp}]    - whatsapp_ready: ${estadoDespues.whatsapp_ready}`);
+          console.log(`[${timestamp}]    - client_state: ${estadoDespues.client_state}`);
+          
           mensajeEnviado = true;
           sessionMantenida = true;
         } else {
           console.log(`[${timestamp}] ⚠️ Cliente WhatsApp no disponible para keep-alive`);
+          console.log(`[${timestamp}]    - whatsappAvailable: ${whatsappAvailable}`);
+          console.log(`[${timestamp}]    - client es null/undefined`);
         }
       } catch (error) {
         console.error(`[${timestamp}] ❌ Error en keep-alive silencioso:`, error.message);
+        console.error(`[${timestamp}]    - Stack:`, error.stack);
       }
       
       // 2. Procesar notificaciones pendientes (si hay)

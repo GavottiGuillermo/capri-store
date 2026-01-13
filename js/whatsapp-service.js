@@ -356,11 +356,23 @@ function registrarEventosWhatsApp(client) {
   // Evento disconnected
   client.on('disconnected', (reason) => {
     const timestamp = new Date().toISOString();
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[${timestamp}] 🔴 EVENTO DISCONNECTED DISPARADO`);
+    console.log(`${'='.repeat(60)}`);
     console.log(`[${timestamp}] ⚠️ WhatsApp desconectado - Razón: ${reason}`);
+    console.log(`[${timestamp}] 📊 Estado antes del reset:`);
+    console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
+    console.log(`[${timestamp}]    - qrGenerated: ${qrGenerated}`);
+    console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
     console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
     whatsappReady = false;
     qrGenerated = false;
     setIsConnecting(false); // 🔓 Desbloquear si se desconecta
+    console.log(`[${timestamp}] 📊 Estado después del reset:`);
+    console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
+    console.log(`[${timestamp}]    - qrGenerated: ${qrGenerated}`);
+    console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
+    console.log(`${'='.repeat(60)}\n`);
     
     console.log('\n========================================');
     console.log('⚠️  WHATSAPP DESCONECTADO');
@@ -439,22 +451,30 @@ async function cleanup() {
 
 // Función para inicializar WhatsApp (simplificada sin Instance Lock)
 async function inicializarWhatsApp() {
-  console.log('🔵 inicializarWhatsApp() LLAMADA');
-  console.log('📍 Stack trace:');
+  const timestamp = new Date().toISOString();
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`[${timestamp}] 🔵 inicializarWhatsApp() LLAMADA`);
+  console.log(`${'='.repeat(60)}`);
+  console.log('📍 Stack trace para identificar quién llamó:');
   console.trace();
+  console.log(`${'='.repeat(60)}\n`);
   
   try {
     // VALIDACIÓN PREVIA: Verificar si WhatsApp ya está conectado
     if (whatsappReady && whatsappClient) {
+      console.log(`[${timestamp}] 🔍 Verificando estado actual antes de proceder...`);
       try {
         const state = await whatsappClient.getState();
+        console.log(`[${timestamp}] 📊 Estado detectado: ${state}`);
         if (state === 'CONNECTED') {
-          console.log('✅ WhatsApp ya está conectado - Saltando inicialización');
-          console.log(`🔗 Estado actual: ${state}`);
+          console.log(`[${timestamp}] ✅ WhatsApp YA ESTÁ CONECTADO - Saltando inicialización`);
+          console.log(`[${timestamp}] 🔗 Estado actual: ${state}`);
+          console.log(`[${timestamp}] ⚠️ ADVERTENCIA: No se debe llamar inicializarWhatsApp() cuando ya está conectado`);
           return;
         }
       } catch (stateError) {
-        console.log('⚠️ Error verificando estado, continuando con inicialización:', stateError.message);
+        console.log(`[${timestamp}] ⚠️ Error verificando estado:`, stateError.message);
+        console.log(`[${timestamp}] ➡️ Continuando con inicialización...`);
       }
     }
     
