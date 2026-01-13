@@ -1,5 +1,6 @@
 const express = require('express');
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
+const { Pool } = require('pg');
 
 const cors = require('cors');
 
@@ -11,7 +12,25 @@ async function initializeDatabase() {
   if (!process.env.DATABASE_URL) {
     throw new Error('No DATABASE_URL configured');
   }
-  // If needed, actual DB init can be implemented here.
+  
+  // Crear pool de conexiones PostgreSQL
+  console.log('🔌 Inicializando conexión a PostgreSQL...');
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false // Necesario para Render/Neon
+    },
+    max: 20, // máximo 20 conexiones
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+  
+  // Verificar conexión
+  const client = await pool.connect();
+  console.log('✅ Conexión PostgreSQL establecida');
+  client.release();
+  
+  return pool;
 }
 
 // SYSTEM SIMPLIFIED: PostgreSQL session persistence working perfectly - v4.0
