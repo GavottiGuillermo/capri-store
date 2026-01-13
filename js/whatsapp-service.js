@@ -104,6 +104,16 @@ const puppeteerArgs = [
   '--disable-features=AudioServiceOutOfProcess',
   '--renderer-process-limit=1',  // Solo 1 proceso renderer
   '--max-unused-resource-memory-usage-percentage=25',  // Liberar memoria no usada
+  // ARGUMENTOS ADICIONALES PARA ESTABILIDAD DE SESIÓN
+  '--disable-dev-shm-usage',  // Usar /tmp en lugar de /dev/shm (mejor para Render)
+  '--disable-setuid-sandbox',  // Desactivar sandbox setuid
+  '--no-sandbox',  // Ya estaba, pero aseguramos que esté
+  '--disable-infobars',  // Quitar barras de información
+  '--window-position=0,0',  // Posición fija de ventana
+  '--ignore-certificate-errors',  // Ignorar errores de certificado
+  '--ignore-certificate-errors-spki-list',
+  '--disable-features=VizDisplayCompositor,site-per-process',  // Deshabilitar aislamiento de procesos
+  '--disable-web-security',  // Ya estaba, reforzamos
   '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ];
 
