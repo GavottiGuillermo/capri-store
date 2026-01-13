@@ -123,11 +123,10 @@ let whatsappClient = new Client({
     handleSIGHUP: false
   },
   webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+    type: 'none'  // DESHABILITADO: Evitar actualizaciones automáticas que causen re-auth
   },
   qrMaxRetries: 0,  // DESHABILITADO: No auto-regenerar QR (solo manual via endpoint)
-  authTimeoutMs: 60000,
+  authTimeoutMs: 0,  // SIN TIMEOUT: No forzar timeout de autenticación
   takeoverOnConflict: false,  // DESHABILITADO: No tomar control automático
   takeoverTimeoutMs: 0,  // Sin timeout para takeover
   restartOnAuthFail: false  // DESHABILITADO: No reiniciar automáticamente en fallo de auth
@@ -387,10 +386,10 @@ function registrarEventosWhatsApp(client) {
     
     // PROTECCIÓN: Si ya está conectado, ignorar eventos authenticated adicionales
     if (whatsappReady) {
-      console.log(`[${timestamp}] ⚠️ AUTHENTICATED disparado pero WhatsApp ya está conectado - IGNORANDO`);
+      console.log(`[${timestamp}] ⚠️⚠️⚠️ AUTHENTICATED DUPLICADO DETECTADO`);
       console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
       console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
-      console.log(`[${timestamp}]    - Esto puede indicar re-autenticación innecesaria`);
+      console.log(`[${timestamp}] 🛑 IGNORANDO COMPLETAMENTE - No tocar flags`);
       return; // Ignorar eventos authenticated si ya estamos conectados
     }
     
