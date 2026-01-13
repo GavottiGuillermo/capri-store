@@ -149,7 +149,24 @@ function registrarEventosWhatsApp(client) {
   client.removeAllListeners('auth_failure');
   client.removeAllListeners('disconnected');
   client.removeAllListeners('loading_screen');
+  client.removeAllListeners('change_state');
   console.log('✅ Listeners antiguos removidos');
+  
+  // Evento change_state - Detectar cambios de estado para diagnóstico
+  client.on('change_state', (state) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 🔄 CAMBIO DE ESTADO WhatsApp: ${state}`);
+    
+    if (state === 'CONFLICT') {
+      console.log(`[${timestamp}] ⚠️⚠️⚠️ CONFLICTO DE SESIÓN DETECTADO`);
+      console.log(`[${timestamp}]    Hay otra sesión activa con el mismo QR`);
+      console.log(`[${timestamp}]    Cerrando sesión duplicada...`);
+    } else if (state === 'UNPAIRED') {
+      console.log(`[${timestamp}] 📱 Dispositivo desvinculado desde el celular`);
+    } else if (state === 'TIMEOUT') {
+      console.log(`[${timestamp}] ⏱️ Timeout - Conexión expiró`);
+    }
+  });
   
   // 🔒 Evento QR - MARCAR INICIO DE PROCESO DE CONEXIÓN
   client.on('qr', (qr) => {
@@ -207,9 +224,9 @@ function registrarEventosWhatsApp(client) {
     console.log('• Espera 10-15 segundos después de escanear');
     console.log('• Si falla, espera 2 minutos antes de reintentar');
     console.log('\n🖥️ INFORMACIÓN DEL DISPOSITIVO:');
-    console.log('• Debería aparecer como "Linux Desktop" o "Chrome Linux"');
-    console.log('• Si aparece como "MAC Desktop", la sesión está corrupta');
-    console.log('• User Agent corregido para Render/Linux');
+    console.log('• Puede aparecer como "Chrome (Mac OS)" o "Chrome Linux" - es normal');
+    console.log('• Lo importante es que se conecte exitosamente');
+    console.log('• El nombre del dispositivo no afecta el funcionamiento');
     console.log('\n⏰ Tienes 60 segundos para escanearlo');
     console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
     
@@ -345,8 +362,19 @@ function registrarEventosWhatsApp(client) {
   
   // Evento authenticated - Solo para logging, el evento 'ready' es el definitivo
   client.on('authenticated', () => {
-    console.log('🔐 WhatsApp autenticado correctamente');
-    console.log('⏳ Esperando evento ready para confirmar conexión completa...');
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 🔐 WhatsApp autenticado correctamente`);
+    
+    // PROTECCIÓN: Si ya está conectado, ignorar eventos authenticated adicionales
+    if (whatsappReady) {
+      console.log(`[${timestamp}] ⚠️ AUTHENTICATED disparado pero WhatsApp ya está conectado - IGNORANDO`);
+      console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
+      console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
+      console.log(`[${timestamp}]    - Esto puede indicar re-autenticación innecesaria`);
+      return; // Ignorar eventos authenticated si ya estamos conectados
+    }
+    
+    console.log(`[${timestamp}] ⏳ Esperando evento ready para confirmar conexión completa...`);
     
     // Asegurarse de que isConnecting esté en true
     if (!isConnecting) {
@@ -392,6 +420,20 @@ function registrarEventosWhatsApp(client) {
     console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
     console.log(`[${timestamp}]    - qrGenerated: ${qrGenerated}`);
     console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
+    
+    // Explicar razones de desconexión
+    if (reason === 'LOGOUT') {
+      console.log(`\n[${timestamp}] 🚨 LOGOUT DETECTADO - Posibles causas:`);
+      console.log(`[${timestamp}]    1. Cerraste sesión manualmente desde el celular`);
+      console.log(`[${timestamp}]    2. Hay otra sesión activa (conflicto)`);
+      console.log(`[${timestamp}]    3. WhatsApp detectó actividad sospechosa`);
+      console.log(`[${timestamp}]    4. Se vinculó el mismo QR en otro dispositivo\n`);
+    } else if (reason === 'NAVIGATION') {
+      console.log(`\n[${timestamp}] 🌐 NAVIGATION DETECTADO - WhatsApp Web navegó internamente`);
+      console.log(`[${timestamp}]    Esto puede pasar por actualizaciones o cambios en WhatsApp Web\n`);
+    } else if (reason.includes('qrcode') || reason.includes('retry')) {
+      console.log(`\n[${timestamp}] ⏱️ TIMEOUT DE QR - No se escaneó a tiempo\n`);
+    }
     
     // IMPORTANTE: Destruir cliente para evitar auto-reconexión
     if (reason === 'NAVIGATION' || reason === 'LOGOUT' || reason.includes('qrcode')) {
