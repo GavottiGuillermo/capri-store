@@ -187,12 +187,16 @@ function registrarEventosWhatsApp(client) {
       console.error('4️⃣  Ejecutar nuevamente:');
       console.error('    GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
       console.error('');
-      console.error('💡 El contador se reseteará automáticamente al conectar exitosamente');
+      console.error('💡 El contador se reseteará automáticamente en el próximo intento manual');
       console.error(`${'='.repeat(70)}\n`);
       
       // 🔓 CRÍTICO: Resetear isConnecting para permitir reintentos posteriores
       setIsConnecting(false);
       console.error('🔓 isConnecting reseteado - puedes reintentar con /whatsapp-regenerar-qr');
+      
+      // 🔄 RESETEAR CONTADOR para permitir nuevo intento limpio
+      qrAttempts = 0;
+      console.error('🔄 Contador de QR reseteado a 0 - próximo intento será limpio');
       
       return;
     }

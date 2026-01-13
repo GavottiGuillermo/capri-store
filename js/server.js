@@ -659,6 +659,12 @@ app.get('/whatsapp-regenerar-qr', async (req, res) => {
 
     // Nueva lógica: destruir cliente y reiniciar para forzar QR
     console.log('🧹 Iniciando proceso de regeneración QR (stateless)...');
+    
+    // RESETEAR CONTADOR DE QR antes de inicializar
+    console.log('🔄 Reseteando contador de QR a 0...');
+    await resetearContadorQR();
+    console.log('✅ Contador reseteado - intento limpio');
+    
     try {
       if (whatsappService && whatsappService.whatsappClient) {
         await whatsappService.whatsappClient.destroy();
