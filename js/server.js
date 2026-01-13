@@ -442,45 +442,47 @@ app.get('/whatsapp-keep-alive', async (req, res) => {
       whatsappStatus = 'conectado';
       console.log(`[${timestamp}] ✅ WhatsApp CONECTADO - Todas las variables OK`);
       
-      // 1. Procesar mensajes pendientes
-      console.log(`[${timestamp}] 📤 Procesando mensajes pendientes...`);
+      let pendientesProcesados = false;
+      let sessionMantenida = false;
+      
+      // 1. Mantener sesión activa SIN enviar mensaje (silencioso)
+      console.log(`[${timestamp}] 🔄 Manteniendo sesión activa (getChats en background)...`);
+      try {
+        const { getWhatsAppClient } = require('./whatsapp-service');
+        const client = getWhatsAppClient();
+        
+        if (client) {
+          // Obtener chats en background - mantiene sesión sin notificación visible
+          await client.getChats();
+          console.log(`[${timestamp}] ✅ Sesión mantenida activa (sin mensaje al admin)`);
+          mensajeEnviado = true;
+          sessionMantenida = true;
+        } else {
+          console.log(`[${timestamp}] ⚠️ Cliente WhatsApp no disponible para keep-alive`);
+        }
+      } catch (error) {
+        console.error(`[${timestamp}] ❌ Error en keep-alive silencioso:`, error.message);
+      }
+      
+      // 2. Procesar notificaciones pendientes (si hay)
+      console.log(`[${timestamp}] 📤 Verificando notificaciones pendientes...`);
       try {
         await procesarNotificacionesPendientes();
-        accionRealizada = 'procesados_pendientes';
+        pendientesProcesados = true;
+        console.log(`[${timestamp}] ✅ Notificaciones pendientes procesadas`);
       } catch (procesarError) {
         console.error(`[${timestamp}] ⚠️ Error procesando pendientes:`, procesarError.message);
       }
       
-      // 2. Enviar mensaje al administrador (SIEMPRE para mantener sesión activa)
-      if (ADMIN_WHATSAPP) {
-        const ahora = new Date();
-        const horaFormato = ahora.toLocaleString('es-AR', {
-          timeZone: 'America/Argentina/Buenos_Aires',
-          hour: '2-digit',
-          minute: '2-digit',
-          day: '2-digit',
-          month: '2-digit'
-        });
-        
-        const mensaje = `🟢 *Keep-Alive* - ${horaFormato}\n\n` +
-          `✅ WhatsApp conectado\n` +
-          `⏱️ Uptime: ${Math.floor(process.uptime() / 60)} min\n` +
-          `💾 Memoria: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n\n` +
-          `_Verificación automática cada 2 min_`;
-        
-        try {
-          const resultado = await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
-          mensajeEnviado = resultado.success;
-          
-          if (resultado.success) {
-            console.log(`[${timestamp}] ✅ Mensaje keep-alive enviado al administrador`);
-            accionRealizada = 'procesados_pendientes_y_mensaje_admin';
-          } else {
-            console.log(`[${timestamp}] ⚠️ No se pudo enviar mensaje keep-alive: ${resultado.error}`);
-          }
-        } catch (error) {
-          console.error(`[${timestamp}] ❌ Error enviando mensaje keep-alive:`, error.message);
-        }
+      // Resumen de acciones realizadas
+      if (sessionMantenida && pendientesProcesados) {
+        accionRealizada = 'keep_alive_silencioso_y_pendientes_procesados';
+      } else if (sessionMantenida) {
+        accionRealizada = 'keep_alive_silencioso_ok';
+      } else if (pendientesProcesados) {
+        accionRealizada = 'solo_pendientes_procesados';
+      } else {
+        accionRealizada = 'sin_acciones';
       }
       
     } else {

@@ -241,7 +241,7 @@ function registrarEventosWhatsApp(client) {
           `🕐 ${timestamp}\n` +
           `📱 Sistema operativo\n\n` +
           `Los clientes ya pueden contactarte por WhatsApp! 🛍️\n\n` +
-          `_El sistema enviará mensajes cada 2 min para mantener la sesión activa_`;
+          `_La sesión se mantendrá activa automáticamente en segundo plano_`;
         
         console.log(`📱 Enviando mensaje de confirmación inmediato al admin...`);
         await client.sendMessage(adminNumber, mensajeConexion);
@@ -1004,8 +1004,14 @@ function getIsConnecting() {
   return isConnecting;
 }
 
+// Función para obtener el cliente (útil para keep-alive silencioso)
+function getWhatsAppClient() {
+  return whatsappClient;
+}
+
 module.exports = {
   whatsappClient,
+  getWhatsAppClient,
   inicializarWhatsApp,
   enviarWhatsApp,
   getWhatsAppStatus,
