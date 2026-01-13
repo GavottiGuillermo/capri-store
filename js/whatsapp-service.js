@@ -126,10 +126,11 @@ let whatsappClient = new Client({
     type: 'remote',
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
   },
-  qrMaxRetries: 3,
+  qrMaxRetries: 0,  // DESHABILITADO: No auto-regenerar QR (solo manual via endpoint)
   authTimeoutMs: 60000,
-  takeoverOnConflict: true,
-  takeoverTimeoutMs: 60000
+  takeoverOnConflict: false,  // DESHABILITADO: No tomar control automático
+  takeoverTimeoutMs: 0,  // Sin timeout para takeover
+  restartOnAuthFail: false  // DESHABILITADO: No reiniciar automáticamente en fallo de auth
 });
 
 // ===============================
@@ -353,6 +354,33 @@ function registrarEventosWhatsApp(client) {
     }
   });
   
+  // Evento auth_failure - Detectar fallos de autenticación
+  client.on('auth_failure', (msg) => {
+    const timestamp = new Date().toISOString();
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[${timestamp}] ❌ FALLO DE AUTENTICACIÓN`);
+    console.log(`${'='.repeat(60)}`);
+    console.error(`[${timestamp}] ⚠️ Error en autenticación:`, msg);
+    console.log(`[${timestamp}] 🛑 NO se regenerará QR automáticamente`);
+    console.log(`[${timestamp}] 💡 Para reconectar, usar: GET /whatsapp-regenerar-qr`);
+    console.log(`${'='.repeat(60)}\n`);
+    
+    whatsappReady = false;
+    qrGenerated = false;
+    setIsConnecting(false);
+    
+    // Destruir cliente para evitar reintentos automáticos
+    try {
+      if (whatsappClient) {
+        whatsappClient.destroy().catch(err => {
+          console.error(`[${timestamp}] ⚠️ Error destruyendo cliente tras auth_failure:`, err.message);
+        });
+      }
+    } catch (destroyError) {
+      console.error(`[${timestamp}] ⚠️ Error en destroy:`, destroyError.message);
+    }
+  });
+  
   // Evento disconnected
   client.on('disconnected', (reason) => {
     const timestamp = new Date().toISOString();
@@ -364,6 +392,21 @@ function registrarEventosWhatsApp(client) {
     console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
     console.log(`[${timestamp}]    - qrGenerated: ${qrGenerated}`);
     console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
+    
+    // IMPORTANTE: Destruir cliente para evitar auto-reconexión
+    if (reason === 'NAVIGATION' || reason === 'LOGOUT' || reason.includes('qrcode')) {
+      console.log(`[${timestamp}] 🛑 Desconexión crítica detectada - Destruyendo cliente...`);
+      try {
+        if (whatsappClient) {
+          whatsappClient.destroy().catch(err => {
+            console.error(`[${timestamp}] ⚠️ Error destruyendo cliente:`, err.message);
+          });
+        }
+      } catch (destroyError) {
+        console.error(`[${timestamp}] ⚠️ Error en destroy:`, destroyError.message);
+      }
+    }
+    
     console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
     whatsappReady = false;
     qrGenerated = false;
