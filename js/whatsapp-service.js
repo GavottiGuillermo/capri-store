@@ -170,6 +170,22 @@ function registrarEventosWhatsApp(client) {
   
   // 🔒 Evento QR - MARCAR INICIO DE PROCESO DE CONEXIÓN
   client.on('qr', (qr) => {
+    const timestamp = new Date().toISOString();
+    
+    // 🛑 PROTECCIÓN CRÍTICA: Si ya está conectado, NO generar QR
+    if (whatsappReady) {
+      console.log(`\n${'='.repeat(70)}`);
+      console.log(`[${timestamp}] 🛑 EVENTO QR BLOQUEADO - WhatsApp ya está conectado`);
+      console.log(`${'='.repeat(70)}`);
+      console.log(`[${timestamp}]    - whatsappReady: ${whatsappReady}`);
+      console.log(`[${timestamp}]    - isConnecting: ${isConnecting}`);
+      console.log(`[${timestamp}]    - qrGenerated: ${qrGenerated}`);
+      console.log(`[${timestamp}] ⚠️ WhatsApp Web.js está intentando generar QR innecesariamente`);
+      console.log(`[${timestamp}] 🔒 Ignorando evento QR para prevenir conflicto de sesión`);
+      console.log(`${'='.repeat(70)}\n`);
+      return; // IGNORAR completamente este evento QR
+    }
+    
     setIsConnecting(true); // 🔒 Bloquear otros procesos durante conexión
     qrAttempts++;
     
