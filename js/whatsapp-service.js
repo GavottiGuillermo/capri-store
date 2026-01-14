@@ -1,6 +1,6 @@
 ﻿const { Client, RemoteAuth } = require('whatsapp-web.js');
-const { PostgresStore } = require('wwebjs-postgres');
 const { Pool } = require('pg');
+const fs = require('fs-extra');
 const qrcode = require('qrcode-terminal');
 
 
@@ -17,11 +17,79 @@ const dbPool = new Pool({
   connectionTimeoutMillis: 10000
 });
 
-// Store para RemoteAuth
-const store = new PostgresStore({
-  pg: dbPool,
-  tableName: 'whatsapp_sessions'  // Usar tabla existente
-});
+// Store personalizado para RemoteAuth con PostgreSQL
+// Implementa la interfaz requerida por whatsapp-web.js
+const store = {
+  async sessionExists(options) {
+    const { session } = options;
+    try {
+      const result = await dbPool.query(
+        'SELECT id FROM whatsapp_sessions WHERE id = $1',
+        [session]
+      );
+      return result.rows.length > 0;
+    } catch (error) {
+      console.error('❌ Error verificando sesión:', error.message);
+      return false;
+    }
+  },
+
+  async save(options) {
+    const { session } = options;
+    try {
+      const sessionPath = `${session}.zip`;
+      const data = await fs.readFile(sessionPath);
+      const base64Data = data.toString('base64');
+      
+      await dbPool.query(
+        `INSERT INTO whatsapp_sessions (id, session_data, updated_at) 
+         VALUES ($1, $2, NOW()) 
+         ON CONFLICT (id) 
+         DO UPDATE SET session_data = $2, updated_at = NOW()`,
+        [session, base64Data]
+      );
+      console.log(`✅ Sesión ${session} guardada en PostgreSQL`);
+    } catch (error) {
+      console.error('❌ Error guardando sesión:', error.message);
+      throw error;
+    }
+  },
+
+  async extract(options) {
+    const { session, path } = options;
+    try {
+      const result = await dbPool.query(
+        'SELECT session_data FROM whatsapp_sessions WHERE id = $1',
+        [session]
+      );
+      
+      if (result.rows.length === 0) {
+        throw new Error(`Sesión ${session} no encontrada`);
+      }
+      
+      const buffer = Buffer.from(result.rows[0].session_data, 'base64');
+      await fs.writeFile(path, buffer);
+      console.log(`✅ Sesión ${session} extraída de PostgreSQL`);
+    } catch (error) {
+      console.error('❌ Error extrayendo sesión:', error.message);
+      throw error;
+    }
+  },
+
+  async delete(options) {
+    const { session } = options;
+    try {
+      await dbPool.query(
+        'DELETE FROM whatsapp_sessions WHERE id = $1',
+        [session]
+      );
+      console.log(`✅ Sesión ${session} eliminada de PostgreSQL`);
+    } catch (error) {
+      console.error('❌ Error eliminando sesión:', error.message);
+      throw error;
+    }
+  }
+};
 
 console.log('🗄️ PostgreSQL Store configurado para RemoteAuth');
 
