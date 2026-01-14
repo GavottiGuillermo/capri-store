@@ -1,6 +1,29 @@
-﻿const { Client } = require('whatsapp-web.js');
+﻿const { Client, RemoteAuth } = require('whatsapp-web.js');
+const { PostgresStore } = require('wwebjs-postgres');
+const { Pool } = require('pg');
 const qrcode = require('qrcode-terminal');
 
+
+// ===============================
+// CONFIGURACIÓN POSTGRESQL PARA REMOTEAUTH
+// ===============================
+const dbPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  max: 3,  // Máximo 3 conexiones para RemoteAuth
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
+
+// Store para RemoteAuth
+const store = new PostgresStore({
+  pg: dbPool,
+  tableName: 'whatsapp_sessions'  // Usar tabla existente
+});
+
+console.log('🗄️ PostgreSQL Store configurado para RemoteAuth');
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -119,9 +142,10 @@ const puppeteerArgs = [
 
 // Cambiar a let para permitir recreación del cliente en regeneración de QR
 let whatsappClient = new Client({
-  authStrategy: new LocalAuth({
+  authStrategy: new RemoteAuth({
     clientId: 'capri-store-session',
-    dataPath: authPath
+    store: store,
+    backupSyncIntervalMs: 600000  // Backup cada 10 minutos
   }),
   puppeteer: {
     headless: true,
@@ -133,10 +157,11 @@ let whatsappClient = new Client({
     handleSIGHUP: false
   },
   webVersionCache: {
-    type: 'none'  // DESHABILITADO: Evitar actualizaciones automáticas que causen re-auth
+    type: 'remote',  // RemoteAuth funciona mejor con 'remote'
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
   },
   qrMaxRetries: 0,  // DESHABILITADO: No auto-regenerar QR (solo manual via endpoint)
-  authTimeoutMs: 0,  // SIN TIMEOUT: No forzar timeout de autenticación
+  authTimeoutMs: 60000,  // 60 segundos para auth con RemoteAuth
   takeoverOnConflict: false,  // DESHABILITADO: No tomar control automático
   takeoverTimeoutMs: 0,  // Sin timeout para takeover
   restartOnAuthFail: false  // DESHABILITADO: No reiniciar automáticamente en fallo de auth
