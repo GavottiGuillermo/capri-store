@@ -91,6 +91,7 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP;
 let whatsappReady = false;
 let whatsappClient = null;
 let onWhatsAppReadyCallback = null;
+let isConnecting = false;
 
 // ===============================
 // CONFIGURACIÓN DE PUPPETEER
@@ -205,6 +206,8 @@ async function inicializarWhatsApp() {
 async function regenerarQR() {
   console.log('🔄 Regenerando QR...');
   
+  isConnecting = false; // Resetear estado
+  
   // Destruir cliente actual
   if (whatsappClient) {
     try {
@@ -288,6 +291,38 @@ function keepAlive() {
 }
 
 // ===============================
+// FUNCIONES DE COMPATIBILIDAD (STUBS)
+// ===============================
+function getIsConnecting() {
+  return isConnecting;
+}
+
+function setIsConnecting(value) {
+  isConnecting = value;
+  return isConnecting;
+}
+
+function getWhatsAppStatus() {
+  return getEstadoWhatsApp();
+}
+
+function verificarConexionCompleta() {
+  return whatsappReady;
+}
+
+function forzarReconexion() {
+  return { mensaje: 'Auto-reconexión deshabilitada - usar /whatsapp-regenerar-qr' };
+}
+
+function resetearContadorQR() {
+  return { mensaje: 'Contadores eliminados en versión simplificada' };
+}
+
+function sincronizarEstadoWhatsApp() {
+  return getEstadoWhatsApp();
+}
+
+// ===============================
 // EXPORTS
 // ===============================
 module.exports = {
@@ -300,6 +335,18 @@ module.exports = {
   keepAlive,
   setOnWhatsAppReadyCallback,
   getWhatsAppClient: () => whatsappClient,
+  // Funciones de compatibilidad
+  getIsConnecting,
+  setIsConnecting,
+  getWhatsAppStatus,
+  verificarConexionCompleta,
+  forzarReconexion,
+  resetearContadorQR,
+  sincronizarEstadoWhatsApp,
+  enviarWhatsApp: enviarMensajeWhatsApp, // Alias
+  // Constantes
+  ADMIN_WHATSAPP,
+  BUSINESS_NAME,
   dbPool
 };
 
