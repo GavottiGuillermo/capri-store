@@ -475,32 +475,51 @@ async function inicializarWhatsApp() {
         readyEventCount = 0;
         qrAttempts = 0;
         
-        // Destruir cliente
-        await whatsappClient.destroy();
-        console.log('✅ Cliente anterior destruido');
+        // Destruir cliente solo si no es null
+        if (whatsappClient && typeof whatsappClient.destroy === 'function') {
+          await whatsappClient.destroy();
+          console.log('✅ Cliente anterior destruido');
+        }
         
         // Esperar 2 segundos para asegurar limpieza completa
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (destroyError) {
         console.warn('⚠️ Error destruyendo cliente anterior (continuando):', destroyError.message);
       }
-    }
-    
-    // VALIDACIÓN DE CONTEXTO: Verificar que no hay errores de contexto destruido previos
-    if (whatsappClient && whatsappClient._page) {
-      try {
-        // Test simple para verificar que el contexto está vivo
-        await whatsappClient._page.evaluate(() => window.location.href);
-      } catch (contextError) {
-        if (contextError.message.includes('Execution context was destroyed')) {
-          console.log('⚠️ Contexto de ejecución previamente destruido - Requiere sesión fresca');
-          throw new Error('Contexto de ejecución destruido - Sesión incompatible');
-        }
-      }
+      
+      // 🔄 RE-CREAR CLIENTE COMPLETAMENTE después de destroy
+      // (destroy() deja el cliente inutilizable, necesitamos crear uno nuevo)
+      console.log('🔄 Re-creando cliente WhatsApp...');
+      whatsappClient = new Client({
+        authStrategy: new LocalAuth({
+          clientId: 'capri-store-session',
+          dataPath: authPath
+        }),
+        puppeteer: {
+          headless: true,
+          args: puppeteerArgs,
+          timeout: 60000,
+          executablePath: undefined,
+          handleSIGINT: false,
+          handleSIGTERM: false,
+          handleSIGHUP: false
+        },
+        webVersionCache: {
+          type: 'remote',
+          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        },
+        qrMaxRetries: 3,
+        authTimeoutMs: 60000,
+        takeoverOnConflict: true,
+        takeoverTimeoutMs: 60000
+      });
+      
+      // Re-registrar eventos en el nuevo cliente
+      registrarEventosWhatsApp(whatsappClient);
+      console.log('✅ Cliente WhatsApp re-creado con eventos registrados');
     }
     
     console.log('🚀 Inicializando WhatsApp Business...');
-    
     console.log('📱 Inicializando cliente WhatsApp (LocalAuth stateless)...');
     await whatsappClient.initialize();
     
