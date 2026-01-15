@@ -243,7 +243,10 @@ function registrarEventosWhatsApp(client) {
           `Los clientes ya pueden contactarte por WhatsApp! 🛍️\n\n` +
           `_El sistema enviará mensajes cada 2 min para mantener la sesión activa_`;
         
-        console.log(`📱 Enviando mensaje de confirmación inmediato al admin...`);
+        console.log(`📱 Esperando 5 segundos para que WhatsApp se estabilice...`);
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
+        
+        console.log(`📱 Enviando mensaje de confirmación al admin...`);
         await client.sendMessage(adminNumber, mensajeConexion);
         console.log(`✅ Mensaje de confirmación enviado al administrador`);
       } catch (mensajeError) {
