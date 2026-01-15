@@ -225,124 +225,53 @@ function registrarEventosWhatsApp(client) {
       return; // Ignorar eventos ready duplicados
     }
     
-    console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
-    whatsappReady = true;
+    console.log('🎉 EVENTO READY DISPARADO - WhatsApp inicializando...');
+    console.log('⏳ Esperando que el estado cambie a CONNECTED antes de marcar como listo...');
+    
+    // NO marcar como ready inmediatamente - esperar a que el estado sea CONNECTED
+    // whatsappReady se establecerá cuando getState() === 'CONNECTED'
     
     // RESETEAR CONTADOR DE QR cuando se conecta exitosamente
     qrAttempts = 0;
-    console.log('✅ Contador de QR reseteado - conexión exitosa');
+    console.log('✅ Contador de QR reseteado');
     
-    // ✅ ENVIAR MENSAJE INMEDIATO AL ADMINISTRADOR tras conexión exitosa
-    if (ADMIN_WHATSAPP) {
+    // ⏳ VERIFICAR ESTADO CADA 2 SEGUNDOS (máximo 30 segundos)
+    let intentos = 0;
+    const maxIntentos = 15; // 30 segundos
+    
+    const verificarEstado = setInterval(async () => {
+      intentos++;
       try {
-        const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
-        const mensajeConexion = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n` +
-          `✅ ${BUSINESS_NAME} está online\n` +
-          `🕐 ${timestamp}\n` +
-          `📱 Sistema operativo\n\n` +
-          `Los clientes ya pueden contactarte por WhatsApp! 🛍️\n\n` +
-          `_El sistema enviará mensajes cada 2 min para mantener la sesión activa_`;
+        const estado = await client.getState();
+        console.log(`🔍 Verificación ${intentos}/${maxIntentos} - Estado: ${estado}`);
         
-        console.log(`📱 Esperando 5 segundos para que WhatsApp se estabilice...`);
-        await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
-        
-        console.log(`📱 Enviando mensaje de confirmación al admin...`);
-        await client.sendMessage(adminNumber, mensajeConexion);
-        console.log(`✅ Mensaje de confirmación enviado al administrador`);
-      } catch (mensajeError) {
-        console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
-      }
-    } else {
-      console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
-    }
-    
-    /* DESHABILITADO: Guardado de sesión y mensaje inmediato
-    // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 120s)
-    // Razón: RemoteAuth tarda ~77s en guardar (observado en logs)
-    console.log('⏳ Iniciando espera dinámica para confirmación de guardado de sesión...');
-    console.log('⏰ Timeout aumentado a 120s para cubrir tiempo real de guardado');
-    
-    esperarGuardadoSesion(120000).then(async (sesionGuardada) => {
-      if (sesionGuardada) {
-        console.log('✅ Proceso de conexión completado - Sesión guardada y verificada en PostgreSQL');
-        
-        // ⏳ ESPERAR 10s para que WhatsApp se estabilice completamente
-        console.log('⏳ Esperando 10s adicionales para estabilización de WhatsApp...');
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        console.log('✅ WhatsApp estabilizado - procediendo a enviar mensaje');
-        
-        // 📱 ENVIAR MENSAJE AL ADMIN - Modo simplificado
-        try {
-          if (ADMIN_WHATSAPP && whatsappReady) {
-            const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
-            const mensajeAdmin = `🎉 *WHATSAPP BUSINESS CONECTADO*\n\n` +
-              `✅ Capri Store está online\n` +
-              `🕐 ${new Date().toLocaleString('es-AR')}\n` +
-              `📊 Sistema operativo (modo simplificado)\n\n` +
-              `Los clientes ya pueden contactarte por WhatsApp! 🛍️`;
-            
-            console.log(`📱 Enviando mensaje de confirmación al admin (${ADMIN_WHATSAPP})...`);
-            await client.sendMessage(adminNumber, mensajeAdmin);
-            console.log(`✅ Mensaje de confirmación enviado al admin exitosamente`);
-          } else if (!ADMIN_WHATSAPP) {
-            console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
-          } else if (!whatsappReady) {
-            console.warn('⚠️ whatsappReady=false - no se puede enviar mensaje');
+        if (estado === 'CONNECTED') {
+          clearInterval(verificarEstado);
+          whatsappReady = true;
+          console.log('✅✅✅ WhatsApp COMPLETAMENTE CONECTADO y OPERATIVO ✅✅✅');
+          console.log(`🕐 ${timestamp}`);
+          
+          // Marcar conexión exitosa
+          setIsConnecting(false);
+          marcarConexionExitosa();
+          
+          // Procesar notificaciones pendientes
+          if (onWhatsAppReadyCallback && typeof onWhatsAppReadyCallback === 'function') {
+            console.log('🔄 Ejecutando callback para notificaciones pendientes (WhatsApp ready confirmado)...');
+            onWhatsAppReadyCallback();
           }
-        } catch (mensajeError) {
-          console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
+        } else if (intentos >= maxIntentos) {
+          clearInterval(verificarEstado);
+          console.warn('⚠️ Timeout esperando estado CONNECTED - puede que tarde más de lo esperado');
+          console.warn('⚠️ Si ves este mensaje, el sistema seguirá intentando conectarse');
+        }
+      } catch (error) {
+        console.error(`❌ Error verificando estado: ${error.message}`);
+        if (intentos >= maxIntentos) {
+          clearInterval(verificarEstado);
         }
       }
-    */
-    
-    /* DESHABILITADO: Continuación de espera de guardado
-      } else {
-        console.error('❌ Timeout alcanzado (120s) - sesión NO se guardó en PostgreSQL');
-        console.error('⚠️ NO se enviará mensaje al admin (sesión no persistente)');
-        console.error('💡 Esto puede indicar un problema con RemoteAuth o permisos de escritura');
-      }
-      
-      setIsConnecting(false); // 🔓 Desbloquear sistema
-      console.log('🔓 Sistema desbloqueado para otras operaciones');
-    });
-    */
-    
-    setIsConnecting(false); // 🔓 Desbloquear inmediatamente
-    console.log('🔓 Sistema desbloqueado para otras operaciones');
-    
-    // Marcar conexión exitosa para verificación de disponibilidad
-    console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
-    marcarConexionExitosa();
-    
-    // Procesar notificaciones pendientes en background
-    if (onWhatsAppReadyCallback) {
-      console.log('🔄 Ejecutando callback para notificaciones pendientes (WhatsApp ready confirmado)...');
-      setImmediate(async () => {
-        try {
-          await onWhatsAppReadyCallback();
-          lastCallbackExecution = Date.now();
-        } catch (error) {
-          console.error('❌ Error en callback de notificaciones pendientes:', error);
-        }
-      });
-    }
-    
-    // Verificar estado real y mostrar info
-    try {
-      const state = await client.getState();
-      const authInfo = 'Local (Temporal)';
-      
-      console.log('\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉');
-      console.log(`✅ WHATSAPP BUSINESS CONECTADO! [${timestamp}]`);
-      console.log(`📱 Negocio: ${BUSINESS_NAME}`);
-      console.log(`📞 Admin: ${ADMIN_WHATSAPP}`);
-      console.log(`🔗 Estado del cliente: ${state}`);
-      console.log(`🗄️ Autenticación: ${authInfo}`);
-      console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
-      console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
-    } catch (infoError) {
-      console.log('⚠️ No se pudo obtener info del estado');
-    }
+    }, 2000); // Verificar cada 2 segundos
   });
   
   // Evento authenticated - Solo para logging, el evento 'ready' es el definitivo
