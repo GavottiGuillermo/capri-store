@@ -92,6 +92,7 @@ let whatsappReady = false;
 let whatsappClient = null;
 let onWhatsAppReadyCallback = null;
 let isConnecting = false;
+let ultimaConexionExitosa = null; // Timestamp de última conexión exitosa
 
 // ===============================
 // CONFIGURACIÓN DE PUPPETEER
@@ -142,11 +143,13 @@ async function inicializarWhatsApp() {
   // Evento Ready
   whatsappClient.on('ready', async () => {
     whatsappReady = true;
+    ultimaConexionExitosa = new Date(); // Marcar timestamp de conexión
     const timestamp = new Date().toLocaleString('es-AR');
     
     console.log('\n' + '🎉'.repeat(35));
     console.log(`✅ WHATSAPP CONECTADO [${timestamp}]`);
     console.log(`📱 Negocio: ${BUSINESS_NAME}`);
+    console.log(`🎯 Conexión exitosa marcada: ${ultimaConexionExitosa.toISOString()}`);
     console.log('🎉'.repeat(35) + '\n');
 
     // Enviar mensaje al admin
@@ -158,17 +161,19 @@ async function inicializarWhatsApp() {
         
         await whatsappClient.sendMessage(adminNumber, 
           `✅ WhatsApp conectado - ${timestamp}`);
+        console.log('✅ Mensaje enviado al admin');
       } catch (error) {
-        console.error('❌ Error enviando mensaje al admin');
+        console.error('❌ Error enviando mensaje al admin:', error.message);
       }
     }
 
     // Procesar notificaciones pendientes
     if (onWhatsAppReadyCallback) {
       try {
+        console.log('🔄 Procesando notificaciones pendientes...');
         await onWhatsAppReadyCallback();
       } catch (error) {
-        console.error('❌ Error procesando pendientes');
+        console.error('❌ Error procesando pendientes:', error.message);
       }
     }
   });
@@ -176,6 +181,7 @@ async function inicializarWhatsApp() {
   // Evento Disconnected
   whatsappClient.on('disconnected', async (reason) => {
     whatsappReady = false;
+    ultimaConexionExitosa = null; // Resetear timestamp
     console.log('\n' + '⚠️'.repeat(35));
     console.log(`🔴 WHATSAPP DESCONECTADO - Razón: ${reason}`);
     console.log('⚠️'.repeat(35) + '\n');
@@ -322,6 +328,19 @@ function sincronizarEstadoWhatsApp() {
   return getEstadoWhatsApp();
 }
 
+function marcarConexionExitosa() {
+  ultimaConexionExitosa = new Date();
+  whatsappReady = true;
+  console.log(`🎯 MARCA CONEXIÓN EXITOSA: ${ultimaConexionExitosa.toISOString()}`);
+  console.log(`🎯 Estado whatsappReady: ${whatsappReady}`);
+}
+
+function setWhatsAppReady(value) {
+  whatsappReady = value;
+  console.log(`🔧 FORZADO whatsappReady = ${whatsappReady}`);
+  return whatsappReady;
+}
+
 // ===============================
 // EXPORTS
 // ===============================
@@ -335,6 +354,7 @@ module.exports = {
   keepAlive,
   setOnWhatsAppReadyCallback,
   getWhatsAppClient: () => whatsappClient,
+  whatsappClient,
   // Funciones de compatibilidad
   getIsConnecting,
   setIsConnecting,
@@ -343,10 +363,13 @@ module.exports = {
   forzarReconexion,
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
+  marcarConexionExitosa,
+  setWhatsAppReady,
   enviarWhatsApp: enviarMensajeWhatsApp, // Alias
   // Constantes
   ADMIN_WHATSAPP,
   BUSINESS_NAME,
+  ultimaConexionExitosa,
   dbPool
 };
 
