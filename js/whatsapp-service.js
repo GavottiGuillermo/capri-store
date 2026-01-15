@@ -265,11 +265,26 @@ function estaWhatsAppListo() {
   return whatsappReady;
 }
 
+function getWhatsAppReady() {
+  return whatsappReady;
+}
+
 // ===============================
 // CALLBACK
 // ===============================
 function setOnWhatsAppReadyCallback(callback) {
   onWhatsAppReadyCallback = callback;
+}
+
+// ===============================
+// KEEP-ALIVE (no hace nada, solo retorna estado)
+// ===============================
+function keepAlive() {
+  return {
+    ejecutado: true,
+    conectado: whatsappReady,
+    mensaje: whatsappReady ? 'WhatsApp conectado' : 'WhatsApp desconectado'
+  };
 }
 
 // ===============================
@@ -281,6 +296,8 @@ module.exports = {
   enviarMensajeWhatsApp,
   getEstadoWhatsApp,
   estaWhatsAppListo,
+  getWhatsAppReady,
+  keepAlive,
   setOnWhatsAppReadyCallback,
   getWhatsAppClient: () => whatsappClient,
   dbPool
