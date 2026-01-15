@@ -152,7 +152,20 @@ function registrarEventosWhatsApp(client) {
   console.log('✅ Listeners antiguos removidos');
   
   // 🔒 Evento QR - MARCAR INICIO DE PROCESO DE CONEXIÓN
-  client.on('qr', (qr) => {
+  client.on('qr', async (qr) => {
+    // 🚫 IGNORAR QR si ya está conectado (puede ser refresh interno)
+    if (whatsappReady) {
+      try {
+        const state = await client.getState();
+        if (state === 'CONNECTED') {
+          console.log('⚠️ Evento QR mientras ya está CONNECTED - IGNORANDO (refresh interno de WhatsApp Web)');
+          return;
+        }
+      } catch (e) {
+        // Continuar si falla el check
+      }
+    }
+    
     setIsConnecting(true); // 🔒 Bloquear otros procesos durante conexión
     qrAttempts++;
     
@@ -286,12 +299,25 @@ function registrarEventosWhatsApp(client) {
   });
   
   // Evento authenticated - Solo para logging, el evento 'ready' es el definitivo
-  client.on('authenticated', () => {
+  client.on('authenticated', async () => {
+    // 🚫 IGNORAR si ya está conectado (puede ser refresh interno de WhatsApp Web)
+    if (whatsappReady) {
+      try {
+        const state = await client.getState();
+        if (state === 'CONNECTED') {
+          console.log('✅ Evento authenticated mientras ya está CONNECTED - IGNORANDO (refresh interno)');
+          return;
+        }
+      } catch (e) {
+        // Continuar si falla el check
+      }
+    }
+    
     console.log('🔐 WhatsApp autenticado correctamente');
     console.log('⏳ Esperando evento ready para confirmar conexión completa...');
     
-    // Asegurarse de que isConnecting esté en true
-    if (!isConnecting) {
+    // Asegurarse de que isConnecting esté en true solo si no está ya conectado
+    if (!isConnecting && !whatsappReady) {
       setIsConnecting(true);
     }
   });
@@ -395,14 +421,39 @@ async function inicializarWhatsApp() {
   console.trace();
   
   try {
+    // 🚫 VALIDACIÓN CRÍTICA: NO inicializar si ya está en proceso de conexión
+    if (isConnecting) {
+      console.log('⚠️ Ya hay un proceso de conexión activo - IGNORANDO inicializarWhatsApp()');
+      console.log(`   isConnecting: ${isConnecting}`);
+      console.log(`   whatsappReady: ${whatsappReady}`);
+      return;
+    }
+    
     // VALIDACIÓN PREVIA: Verificar si WhatsApp ya está conectado
     if (whatsappReady && whatsappClient) {
       try {
         const state = await whatsappClient.getState();
+        console.log(`🔍 Estado actual del cliente: ${state}`);
+        
+        // Si está CONNECTED, no hacer nada
         if (state === 'CONNECTED') {
-          console.log('✅ WhatsApp ya está conectado - Saltando inicialización');
-          console.log(`🔗 Estado actual: ${state}`);
+          console.log('✅ WhatsApp ya está CONNECTED - Saltando inicialización');
           return;
+        }
+        
+        // Si está OPENING (cargando), esperar un poco más
+        if (state === 'OPENING') {
+          console.log('⏳ WhatsApp está OPENING (cargando) - Esperando 10 segundos...');
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          
+          // Verificar nuevamente después de esperar
+          const nuevoEstado = await whatsappClient.getState();
+          console.log(`🔍 Estado después de esperar: ${nuevoEstado}`);
+          
+          if (nuevoEstado === 'CONNECTED') {
+            console.log('✅ WhatsApp ahora está CONNECTED - Saltando inicialización');
+            return;
+          }
         }
       } catch (stateError) {
         console.log('⚠️ Error verificando estado, continuando con inicialización:', stateError.message);
