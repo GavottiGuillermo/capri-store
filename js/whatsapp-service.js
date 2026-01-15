@@ -999,6 +999,11 @@ function getIsConnecting() {
   return isConnecting;
 }
 
+// Función para obtener el cliente de WhatsApp
+function getWhatsAppClient() {
+  return whatsappClient;
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -1018,6 +1023,7 @@ module.exports = {
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,
   sessionIsOld,
+  getWhatsAppClient,
   ADMIN_WHATSAPP,
   BUSINESS_NAME
 };
