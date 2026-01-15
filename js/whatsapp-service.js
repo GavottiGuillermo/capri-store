@@ -13,6 +13,7 @@ const MAX_QR_ATTEMPTS = 5;
 let sessionIsOld = false; // Bandera para sesiones >24h
 let isConnecting = false; // 🔒 Flag para bloquear otros procesos durante conexión
 let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
+let verificarEstadoInterval = null; // 🔍 Referencia al interval de verificación de estado
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -239,14 +240,22 @@ function registrarEventosWhatsApp(client) {
     let intentos = 0;
     const maxIntentos = 15; // 30 segundos
     
-    const verificarEstado = setInterval(async () => {
+    // Cancelar interval anterior si existe
+    if (verificarEstadoInterval) {
+      console.log('🔄 Cancelando verificación de estado anterior...');
+      clearInterval(verificarEstadoInterval);
+      verificarEstadoInterval = null;
+    }
+    
+    verificarEstadoInterval = setInterval(async () => {
       intentos++;
       try {
         const estado = await client.getState();
         console.log(`🔍 Verificación ${intentos}/${maxIntentos} - Estado: ${estado}`);
         
         if (estado === 'CONNECTED') {
-          clearInterval(verificarEstado);
+          clearInterval(verificarEstadoInterval);
+          verificarEstadoInterval = null;
           whatsappReady = true;
           console.log('✅✅✅ WhatsApp COMPLETAMENTE CONECTADO y OPERATIVO ✅✅✅');
           console.log(`🕐 ${timestamp}`);
@@ -261,14 +270,16 @@ function registrarEventosWhatsApp(client) {
             onWhatsAppReadyCallback();
           }
         } else if (intentos >= maxIntentos) {
-          clearInterval(verificarEstado);
+          clearInterval(verificarEstadoInterval);
+          verificarEstadoInterval = null;
           console.warn('⚠️ Timeout esperando estado CONNECTED - puede que tarde más de lo esperado');
           console.warn('⚠️ Si ves este mensaje, el sistema seguirá intentando conectarse');
         }
       } catch (error) {
         console.error(`❌ Error verificando estado: ${error.message}`);
         if (intentos >= maxIntentos) {
-          clearInterval(verificarEstado);
+          clearInterval(verificarEstadoInterval);
+          verificarEstadoInterval = null;
         }
       }
     }, 2000); // Verificar cada 2 segundos
@@ -292,7 +303,15 @@ function registrarEventosWhatsApp(client) {
     console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
     whatsappReady = false;
     qrGenerated = false;
+    readyEventCount = 0; // 🔄 Resetear contador de eventos ready
     setIsConnecting(false); // 🔓 Desbloquear si se desconecta
+    
+    // Cancelar verificación de estado si está activa
+    if (verificarEstadoInterval) {
+      clearInterval(verificarEstadoInterval);
+      verificarEstadoInterval = null;
+      console.log(`[${timestamp}] 🔄 Interval de verificación cancelado`);
+    }
     
     console.log('\n========================================');
     console.log('⚠️  WHATSAPP DESCONECTADO');
@@ -387,6 +406,32 @@ async function inicializarWhatsApp() {
         }
       } catch (stateError) {
         console.log('⚠️ Error verificando estado, continuando con inicialización:', stateError.message);
+      }
+    }
+    
+    // 🧹 LIMPIAR SESIÓN ANTERIOR: Destruir cliente viejo antes de crear uno nuevo
+    if (whatsappClient) {
+      console.log('🧹 Destruyendo cliente anterior para evitar sesiones mixtas...');
+      try {
+        // Cancelar interval de verificación si existe
+        if (verificarEstadoInterval) {
+          clearInterval(verificarEstadoInterval);
+          verificarEstadoInterval = null;
+          console.log('✅ Interval de verificación cancelado');
+        }
+        
+        // Resetear contadores
+        readyEventCount = 0;
+        qrAttempts = 0;
+        
+        // Destruir cliente
+        await whatsappClient.destroy();
+        console.log('✅ Cliente anterior destruido');
+        
+        // Esperar 2 segundos para asegurar limpieza completa
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (destroyError) {
+        console.warn('⚠️ Error destruyendo cliente anterior (continuando):', destroyError.message);
       }
     }
     
@@ -688,9 +733,18 @@ async function forzarReconexion() {
   console.log(`[${timestamp}] 🔄 FORZANDO RECONEXIÓN de WhatsApp...`);
   
   try {
-    // Resetear flags
+    // Resetear flags y contadores
     whatsappReady = false;
     qrGenerated = false;
+    readyEventCount = 0;
+    qrAttempts = 0;
+    
+    // Cancelar interval de verificación si existe
+    if (verificarEstadoInterval) {
+      clearInterval(verificarEstadoInterval);
+      verificarEstadoInterval = null;
+      console.log(`[${timestamp}] ✅ Interval de verificación cancelado`);
+    }
     
     console.log(`[${timestamp}] 1️⃣ Destruyendo cliente actual...`);
     await whatsappClient.destroy();
@@ -730,6 +784,15 @@ async function limpiarSesionCorrupta() {
     // Destruir cliente primero
     whatsappReady = false;
     qrGenerated = false;
+    readyEventCount = 0;
+    qrAttempts = 0;
+    
+    // Cancelar interval de verificación si existe
+    if (verificarEstadoInterval) {
+      clearInterval(verificarEstadoInterval);
+      verificarEstadoInterval = null;
+      console.log(`[${timestamp}] ✅ Interval de verificación cancelado`);
+    }
     
     try {
       await whatsappClient.destroy();
