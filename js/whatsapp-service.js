@@ -93,6 +93,8 @@ let whatsappClient = null;
 let onWhatsAppReadyCallback = null;
 let isConnecting = false;
 let ultimaConexionExitosa = null; // Timestamp de última conexión exitosa
+let qrAttempts = 0; // Contador de intentos de QR
+const MAX_QR_ATTEMPTS = 5; // Máximo 5 intentos de QR
 
 // ===============================
 // CONFIGURACIÓN DE PUPPETEER
@@ -126,13 +128,38 @@ async function inicializarWhatsApp() {
     webVersionCache: {
       type: 'remote',
       remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-    }
+    },
+    qrMaxRetries: 5,  // Máximo 5 reintentos de QR
+    authTimeoutMs: 60000,  // 60 segundos timeout
+    restartOnAuthFail: false  // NO reiniciar automáticamente en fallo
   });
 
   // Evento QR
   whatsappClient.on('qr', (qr) => {
+    qrAttempts++;
+    
+    // Límite de QRs alcanzado
+    if (qrAttempts > MAX_QR_ATTEMPTS) {
+      console.log('\n' + '❌'.repeat(70));
+      console.log(`❌ LÍMITE DE QRs ALCANZADO (${qrAttempts - 1}/${MAX_QR_ATTEMPTS})`);
+      console.log('❌'.repeat(70));
+      console.log('🛑 Se detuvo la generación de QRs para evitar bucle infinito');
+      console.log('');
+      console.log('📋 PARA VOLVER A INTENTAR:');
+      console.log('   GET https://capri-store.onrender.com/whatsapp-regenerar-qr');
+      console.log('');
+      console.log('💡 El contador se reseteará con la regeneración manual');
+      console.log('❌'.repeat(70) + '\n');
+      
+      // Destruir cliente para evitar más intentos
+      if (whatsappClient) {
+        whatsappClient.destroy().catch(() => {});
+      }
+      return;
+    }
+    
     console.log('\n' + '='.repeat(70));
-    console.log('📱 ESCANEA ESTE QR CON WHATSAPP');
+    console.log(`📱 ESCANEA ESTE QR CON WHATSAPP (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
     console.log('='.repeat(70) + '\n');
     qrcode.generate(qr, { small: true });
     console.log('\n⏰ Tienes 60 segundos');
@@ -144,12 +171,14 @@ async function inicializarWhatsApp() {
   whatsappClient.on('ready', async () => {
     whatsappReady = true;
     ultimaConexionExitosa = new Date(); // Marcar timestamp de conexión
+    qrAttempts = 0; // ✅ Resetear contador cuando se conecta exitosamente
     const timestamp = new Date().toLocaleString('es-AR');
     
     console.log('\n' + '🎉'.repeat(35));
     console.log(`✅ WHATSAPP CONECTADO [${timestamp}]`);
     console.log(`📱 Negocio: ${BUSINESS_NAME}`);
     console.log(`🎯 Conexión exitosa marcada: ${ultimaConexionExitosa.toISOString()}`);
+    console.log(`✅ Contador de QR reseteado (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
     console.log('🎉'.repeat(35) + '\n');
 
     // Enviar mensaje al admin
@@ -210,30 +239,36 @@ async function inicializarWhatsApp() {
 // REGENERAR QR (MANUAL)
 // ===============================
 async function regenerarQR() {
-  console.log('🔄 Regenerando QR...');
+  console.log('🔄 Regenerando QR manualmente...');
   
-  isConnecting = false; // Resetear estado
+  isConnecting = false;
+  qrAttempts = 0; // ✅ Resetear contador para nueva sesión
+  console.log('🔄 Contador de QR reseteado para nuevo intento');
   
   // Destruir cliente actual
   if (whatsappClient) {
     try {
       await whatsappClient.destroy();
+      console.log('✅ Cliente anterior destruido');
     } catch (error) {
-      console.error('Error destruyendo cliente');
+      console.error('⚠️ Error destruyendo cliente:', error.message);
     }
   }
   
   // Limpiar sesión
   try {
     await store.delete({ session: 'capri-store-session' });
+    console.log('✅ Sesión eliminada de PostgreSQL');
   } catch (error) {
-    console.error('Error limpiando sesión');
+    console.error('⚠️ Error limpiando sesión:', error.message);
   }
   
   whatsappReady = false;
   whatsappClient = null;
+  ultimaConexionExitosa = null;
   
   // Reinicializar
+  console.log('🚀 Reinicializando WhatsApp...');
   await inicializarWhatsApp();
 }
 
@@ -321,7 +356,10 @@ function forzarReconexion() {
 }
 
 function resetearContadorQR() {
-  return { mensaje: 'Contadores eliminados en versión simplificada' };
+  const anteriorQrAttempts = qrAttempts;
+  qrAttempts = 0;
+  console.log(`🔄 Contador QR reseteado: ${anteriorQrAttempts} -> 0`);
+  return { success: true, anterior: anteriorQrAttempts, actual: 0 };
 }
 
 function sincronizarEstadoWhatsApp() {
