@@ -444,71 +444,50 @@ async function inicializarWhatsApp() {
   console.trace();
   
   try {
-    // 🔍 VERIFICAR SI EL CLIENTE FUE DESTRUIDO O ES NULL
-    let necesitaRecrear = false;
-    
-    if (!whatsappClient) {
-      console.log('⚠️ Cliente es null - necesita recreación');
-      necesitaRecrear = true;
-    } else if (whatsappClient._page) {
-      // Test si el contexto está destruido
+    // � SIEMPRE DESTRUIR Y RECREAR para regeneración limpia
+    if (whatsappClient) {
+      console.log('🧹 Destruyendo cliente existente...');
       try {
-        await whatsappClient._page.evaluate(() => window.location.href);
-      } catch (contextError) {
-        if (contextError.message.includes('Execution context was destroyed') || 
-            contextError.message.includes('Target closed')) {
-          console.log('⚠️ Contexto de ejecución destruido - necesita recreación');
-          necesitaRecrear = true;
-        }
+        await whatsappClient.destroy();
+        console.log('✅ Cliente destruido');
+      } catch (destroyError) {
+        console.warn('⚠️ Error destruyendo cliente (continuando):', destroyError.message);
       }
+      
+      // Esperar 2 segundos para limpieza
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
     
-    // 🔄 RECREAR CLIENTE SI ES NECESARIO
-    if (necesitaRecrear) {
-      console.log('🔄 Re-creando cliente WhatsApp completamente...');
-      
-      whatsappClient = new Client({
-        authStrategy: new LocalAuth({
-          clientId: 'capri-store-session',
-          dataPath: authPath
-        }),
-        puppeteer: {
-          headless: true,
-          args: puppeteerArgs,
-          timeout: 60000,
-          executablePath: undefined,
-          handleSIGINT: false,
-          handleSIGTERM: false,
-          handleSIGHUP: false
-        },
-        webVersionCache: {
-          type: 'remote',
-          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-        },
-        qrMaxRetries: 3,
-        authTimeoutMs: 60000,
-        takeoverOnConflict: true,
-        takeoverTimeoutMs: 60000
-      });
-      
-      // Re-registrar eventos
-      registrarEventosWhatsApp(whatsappClient);
-      console.log('✅ Cliente re-creado con eventos registrados');
-    }
+    // 🆕 RECREAR CLIENTE COMPLETAMENTE
+    console.log('🔄 Creando nuevo cliente WhatsApp...');
     
-    // VALIDACIÓN PREVIA: Verificar si WhatsApp ya está conectado
-    if (whatsappReady && whatsappClient && !necesitaRecrear) {
-      try {
-        const state = await whatsappClient.getState();
-        if (state === 'CONNECTED') {
-          console.log('✅ WhatsApp ya está conectado - Saltando inicialización');
-          console.log(`🔗 Estado actual: ${state}`);
-          return;
-        }
-      } catch (stateError) {
-        console.log('⚠️ Error verificando estado, continuando con inicialización:', stateError.message);
-      }
-    }
+    whatsappClient = new Client({
+      authStrategy: new LocalAuth({
+        clientId: 'capri-store-session',
+        dataPath: authPath
+      }),
+      puppeteer: {
+        headless: true,
+        args: puppeteerArgs,
+        timeout: 60000,
+        executablePath: undefined,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false
+      },
+      webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+      },
+      qrMaxRetries: 3,
+      authTimeoutMs: 60000,
+      takeoverOnConflict: true,
+      takeoverTimeoutMs: 60000
+    });
+    
+    // Re-registrar eventos
+    registrarEventosWhatsApp(whatsappClient);
+    console.log('✅ Cliente creado y eventos registrados');
     
     console.log('🚀 Inicializando WhatsApp Business...');
     console.log('📱 Inicializando cliente WhatsApp (LocalAuth stateless)...');
