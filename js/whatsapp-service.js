@@ -439,57 +439,50 @@ async function cleanup() {
 // FUNCIÓN DE INICIALIZACIÓN SIMPLIFICADA
 // ===============================
 
-// Función para inicializar WhatsApp (simplificada sin Instance Lock)
+// Función para inicializar WhatsApp (simplificada - NO destroy)
 async function inicializarWhatsApp() {
   console.log('🔵 inicializarWhatsApp() LLAMADA');
   console.log('📍 Stack trace:');
   console.trace();
   
   try {
-    // � SIEMPRE DESTRUIR Y RECREAR para regeneración limpia
-    if (whatsappClient) {
-      console.log('🧹 Destruyendo cliente existente...');
-      try {
-        await whatsappClient.destroy();
-        console.log('✅ Cliente destruido');
-      } catch (destroyError) {
-        console.warn('⚠️ Error destruyendo cliente (continuando):', destroyError.message);
-      }
+    // SOLO REINICIALIZAR - NO DESTRUIR
+    // El destroy() causa "Could not find expected browser" porque elimina Puppeteer
+    
+    if (!whatsappClient) {
+      console.log('🆕 Creando nuevo cliente WhatsApp (primera vez)...');
       
-      // Esperar 2 segundos para limpieza
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      whatsappClient = new Client({
+        authStrategy: new LocalAuth({
+          clientId: 'capri-store-session',
+          dataPath: authPath
+        }),
+        puppeteer: {
+          headless: true,
+          args: puppeteerArgs,
+          timeout: 60000,
+          executablePath: undefined,
+          handleSIGINT: false,
+          handleSIGTERM: false,
+          handleSIGHUP: false
+        },
+        webVersionCache: {
+          type: 'remote',
+          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        },
+        qrMaxRetries: 3,
+        authTimeoutMs: 60000,
+        takeoverOnConflict: true,
+        takeoverTimeoutMs: 60000
+      });
+      
+      // Registrar eventos
+      registrarEventosWhatsApp(whatsappClient);
+      console.log('✅ Cliente creado y eventos registrados');
+    } else {
+      console.log('🔄 Cliente existente - reinicializando sin destruir...');
+      // El cliente ya existe, solo reinicializar
     }
-    
-    // 🆕 RECREAR CLIENTE COMPLETAMENTE
-    console.log('🔄 Creando nuevo cliente WhatsApp...');
-    
-    whatsappClient = new Client({
-      authStrategy: new LocalAuth({
-        clientId: 'capri-store-session',
-        dataPath: authPath
-      }),
-      puppeteer: {
-        headless: true,
-        args: puppeteerArgs,
-        timeout: 60000,
-        executablePath: undefined,
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false
-      },
-      webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-      },
-      qrMaxRetries: 3,
-      authTimeoutMs: 60000,
-      takeoverOnConflict: true,
-      takeoverTimeoutMs: 60000
-    });
-    
-    // Re-registrar eventos
-    registrarEventosWhatsApp(whatsappClient);
-    console.log('✅ Cliente creado y eventos registrados');
     
     console.log('🚀 Inicializando WhatsApp Business...');
     console.log('📱 Inicializando cliente WhatsApp (LocalAuth stateless)...');
@@ -1045,4 +1038,5 @@ module.exports = {
   ADMIN_WHATSAPP,
   BUSINESS_NAME
 };
+
 
