@@ -422,9 +422,11 @@ async function cleanup() {
   whatsappReady = false;
   
   try {
-    if (whatsappClient) {
+    if (whatsappClient && typeof whatsappClient.destroy === 'function') {
       await whatsappClient.destroy();
       console.log('✅ WhatsApp cerrado');
+    } else {
+      console.log('ℹ️ No hay cliente WhatsApp para cerrar');
     }
   } catch (error) {
     console.error('⚠️ Error cerrando WhatsApp:', error.message);
