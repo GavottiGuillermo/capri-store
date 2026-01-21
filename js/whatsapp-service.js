@@ -1,22 +1,86 @@
 ﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const path = require('path');
 
 // Obtener el ejecutable de Chrome/Chromium (desde puppeteer o sistema)
 let chromiumPath;
-try {
-  const puppeteer = require('puppeteer');
-  chromiumPath = puppeteer.executablePath();
-  console.log(`✅ Chromium encontrado en: ${chromiumPath}`);
-} catch (error) {
-  // Si puppeteer no está instalado, buscar en el sistema
+
+function findChromiumExecutable() {
+  const possiblePaths = [];
+  
+  // 1. Intentar obtener de puppeteer
+  try {
+    const puppeteer = require('puppeteer');
+    const execPath = puppeteer.executablePath();
+    possiblePaths.push(execPath);
+    
+    // Verificar si el archivo existe
+    if (fs.existsSync(execPath)) {
+      console.log(`✅ Chromium de Puppeteer encontrado: ${execPath}`);
+      return execPath;
+    } else {
+      console.warn(`⚠️ Puppeteer retornó path pero no existe: ${execPath}`);
+    }
+  } catch (error) {
+    console.warn(`⚠️ No se pudo obtener executablePath de puppeteer: ${error.message}`);
+  }
+  
+  // 2. Buscar en cache de puppeteer manualmente
+  const cacheDir = path.join(__dirname, '..', '.cache', 'puppeteer', 'chrome');
+  if (fs.existsSync(cacheDir)) {
+    console.log(`🔍 Buscando Chrome en cache: ${cacheDir}`);
+    try {
+      const versions = fs.readdirSync(cacheDir);
+      if (versions.length > 0) {
+        // Usar la versión más reciente
+        const latestVersion = versions.sort().reverse()[0];
+        const chromePath = path.join(cacheDir, latestVersion, 'chrome-linux64', 'chrome');
+        if (fs.existsSync(chromePath)) {
+          console.log(`✅ Chrome encontrado en cache: ${chromePath}`);
+          return chromePath;
+        }
+      }
+    } catch (err) {
+      console.warn(`⚠️ Error explorando cache: ${err.message}`);
+    }
+  }
+  
+  // 3. Paths del sistema (Linux)
   const os = require('os');
   if (os.platform() === 'linux') {
-    // Render usa Linux y puede tener Chrome instalado
-    chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-                   '/usr/bin/google-chrome-stable' ||
-                   '/usr/bin/chromium-browser';
+    const systemPaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium'
+    ];
+    
+    for (const sysPath of systemPaths) {
+      if (sysPath && fs.existsSync(sysPath)) {
+        console.log(`✅ Chrome del sistema encontrado: ${sysPath}`);
+        return sysPath;
+      }
+    }
   }
-  console.log(`⚠️ Puppeteer no disponible, usando path del sistema: ${chromiumPath}`);
+  
+  console.error('❌ No se encontró ningún ejecutable de Chrome/Chromium');
+  console.error('📋 Paths verificados:', possiblePaths);
+  return null;
+}
+
+chromiumPath = findChromiumExecutable();
+
+if (!chromiumPath) {
+  console.error('');
+  console.error('🚨 ERROR CRÍTICO: No se puede inicializar WhatsApp sin Chrome');
+  console.error('');
+  console.error('Soluciones posibles:');
+  console.error('1. Asegúrate que el Build Command incluya: npx puppeteer browsers install chrome');
+  console.error('2. Verifica que puppeteer esté en package.json');
+  console.error('3. En Render, revisa los logs del build para errores de descarga');
+  console.error('');
 }
 
 
