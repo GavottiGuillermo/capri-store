@@ -1365,8 +1365,12 @@ async function verificarEstadoWhatsApp() {
   const clientState = whatsappStatus?.client_state || whatsappStatus?.state;
   const isNotInitialized = clientState === 'NOT_INITIALIZED';
   
+  // OPENING es un estado válido - significa que está autenticado y cargando la interfaz
+  const isConnectedOrOpening = clientState === 'CONNECTED' || clientState === 'OPENING';
+  
   const disponible = whatsappAvailable && 
                     !isNotInitialized && 
+                    isConnectedOrOpening &&
                     (serviceReady || tiempoDesdeUltimaConexion < 300);
   
   // Comprobación de sesión en base de datos eliminada (stateless/local only)
@@ -1378,6 +1382,7 @@ async function verificarEstadoWhatsApp() {
     razon: disponible ? 'Disponible' : 
            !whatsappAvailable ? 'Módulo no cargado' :
            isNotInitialized ? 'WhatsApp no inicializado (usa /whatsapp-regenerar-qr)' :
+           !isConnectedOrOpening ? `Estado no válido: ${clientState}` :
            !serviceReady && tiempoDesdeUltimaConexion >= 300 ? 'No autenticado y sin conexión reciente' :
            'Estado desconocido',
     tiempoDesdeUltimaConexion,

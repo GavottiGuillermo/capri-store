@@ -314,23 +314,34 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ✅ ENVIAR MENSAJE INMEDIATO AL ADMINISTRADOR tras conexión exitosa
+    // ✅ ENVIAR MENSAJE AL ADMINISTRADOR con delay para que WhatsApp termine de cargar
     if (ADMIN_WHATSAPP) {
-      try {
+      console.log('⏳ Esperando 30 segundos para que WhatsApp termine de cargar antes de enviar mensaje...');
+      setTimeout(async () => {
         const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
         const mensajeConexion = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n` +
           `✅ ${BUSINESS_NAME} está online\n` +
-          `🕐 ${timestamp}\n` +
+          `🕐 ${new Date().toLocaleString('es-AR')}\n` +
           `📱 Sistema operativo\n\n` +
           `Los clientes ya pueden contactarte por WhatsApp! 🛍️\n\n` +
           `_El sistema enviará mensajes cada 2 min para mantener la sesión activa_`;
         
-        console.log(`📱 Enviando mensaje de confirmación inmediato al admin...`);
-        await client.sendMessage(adminNumber, mensajeConexion);
-        console.log(`✅ Mensaje de confirmación enviado al administrador`);
-      } catch (mensajeError) {
-        console.error(`❌ Error enviando mensaje al admin:`, mensajeError.message);
-      }
+        // Intentar enviar con reintentos
+        for (let intento = 1; intento <= 3; intento++) {
+          try {
+            console.log(`📱 Enviando mensaje de confirmación al admin (intento ${intento}/3)...`);
+            await client.sendMessage(adminNumber, mensajeConexion);
+            console.log(`✅ Mensaje de confirmación enviado al administrador exitosamente`);
+            break; // Salir del loop si fue exitoso
+          } catch (mensajeError) {
+            console.error(`❌ Error enviando mensaje al admin (intento ${intento}/3):`, mensajeError.message);
+            if (intento < 3) {
+              console.log(`⏳ Esperando 10 segundos antes del siguiente intento...`);
+              await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+          }
+        }
+      }, 30000); // Esperar 30 segundos
     } else {
       console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
     }
