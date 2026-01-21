@@ -134,7 +134,7 @@ let whatsappClient = new Client({
   puppeteer: {
     headless: true,
     args: puppeteerArgs,
-    timeout: 60000,
+    timeout: 180000, // ⏰ 3 minutos - Render Free necesita más tiempo
     executablePath: chromiumPath, // Usar el path detectado
     handleSIGINT: false,
     handleSIGTERM: false,
@@ -145,9 +145,9 @@ let whatsappClient = new Client({
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
   },
   qrMaxRetries: 3,
-  authTimeoutMs: 60000,
+  authTimeoutMs: 180000, // ⏰ 3 minutos para autenticación en Render Free
   takeoverOnConflict: true,
-  takeoverTimeoutMs: 60000
+  takeoverTimeoutMs: 120000 // ⏰ 2 minutos para takeover
 });
 
 // ===============================
@@ -361,14 +361,70 @@ function registrarEventosWhatsApp(client) {
   });
   
   // Evento authenticated - Solo para logging, el evento 'ready' es el definitivo
-  client.on('authenticated', () => {
-    console.log('🔐 WhatsApp autenticado correctamente');
-    console.log('⏳ Esperando evento ready para confirmar conexión completa...');
+  client.on('authenticated', async () => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 🔐 WhatsApp autenticado correctamente`);
+    console.log(`[${timestamp}] ⏳ Esperando evento ready para confirmar conexión completa...`);
+    console.log(`[${timestamp}] ℹ️ Esto puede tomar 1-2 minutos en Render Free (recursos limitados)`);
+    console.log(`[${timestamp}] 🔄 WhatsApp está cargando la interfaz web...`);
     
     // Asegurarse de que isConnecting esté en true
     if (!isConnecting) {
       setIsConnecting(true);
+      console.log(`[${timestamp}] 🔒 isConnecting establecido a true`);
     }
+    
+    // 🛟 BACKUP: Si después de 2 minutos no hay evento ready, verificar manualmente
+    setTimeout(async () => {
+      if (!whatsappReady) {
+        const ts = new Date().toISOString();
+        console.log(`[${ts}] ⚠️ Han pasado 2 minutos desde authenticated y no hay evento ready`);
+        console.log(`[${ts}] 🔍 Verificando estado del cliente manualmente...`);
+        
+        try {
+          const state = await client.getState();
+          console.log(`[${ts}] 📊 Estado del cliente: ${state}`);
+          
+          if (state === 'CONNECTED') {
+            console.log(`[${ts}] ✅ Cliente CONECTADO - forzando activación manual`);
+            whatsappReady = true;
+            qrAttempts = 0;
+            setIsConnecting(false);
+            marcarConexionExitosa();
+            
+            // Enviar mensaje al admin
+            if (ADMIN_WHATSAPP) {
+              try {
+                const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
+                const mensaje = `🎉 *WHATSAPP CONECTADO* (activación manual)\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n\n_Conexión detectada manualmente después del timeout_`;
+                await client.sendMessage(adminNumber, mensaje);
+                console.log(`[${ts}] ✅ Mensaje de confirmación enviado al admin`);
+              } catch (err) {
+                console.error(`[${ts}] ❌ Error enviando mensaje:`, err.message);
+              }
+            }
+            
+            // Ejecutar callback de notificaciones pendientes
+            if (onWhatsAppReadyCallback) {
+              console.log(`[${ts}] 🔄 Ejecutando callback de notificaciones pendientes...`);
+              setImmediate(async () => {
+                try {
+                  await onWhatsAppReadyCallback();
+                } catch (error) {
+                  console.error(`[${ts}] ❌ Error en callback:`, error);
+                }
+              });
+            }
+          } else {
+            console.log(`[${ts}] ⚠️ Estado no es CONNECTED: ${state} - esperando más tiempo...`);
+          }
+        } catch (error) {
+          console.error(`[${ts}] ❌ Error verificando estado:`, error.message);
+        }
+      } else {
+        console.log(`[${new Date().toISOString()}] ✅ Evento ready ya se disparó correctamente`);
+      }
+    }, 120000); // 2 minutos
   });
   
   // Evento disconnected
@@ -478,7 +534,7 @@ async function inicializarWhatsApp() {
         puppeteer: {
           headless: true,
           args: puppeteerArgs,
-          timeout: 60000,
+          timeout: 180000, // ⏰ 3 minutos - Render Free necesita más tiempo
           executablePath: chromiumPath, // Usar el path detectado
           handleSIGINT: false,
           handleSIGTERM: false,
@@ -489,9 +545,9 @@ async function inicializarWhatsApp() {
           remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
         },
         qrMaxRetries: 3,
-        authTimeoutMs: 60000,
+        authTimeoutMs: 180000, // ⏰ 3 minutos para autenticación en Render Free
         takeoverOnConflict: true,
-        takeoverTimeoutMs: 60000
+        takeoverTimeoutMs: 120000 // ⏰ 2 minutos para takeover
       });
       
       // Registrar eventos
