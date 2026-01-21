@@ -1,6 +1,24 @@
 ﻿const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
+// Obtener el ejecutable de Chrome/Chromium (desde puppeteer o sistema)
+let chromiumPath;
+try {
+  const puppeteer = require('puppeteer');
+  chromiumPath = puppeteer.executablePath();
+  console.log(`✅ Chromium encontrado en: ${chromiumPath}`);
+} catch (error) {
+  // Si puppeteer no está instalado, buscar en el sistema
+  const os = require('os');
+  if (os.platform() === 'linux') {
+    // Render usa Linux y puede tener Chrome instalado
+    chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 
+                   '/usr/bin/google-chrome-stable' ||
+                   '/usr/bin/chromium-browser';
+  }
+  console.log(`⚠️ Puppeteer no disponible, usando path del sistema: ${chromiumPath}`);
+}
+
 
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
@@ -117,7 +135,7 @@ let whatsappClient = new Client({
     headless: true,
     args: puppeteerArgs,
     timeout: 60000,
-    executablePath: undefined,
+    executablePath: chromiumPath, // Usar el path detectado
     handleSIGINT: false,
     handleSIGTERM: false,
     handleSIGHUP: false
@@ -461,7 +479,7 @@ async function inicializarWhatsApp() {
           headless: true,
           args: puppeteerArgs,
           timeout: 60000,
-          executablePath: undefined,
+          executablePath: chromiumPath, // Usar el path detectado
           handleSIGINT: false,
           handleSIGTERM: false,
           handleSIGHUP: false
