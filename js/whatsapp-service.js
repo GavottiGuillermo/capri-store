@@ -330,7 +330,20 @@ function registrarEventosWhatsApp(client) {
         for (let intento = 1; intento <= 3; intento++) {
           try {
             console.log(`📱 Enviando mensaje de confirmación al admin (intento ${intento}/3)...`);
-            await client.sendMessage(adminNumber, mensajeConexion);
+            
+            // 🔧 SOLUCIÓN: Obtener el número como contacto primero
+            console.log(`🔍 Verificando número de contacto: ${adminNumber}`);
+            const numberId = await client.getNumberId(ADMIN_WHATSAPP);
+            
+            if (!numberId) {
+              console.error(`❌ Número ${ADMIN_WHATSAPP} no es válido o no está en WhatsApp`);
+              break;
+            }
+            
+            console.log(`✅ Número válido encontrado: ${numberId._serialized}`);
+            
+            // Enviar mensaje usando el ID verificado
+            await client.sendMessage(numberId._serialized, mensajeConexion);
             console.log(`✅ Mensaje de confirmación enviado al administrador exitosamente`);
             break; // Salir del loop si fue exitoso
           } catch (mensajeError) {
@@ -470,10 +483,16 @@ function registrarEventosWhatsApp(client) {
             // Enviar mensaje al admin
             if (ADMIN_WHATSAPP) {
               try {
-                const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
-                const mensaje = `🎉 *WHATSAPP CONECTADO* (activación manual)\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n\n_Conexión detectada manualmente después del timeout_`;
-                await client.sendMessage(adminNumber, mensaje);
-                console.log(`[${ts}] ✅ Mensaje de confirmación enviado al admin`);
+                console.log(`[${ts}] 📱 Enviando mensaje al admin tras activación manual...`);
+                const numberId = await client.getNumberId(ADMIN_WHATSAPP);
+                
+                if (numberId) {
+                  const mensaje = `🎉 *WHATSAPP CONECTADO* (activación manual)\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n\n_Conexión detectada manualmente después del timeout_`;
+                  await client.sendMessage(numberId._serialized, mensaje);
+                  console.log(`[${ts}] ✅ Mensaje de confirmación enviado al admin`);
+                } else {
+                  console.error(`[${ts}] ❌ Número admin no válido: ${ADMIN_WHATSAPP}`);
+                }
               } catch (err) {
                 console.error(`[${ts}] ❌ Error enviando mensaje:`, err.message);
               }
