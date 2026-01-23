@@ -451,7 +451,8 @@ function registrarEventosWhatsApp(client) {
       
       // ✅ ENVIAR MENSAJE AL ADMIN - Esperar más tiempo para que WhatsApp termine de sincronizar
       if (ADMIN_WHATSAPP && state === 'CONNECTED') {
-        console.log('📱 Programando mensaje de confirmación (espera 15s para sincronización completa)...');
+        console.log('📱 Programando mensaje de confirmación (espera 60s para sincronización completa)...');
+        console.log('⏳ WhatsApp necesita tiempo para sincronizar mensajes y contactos en segundo plano');
         setTimeout(async () => {
           try {
             // Verificar que todavía estamos conectados
@@ -461,13 +462,13 @@ function registrarEventosWhatsApp(client) {
               return;
             }
             
-            console.log('📤 Obteniendo ID del número administrador...');
+            console.log('📤 [1 min después] Obteniendo ID del número administrador...');
             const numberId = await client.getNumberId(ADMIN_WHATSAPP);
             if (numberId) {
               const mensaje = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n📱 Sistema operativo\n\nLos clientes ya pueden contactarte por WhatsApp! 🛍️`;
               console.log('📨 Enviando mensaje al administrador...');
               await client.sendMessage(numberId._serialized, mensaje);
-              console.log('✅ Mensaje de confirmación enviado exitosamente al administrador');
+              console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
             } else {
               console.log('⚠️ No se pudo obtener el ID del número administrador');
             }
@@ -475,7 +476,7 @@ function registrarEventosWhatsApp(client) {
             console.error('❌ Error enviando mensaje al admin:', err.message);
             console.error('📋 Stack:', err.stack);
           }
-        }, 15000); // 15 segundos para que WhatsApp termine de sincronizar completamente
+        }, 60000); // 60 segundos (1 minuto) para que WhatsApp termine de sincronizar completamente
       }
     } catch (infoError) {
       console.log('⚠️ No se pudo obtener info del estado');
