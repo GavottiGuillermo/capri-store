@@ -448,6 +448,23 @@ function registrarEventosWhatsApp(client) {
       console.log(`🗄️ Autenticación: ${authInfo}`);
       console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
       console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+      
+      // ✅ ENVIAR MENSAJE AL ADMIN ahora que está completamente conectado
+      if (ADMIN_WHATSAPP && state === 'CONNECTED') {
+        console.log('📱 Enviando mensaje de confirmación al administrador...');
+        setTimeout(async () => {
+          try {
+            const numberId = await client.getNumberId(ADMIN_WHATSAPP);
+            if (numberId) {
+              const mensaje = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n📱 Sistema operativo\n\nLos clientes ya pueden contactarte por WhatsApp! 🛍️`;
+              await client.sendMessage(numberId._serialized, mensaje);
+              console.log('✅ Mensaje de confirmación enviado al administrador');
+            }
+          } catch (err) {
+            console.error('❌ Error enviando mensaje al admin:', err.message);
+          }
+        }, 5000); // 5 segundos después de mostrar el banner
+      }
     } catch (infoError) {
       console.log('⚠️ No se pudo obtener info del estado');
     }
@@ -512,12 +529,13 @@ function registrarEventosWhatsApp(client) {
   });
   
   // Evento disconnected
-  client.on('disconnected', (reason) => {
+  client.on('disconnected', async (reason) => {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ⚠️ WhatsApp desconectado - Razón: ${reason}`);
     console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
     whatsappReady = false;
     qrGenerated = false;
+    readyEventCount = 0; // Resetear contador de ready
     setIsConnecting(false); // 🔓 Desbloquear si se desconecta
     
     console.log('\n========================================');
@@ -532,9 +550,63 @@ function registrarEventosWhatsApp(client) {
     console.log('');
     console.log('========================================\n');
     
-    // Si la desconexión es por sesión inválida, avisar
+    // 🧹 LIMPIEZA CRÍTICA: Si es LOGOUT o NAVIGATION, destruir cliente y recrear desde cero
     if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
-      console.log(`[${timestamp}] ⚠️ Sesión perdida - Se necesitará escanear QR nuevamente`);
+      console.log(`[${timestamp}] 🧹 Sesión perdida - LIMPIANDO cliente completamente...`);
+      
+      try {
+        // Destruir cliente antiguo
+        if (whatsappClient) {
+          console.log(`[${timestamp}] 🗑️ Destruyendo cliente antiguo...`);
+          await whatsappClient.destroy();
+          console.log(`[${timestamp}] ✅ Cliente destruido`);
+        }
+        
+        // Resetear variable
+        whatsappClient = null;
+        
+        // Esperar 2 segundos antes de recrear
+        console.log(`[${timestamp}] ⏳ Esperando 2 segundos antes de recrear...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Recrear cliente desde cero
+        console.log(`[${timestamp}] 🆕 Recreando cliente WhatsApp desde cero...`);
+        const { LocalAuth } = require('whatsapp-web.js');
+        const path = require('path');
+        const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+        
+        whatsappClient = new Client({
+          authStrategy: new LocalAuth({
+            clientId: 'capri-store-session',
+            dataPath: authPath
+          }),
+          puppeteer: {
+            headless: true,
+            args: puppeteerArgs,
+            timeout: 180000,
+            executablePath: chromiumPath,
+            handleSIGINT: false,
+            handleSIGTERM: false,
+            handleSIGHUP: false
+          },
+          webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+          },
+          qrMaxRetries: 3,
+          authTimeoutMs: 180000,
+          takeoverOnConflict: true,
+          takeoverTimeoutMs: 120000
+        });
+        
+        // Re-registrar eventos
+        registrarEventosWhatsApp(whatsappClient);
+        console.log(`[${timestamp}] ✅ Cliente recreado - listo para nueva inicialización`);
+        
+      } catch (cleanupError) {
+        console.error(`[${timestamp}] ❌ Error en limpieza:`, cleanupError.message);
+      }
+      
       return;
     }
     
@@ -546,9 +618,12 @@ function registrarEventosWhatsApp(client) {
     }
   });
   
-  // Evento loading_screen
+  // Evento loading_screen - Solo mostrar antes del evento ready
   client.on('loading_screen', (percent, message) => {
-    console.log('📱 Cargando WhatsApp:', percent + '%', message);
+    // No mostrar loading después de que ready se disparó (WhatsApp sigue sincronizando en background)
+    if (!whatsappReady) {
+      console.log('📱 Cargando WhatsApp:', percent + '%', message);
+    }
   });
 
   
@@ -1174,6 +1249,10 @@ function getIsConnecting() {
   return isConnecting;
 }
 
+function getWhatsAppClient() {
+  return whatsappClient;
+}
+
 module.exports = {
   whatsappClient,
   inicializarWhatsApp,
@@ -1187,6 +1266,7 @@ module.exports = {
   marcarConexionExitosa,
   setWhatsAppReady,
   getWhatsAppReady,
+  getWhatsAppClient, // ✅ Exportar función para obtener cliente
   getIsConnecting,
   setIsConnecting,
   setOnWhatsAppReadyCallback,
