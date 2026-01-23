@@ -314,9 +314,11 @@ function registrarEventosWhatsApp(client) {
     qrAttempts = 0;
     console.log('✅ Contador de QR reseteado - conexión exitosa');
     
-    // ✅ ENVIAR MENSAJE AL ADMINISTRADOR con delay para que WhatsApp termine de cargar
+    // ✅ OPCIONAL: Enviar mensaje al administrador (deshabilitado por defecto)
+    // Si quieres recibir notificación, descomenta el código siguiente
+    /* 
     if (ADMIN_WHATSAPP) {
-      console.log('⏳ Esperando 30 segundos para que WhatsApp termine de cargar antes de enviar mensaje...');
+      console.log('⏳ Esperando 60 segundos para que WhatsApp termine de cargar (100%) antes de enviar mensaje...');
       setTimeout(async () => {
         const adminNumber = ADMIN_WHATSAPP.includes('@c.us') ? ADMIN_WHATSAPP : `${ADMIN_WHATSAPP}@c.us`;
         const mensajeConexion = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n` +
@@ -331,7 +333,7 @@ function registrarEventosWhatsApp(client) {
           try {
             console.log(`📱 Enviando mensaje de confirmación al admin (intento ${intento}/3)...`);
             
-            // 🔧 SOLUCIÓN: Obtener el número como contacto primero
+            // Verificar número primero
             console.log(`🔍 Verificando número de contacto: ${adminNumber}`);
             const numberId = await client.getNumberId(ADMIN_WHATSAPP);
             
@@ -354,10 +356,13 @@ function registrarEventosWhatsApp(client) {
             }
           }
         }
-      }, 30000); // Esperar 30 segundos
-    } else {
-      console.warn('⚠️ ADMIN_WHATSAPP no configurado - no se envió mensaje de confirmación');
+      }, 60000); // Esperar 60 segundos para que WhatsApp cargue 100%
     }
+    */
+    
+    // Log simple sin enviar mensaje
+    console.log(`💡 WhatsApp conectado - Admin: ${ADMIN_WHATSAPP || 'No configurado'}`);
+    console.log(`📊 El sistema procesará notificaciones de compras automáticamente`);
     
     /* DESHABILITADO: Guardado de sesión y mensaje inmediato
     // ⏳ ESPERA DINÁMICA: Verificar cada 2s si la sesión se guardó (máx 120s)
@@ -480,23 +485,8 @@ function registrarEventosWhatsApp(client) {
             setIsConnecting(false);
             marcarConexionExitosa();
             
-            // Enviar mensaje al admin
-            if (ADMIN_WHATSAPP) {
-              try {
-                console.log(`[${ts}] 📱 Enviando mensaje al admin tras activación manual...`);
-                const numberId = await client.getNumberId(ADMIN_WHATSAPP);
-                
-                if (numberId) {
-                  const mensaje = `🎉 *WHATSAPP CONECTADO* (activación manual)\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n\n_Conexión detectada manualmente después del timeout_`;
-                  await client.sendMessage(numberId._serialized, mensaje);
-                  console.log(`[${ts}] ✅ Mensaje de confirmación enviado al admin`);
-                } else {
-                  console.error(`[${ts}] ❌ Número admin no válido: ${ADMIN_WHATSAPP}`);
-                }
-              } catch (err) {
-                console.error(`[${ts}] ❌ Error enviando mensaje:`, err.message);
-              }
-            }
+            // Log simple - no enviar mensaje
+            console.log(`[${ts}] 💡 WhatsApp conectado vía activación manual - Admin: ${ADMIN_WHATSAPP || 'No configurado'}`);
             
             // Ejecutar callback de notificaciones pendientes
             if (onWhatsAppReadyCallback) {
