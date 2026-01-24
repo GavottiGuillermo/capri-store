@@ -466,16 +466,10 @@ function registrarEventosWhatsApp(client) {
             const numberId = await client.getNumberId(ADMIN_WHATSAPP);
             if (numberId) {
               console.log('✅ Número ID obtenido:', numberId._serialized);
-              
-              // Primero, obtener o crear el chat
-              console.log('💬 Obteniendo chat del administrador...');
-              const chat = await client.getChatById(numberId._serialized);
-              console.log('✅ Chat obtenido correctamente');
-              
-              // Enviar mensaje a través del chat
+
               const mensaje = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n📱 Sistema operativo\n\nLos clientes ya pueden contactarte por WhatsApp! 🛍️`;
-              console.log('📨 Enviando mensaje al administrador...');
-              await chat.sendMessage(mensaje);
+              console.log('📨 Enviando mensaje al administrador directamente con client.sendMessage...');
+              await client.sendMessage(numberId._serialized, mensaje);
               console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
             } else {
               console.log('⚠️ No se pudo obtener el ID del número administrador');
@@ -811,12 +805,9 @@ async function enviarWhatsApp(numero, mensaje) {
     const numeroFormateado = numero.includes('@') ? numero : `${numero}@c.us`;
     console.log(`[${timestamp}] 📱 Número formateado: ${numeroFormateado}`);
     
-    // Enviar mensaje
-    console.log(`[${timestamp}] 🚀 Obteniendo chat y enviando mensaje...`);
-    const chat = await whatsappClient.getChatById(numeroFormateado);
-    console.log(`[${timestamp}] ✅ Chat obtenido, enviando mensaje...`);
-    
-    const messageResult = await chat.sendMessage(mensaje);
+    // Enviar mensaje directamente con client para evitar inconsistencias en chats sin sincronizar
+    console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage...`);
+    const messageResult = await whatsappClient.sendMessage(numeroFormateado, mensaje);
     console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
     
     // Mejorar el logging del messageId para evitar [object Object]
