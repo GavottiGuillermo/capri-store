@@ -213,7 +213,7 @@ async function enviarMensajeConfirmacionAdmin(client) {
       console.warn('⚠️ Chat del administrador aún no está completamente hidratado (faltan datos de msgs)');
     } else {
       try {
-        await client.sendMessage(numberId._serialized, message);
+        await client.sendMessage(numberId._serialized, message, { sendSeen: false });
         console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
         return;
       } catch (error) {
