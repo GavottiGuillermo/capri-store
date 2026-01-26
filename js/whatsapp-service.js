@@ -99,6 +99,9 @@ let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
 
+const ADMIN_MESSAGE_MAX_RETRIES = 3;
+const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
+
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
 let lastCallbackExecution = 0;
@@ -134,6 +137,14 @@ function getIsConnecting() {
   return isConnecting;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function chatHasUnreadState(chat) {
+  return Boolean(chat && chat.msgs && typeof chat.msgs.markedUnread !== 'undefined');
+}
+
 
 // Hidratar chats para evitar errores internos (markedUnread undefined)
 async function ensureChatHydrated(client, chatId) {
@@ -151,11 +162,73 @@ async function ensureChatHydrated(client, chatId) {
         console.warn(`[${ts}] ⚠️ Error en fetchMessages para ${chatId}: ${err.message}`);
       });
     }
+    if (!chat.msgs) {
+      chat.msgs = { markedUnread: false };
+    } else if (typeof chat.msgs.markedUnread === 'undefined') {
+      chat.msgs.markedUnread = false;
+    }
     return chat;
   } catch (error) {
     console.warn(`[${ts}] ⚠️ Error hidratando chat ${chatId}: ${error.message}`);
     return null;
   }
+}
+
+async function enviarMensajeConfirmacionAdmin(client) {
+  if (!ADMIN_WHATSAPP) {
+    console.log('⚠️ ADMIN_WHATSAPP no está configurado; se omite la notificación');
+    return;
+  }
+
+  console.log('📱 Enviando mensaje de confirmación al administrador (controlado con reintentos)...');
+
+  const message = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n📱 Sistema operativo\n\nLos clientes ya pueden contactarte por WhatsApp! 🛍️`;
+
+  let numberId;
+  try {
+    console.log('📤 Obteniendo ID del número administrador...');
+    numberId = await client.getNumberId(ADMIN_WHATSAPP);
+  } catch (error) {
+    console.error('❌ Error obteniendo el ID del número administrador:', error.message);
+    return;
+  }
+
+  if (!numberId) {
+    console.warn('⚠️ No se pudo obtener el ID del número administrador');
+    return;
+  }
+
+  console.log('✅ Número ID obtenido:', numberId._serialized);
+
+  for (let attempt = 1; attempt <= ADMIN_MESSAGE_MAX_RETRIES; attempt += 1) {
+    const state = await client.getState().catch(() => null);
+    if (state !== 'CONNECTED') {
+      console.warn(`⚠️ Cliente dejó de estar CONNECTED antes de enviar el mensaje (estado actual: ${state})`);
+      return;
+    }
+
+    console.log(`📨 Intento ${attempt}/${ADMIN_MESSAGE_MAX_RETRIES} de enviar mensaje al administrador...`);
+    const chat = await ensureChatHydrated(client, numberId._serialized);
+    if (!chatHasUnreadState(chat)) {
+      console.warn('⚠️ Chat del administrador aún no está completamente hidratado (faltan datos de msgs)');
+    } else {
+      try {
+        await client.sendMessage(numberId._serialized, message);
+        console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
+        return;
+      } catch (error) {
+        console.error('❌ Error enviando mensaje al admin:', error.message);
+        console.error('📋 Stack:', error.stack);
+      }
+    }
+
+    if (attempt < ADMIN_MESSAGE_MAX_RETRIES) {
+      console.log(`⏳ Reintentando en ${ADMIN_MESSAGE_RETRY_DELAY_MS / 1000} segundos...`);
+      await sleep(ADMIN_MESSAGE_RETRY_DELAY_MS);
+    }
+  }
+
+  console.error('❌ No se pudo enviar el mensaje de confirmación al administrador tras agotar los reintentos');
 }
 
 
@@ -474,32 +547,8 @@ function registrarEventosWhatsApp(client) {
       console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
       
       // ✅ ENVIAR MENSAJE AL ADMIN - Esperar más tiempo para que WhatsApp termine de sincronizar
-      if (ADMIN_WHATSAPP && state === 'CONNECTED') {
-        console.log('📱 Enviando mensaje de confirmación al administrador (sin espera adicional)...');
-        try {
-          const currentState = await client.getState();
-          if (currentState !== 'CONNECTED') {
-            console.log('⚠️ Cliente ya no está CONNECTED, cancelando mensaje al admin');
-            return;
-          }
-
-          console.log('📤 Obteniendo ID del número administrador...');
-          const numberId = await client.getNumberId(ADMIN_WHATSAPP);
-          if (numberId) {
-            console.log('✅ Número ID obtenido:', numberId._serialized);
-            await ensureChatHydrated(client, numberId._serialized);
-
-            const mensaje = `🎉 *WHATSAPP CONECTADO EXITOSAMENTE*\n\n✅ ${BUSINESS_NAME} está online\n🕐 ${new Date().toLocaleString('es-AR')}\n📱 Sistema operativo\n\nLos clientes ya pueden contactarte por WhatsApp! 🛍️`;
-            console.log('📨 Enviando mensaje al administrador directamente con client.sendMessage...');
-            await client.sendMessage(numberId._serialized, mensaje);
-            console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
-          } else {
-            console.log('⚠️ No se pudo obtener el ID del número administrador');
-          }
-        } catch (err) {
-          console.error('❌ Error enviando mensaje al admin:', err.message);
-          console.error('📋 Stack:', err.stack);
-        }
+      if (state === 'CONNECTED') {
+        await enviarMensajeConfirmacionAdmin(client);
       }
     } catch (infoError) {
       console.log('⚠️ No se pudo obtener info del estado');
