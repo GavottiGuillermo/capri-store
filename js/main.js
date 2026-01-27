@@ -393,14 +393,9 @@ async function renderizarProductos() {
     seccion.id = `categoria-${categoria}`;
 
     const header = document.createElement('div');
-    header.className = 'd-flex justify-content-between align-items-center flex-wrap';
-    header.style.gap = '0.75rem';
+    header.className = 'categoria-encabezado';
     header.innerHTML = `
-      <div>
-        <p class="text-uppercase text-muted mb-2 small">Categoría</p>
-        <h3 class="text-vino-tinto font-weight-bold mb-0">${formatearNombreCategoria(categoria)}</h3>
-      </div>
-      <a class="btn btn-outline-vino-tinto btn-sm" href="#categorias-nav">Volver a categorías</a>
+      <h3 class="text-vino-tinto font-weight-bold mb-0">${formatearNombreCategoria(categoria)}</h3>
     `;
 
     const row = document.createElement('div');

@@ -133,18 +133,10 @@
     }
     .category-chip-group {
       display: flex;
-      flex-wrap: nowrap;
-      gap: 0.5rem;
-      overflow-x: auto;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
       padding: 0.75rem 0;
-      scrollbar-width: thin;
-    }
-    .category-chip-group::-webkit-scrollbar {
-      height: 6px;
-    }
-    .category-chip-group::-webkit-scrollbar-thumb {
-      background-color: rgba(107,10,10,0.3);
-      border-radius: 999px;
     }
     .category-chip {
       background-color: var(--color-acento);
@@ -176,6 +168,9 @@
       padding-bottom: 2.5rem;
       margin-bottom: 2.5rem;
     }
+    .categoria-encabezado {
+      margin-bottom: 1.5rem;
+    }
     .categoria-section:last-child {
       border-bottom: none;
       padding-bottom: 0;
@@ -205,7 +200,6 @@
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ml-auto font-weight-bold">
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#novedades">Novedades</a></li>
-          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#categorias-nav">Categorías</a></li>
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#contacto">Contacto</a></li>
           <li class="nav-item"><a class="nav-link" href="#" id="link-refrescar">Refrescar stock</a></li>
           <li class="nav-item">
@@ -237,9 +231,6 @@
       <p class="text-rosado lead mb-4">
         Moda femenina con estilo único en vino tinto, blanco y rosado. ¡Descubrí tu look ideal!
       </p>
-      <a class="btn btn-rosado btn-lg font-weight-bold px-5 py-3 micro-bounce glow-on-hover js-scroll-trigger" href="#categorias-nav">
-        Ver Productos
-      </a>
     </div>
   </section>
 
@@ -255,8 +246,7 @@
   <section class="bg-light main-section product-container py-5" id="productos">
     <div class="container">
       <div class="text-center mb-5">
-        <h2 class="text-vino-tinto display-5 font-weight-bold mb-3 section-title categoria-titulo">Colecciones Capri</h2>
-        <p class="lead text-muted mb-0">Explorá todas las categorías disponibles sin cambiar de vista.</p>
+        <h2 class="text-vino-tinto display-5 font-weight-bold mb-0 section-title categoria-titulo">Productos</h2>
       </div>
       <div id="productos-list">
         <!-- Aquí se insertan las secciones dinámicamente -->
@@ -304,17 +294,10 @@
         
         <!-- Información adicional -->
         <div class="mt-5 pt-4 border-top border-secondary">
-          <div class="row">
-            <div class="col-md-6">
-              <h5><i class="fas fa-clock mr-2"></i>Horarios de Atención</h5>
-              <p class="mb-2">Lunes a Viernes: 9:00 - 18:00</p>
-              <p class="mb-0">Sábados: 9:00 - 13:00</p>
-            </div>
-            <div class="col-md-6">
-              <h5><i class="fas fa-map-marker-alt mr-2"></i>Ubicación</h5>
-              <p class="mb-0">Zárate, Buenos Aires</p>
-              <p class="mb-0">Argentina</p>
-            </div>
+          <div class="text-center">
+            <h5><i class="fas fa-map-marker-alt mr-2"></i>Ubicación</h5>
+            <p class="mb-0">Zárate, Buenos Aires</p>
+            <p class="mb-0">Argentina</p>
           </div>
           
           <div class="mt-4">
@@ -330,13 +313,8 @@
 
   <!-- Footer -->
   <footer class="bg-vino-tinto text-white py-4 mt-auto">
-    <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center text-sm">
-      <p class="mb-2 mb-md-0">© 2024 Capri Store. Todos los derechos reservados.</p>
-      <div>
-        <a aria-label="Facebook" class="text-white mx-2" href="#"><i class="fab fa-facebook-f"></i></a>
-        <a aria-label="Instagram" class="text-white mx-2" href="#"><i class="fab fa-instagram"></i></a>
-        <a aria-label="Twitter" class="text-white mx-2" href="#"><i class="fab fa-twitter"></i></a>
-      </div>
+    <div class="container d-flex flex-column flex-md-row justify-content-center align-items-center text-sm">
+      <p class="mb-0 text-center">© 2024 Capri Store. Todos los derechos reservados.</p>
     </div>
   </footer>
 
