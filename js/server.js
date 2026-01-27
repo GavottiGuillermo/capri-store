@@ -127,6 +127,29 @@ const app = express();
 // Almacén en memoria para notificaciones de webhook
 const webhookNotifications = new Map();
 
+// API key para apps móviles que consultan notificaciones pendientes
+const MOBILE_NOTIFICATION_API_KEY = process.env.MOBILE_NOTIFICATION_API_KEY || process.env.NOTIFICATION_MOBILE_KEY;
+
+function extraerApiKey(req) {
+  const authHeader = req.headers['authorization'] || '';
+  if (authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return (req.headers['x-api-key'] || req.query.apiKey || req.query.api_key || '').toString().trim();
+}
+
+function requireMobileApiKey(req, res, next) {
+  if (!MOBILE_NOTIFICATION_API_KEY) {
+    console.error('❌ MOBILE_NOTIFICATION_API_KEY no configurada. Bloqueando acceso controlado.');
+    return res.status(503).json({ error: 'Notificaciones móviles no habilitadas' });
+  }
+  const providedKey = extraerApiKey(req);
+  if (!providedKey || providedKey !== MOBILE_NOTIFICATION_API_KEY) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  return next();
+}
+
 // ===============================
 // CONFIGURACIÓN BÁSICA
 // ===============================
@@ -348,6 +371,59 @@ async function executeQueryWithRetry(poolInstance, query, params = [], maxRetrie
   }
 
   throw lastError || new Error('executeQueryWithRetry terminó sin resultado ni error');
+}
+
+function agruparPedidosPendientes(rows = []) {
+  const pedidos = new Map();
+  rows.forEach(row => {
+    const key = row.mp_payment_id || row.id_pedido || `${row.pedido_nombre_cliente || 'cliente'}-${row.pedido_fecha?.toISOString?.() || row.pedido_fecha}`;
+    if (!pedidos.has(key)) {
+      pedidos.set(key, {
+        mp_payment_id: row.mp_payment_id,
+        id_pedido: row.id_pedido,
+        cliente: row.pedido_nombre_cliente,
+        telefono: row.pedido_telefono_cliente,
+        monto_total: Number(row.pedido_monto_total) || 0,
+        fecha: row.pedido_fecha,
+        tipo_entrega: row.pedido_tipo_entrega,
+        productos: []
+      });
+    }
+    pedidos.get(key).productos.push({
+      nombre: row.prenda,
+      categoria: row.categoria,
+      color: row.color,
+      talle: row.talle,
+      precio_transferencia: row.precio_venta_transferencia,
+      precio_efectivo: row.precio_venta_efectivo
+    });
+  });
+
+  return Array.from(pedidos.values()).map(p => ({
+    ...p,
+    productos: agruparProductosIdenticos(p.productos)
+  }));
+}
+
+function agruparProductosIdenticos(productos = []) {
+  const agrupados = new Map();
+  productos.forEach(prod => {
+    const key = `${prod.nombre}-${prod.color}-${prod.talle}`;
+    if (agrupados.has(key)) {
+      agrupados.get(key).cantidad += 1;
+    } else {
+      agrupados.set(key, {
+        nombre: prod.nombre,
+        categoria: prod.categoria,
+        color: prod.color,
+        talle: prod.talle,
+        cantidad: 1,
+        precio_transferencia: prod.precio_transferencia,
+        precio_efectivo: prod.precio_efectivo
+      });
+    }
+  });
+  return Array.from(agrupados.values());
 }
 
 // ===============================
@@ -1616,6 +1692,57 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
     console.error(`[${timestamp}] ❌ Error en procesarNotificacionesPendientes:`, error.message);
   }
 }
+
+app.get('/api/notificaciones-pendientes', requireMobileApiKey, async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Base de datos no disponible' });
+  }
+
+  const maxLimit = 100;
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 25, maxLimit));
+  const windowHoursMax = 24 * 14; // 2 semanas
+  const windowHours = Math.max(1, Math.min(parseInt(req.query.horas, 10) || 72, windowHoursMax));
+  const sinceDate = new Date(Date.now() - windowHours * 60 * 60 * 1000);
+
+  try {
+    const pendientes = await executeQueryWithRetry(
+      pool,
+      `SELECT
+        p.mp_payment_id,
+        p.id_pedido,
+        p.pedido_nombre_cliente,
+        p.pedido_telefono_cliente,
+        p.pedido_monto_total,
+        p.pedido_fecha,
+        p.pedido_tipo_entrega,
+        p.prenda,
+        p.categoria,
+        p.color,
+        p.talle,
+        p.precio_venta_transferencia,
+        p.precio_venta_efectivo
+       FROM productos p
+       WHERE p.estado ILIKE '%Pendiente%'
+         AND (p.whatsapp_notificado = 'False' OR p.whatsapp_notificado IS NULL)
+         AND p.pedido_fecha >= $1
+       ORDER BY p.pedido_fecha ASC
+       LIMIT $2`,
+      [sinceDate, limit]
+    );
+
+    const orders = agruparPedidosPendientes(pendientes.rows);
+    return res.json({
+      checked_at: new Date().toISOString(),
+      pending: orders.length,
+      window_hours: windowHours,
+      limit,
+      orders
+    });
+  } catch (error) {
+    console.error('❌ Error consultando notificaciones pendientes (API móvil):', error.message);
+    return res.status(500).json({ error: 'No se pudo consultar la información' });
+  }
+});
 
 // Función para actualizar el estado de notificación WhatsApp
 async function actualizarEstadoWhatsApp(paymentId, estado) {
