@@ -880,7 +880,7 @@ async function enviarWhatsApp(numero, mensaje) {
 
     // Enviar mensaje directamente con client para evitar inconsistencias en chats sin sincronizar
     console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage...`);
-    const messageResult = await whatsappClient.sendMessage(numeroFormateado, mensaje);
+    const messageResult = await whatsappClient.sendMessage(numeroFormateado, mensaje, { sendSeen: false });
     console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
     
     // Mejorar el logging del messageId para evitar [object Object]
