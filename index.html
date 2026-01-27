@@ -123,6 +123,72 @@
     .cart-item {
       animation: fadeInLeft 0.3s ease-out;
     }
+    .category-bar {
+      position: sticky;
+      top: 64px;
+      z-index: 998;
+      background-color: #fff;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+    }
+    .category-chip-group {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding: 0.75rem 0;
+      scrollbar-width: thin;
+    }
+    .category-chip-group::-webkit-scrollbar {
+      height: 6px;
+    }
+    .category-chip-group::-webkit-scrollbar-thumb {
+      background-color: rgba(107,10,10,0.3);
+      border-radius: 999px;
+    }
+    .category-chip {
+      background-color: var(--color-acento);
+      color: var(--vino-tinto);
+      border: 1px solid rgba(107,10,10,0.2);
+      border-radius: 999px;
+      padding: 0.4rem 1.1rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+    }
+    .category-chip:hover,
+    .category-chip:focus {
+      text-decoration: none;
+      background-color: var(--vino-tinto);
+      color: #fff;
+      border-color: var(--vino-tinto);
+    }
+    .category-chip.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .categoria-section {
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      padding-bottom: 2.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .categoria-section:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
+    @media (max-width: 991.98px) {
+      .category-bar {
+        top: 56px;
+      }
+      .category-chip-group {
+        flex-wrap: wrap;
+      }
+    }
   </style>
 </head>
 <body class="bg-white text-vino">
@@ -139,26 +205,7 @@
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ml-auto font-weight-bold">
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#novedades">Novedades</a></li>
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="productosDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-              Productos
-            </a>
-            <div class="dropdown-menu bg-vino-tinto border-rosado" aria-labelledby="productosDropdown">
-              <a class="dropdown-item text-white" href="#" data-categoria="todos" id="menu-todos">Todos los Productos</a>
-              <div class="dropdown-divider bg-rosado"></div>
-              <a class="dropdown-item text-white" href="#" data-categoria="Accesorios" id="menu-accesorios">Accesorios</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Bodys" id="menu-bodys">Bodys</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Conjuntos" id="menu-conjuntos">Conjuntos</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Minis" id="menu-minis">Minis</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Pantalones" id="menu-pantalones">Pantalones</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Polleras" id="menu-polleras">Polleras</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Remeras" id="menu-remeras">Remeras</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Shorts" id="menu-shorts">Shorts</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Tops" id="menu-tops">Tops</a>
-              <a class="dropdown-item text-white" href="#" data-categoria="Vestidos" id="menu-vestidos">Vestidos</a>
-            </div>
-          </li>
-          
+          <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#categorias-nav">Categorías</a></li>
           <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#contacto">Contacto</a></li>
           <li class="nav-item"><a class="nav-link" href="#" id="link-refrescar">Refrescar stock</a></li>
           <li class="nav-item">
@@ -172,6 +219,14 @@
     </div>
   </nav>
 
+  <div id="categorias-nav" class="category-bar shadow-sm">
+    <div class="container">
+      <div class="category-chip-group" data-category-links>
+        <!-- Links de categorías inyectados dinámicamente -->
+      </div>
+    </div>
+  </div>
+
   <!-- Hero -->
   <section class="position-relative bg-white">
     <img alt="Capri Store Hero" class="w-100" style="max-height:500px; object-fit:cover;" height="500" loading="lazy" src="https://storage.googleapis.com/a1aa/image/20cad6ef-cea8-4094-b9b4-a78445a422a2.jpg" width="1200"/>
@@ -182,7 +237,7 @@
       <p class="text-rosado lead mb-4">
         Moda femenina con estilo único en vino tinto, blanco y rosado. ¡Descubrí tu look ideal!
       </p>
-      <a class="btn btn-rosado btn-lg font-weight-bold px-5 py-3 micro-bounce glow-on-hover js-scroll-trigger" href="#productos">
+      <a class="btn btn-rosado btn-lg font-weight-bold px-5 py-3 micro-bounce glow-on-hover js-scroll-trigger" href="#categorias-nav">
         Ver Productos
       </a>
     </div>
@@ -199,9 +254,12 @@
   </section>
   <section class="bg-light main-section product-container py-5" id="productos">
     <div class="container">
-      <h2 class="text-vino-tinto display-5 font-weight-bold mb-5 text-center section-title categoria-titulo" id="titulo-productos">Productos</h2>
-      <div class="row" id="productos-list">
-        <!-- Aquí se insertan los productos dinámicamente -->
+      <div class="text-center mb-5">
+        <h2 class="text-vino-tinto display-5 font-weight-bold mb-3 section-title categoria-titulo">Colecciones Capri</h2>
+        <p class="lead text-muted mb-0">Explorá todas las categorías disponibles sin cambiar de vista.</p>
+      </div>
+      <div id="productos-list">
+        <!-- Aquí se insertan las secciones dinámicamente -->
       </div>
     </div>
   </section>

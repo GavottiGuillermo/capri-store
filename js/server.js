@@ -1567,7 +1567,8 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         
         const orderData = {
           numeroDisplay: pedido.id_pedido?.slice(-2) || '??',
-          idPedidoCompleto: pedido.id_pedido
+          idPedidoCompleto: pedido.id_pedido,
+          fechaPago: pedido.pedido_fecha
         };
         
         const paymentInfo = {
@@ -1721,14 +1722,25 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
   console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
     
-    const fechaHora = new Date().toLocaleString('es-AR', {
+    const fechaOptions = {
       timeZone: 'America/Argentina/Buenos_Aires',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit'
-    });
+    };
+    const fechaReferenciaCruda = orderData?.fechaPago || paymentInfo?.date_approved || paymentInfo?.date_created;
+    let fechaHora;
+    if (fechaReferenciaCruda) {
+      const fechaParseada = new Date(fechaReferenciaCruda);
+      if (!Number.isNaN(fechaParseada.getTime())) {
+        fechaHora = fechaParseada.toLocaleString('es-AR', fechaOptions);
+      }
+    }
+    if (!fechaHora) {
+      fechaHora = new Date().toLocaleString('es-AR', fechaOptions);
+    }
     
     // Obtener productos del payment info con validación robusta
     const items = (paymentInfo && paymentInfo.additional_info && paymentInfo.additional_info.items) 
@@ -1817,8 +1829,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
         `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
         `📋 *Detalles de tu pedido:*\n` +
-        `🆔 *Número:* ${numeroDisplay}\n` +
-        `📅 *Fecha:* ${fechaHora}\n` +
+        `🆔 *ID Número Pedido:* ${numeroDisplay}\n` +
+        `📅 *Fecha del pago:* ${fechaHora}\n` +
         `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
         `🛍️ *Productos:*\n${productosTexto}\n\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -2062,13 +2074,13 @@ app.post('/webhook', async (req, res) => {
             // Obtener el ID del pedido creado
             const pedidoResult = await executeQueryWithRetry(
               pool,
-              `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
+              `SELECT id_pedido, pedido_fecha FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
               [paymentId, paymentId.toString()],
               2
             );
 
             if (pedidoResult && pedidoResult.rows && pedidoResult.rows.length > 0) {
-              const idPedidoCompleto = pedidoResult.rows[0].id_pedido;
+              const { id_pedido: idPedidoCompleto, pedido_fecha: fechaPedido } = pedidoResult.rows[0];
               const numeroDisplay = idPedidoCompleto && idPedidoCompleto.length >= 2 ? 
                 idPedidoCompleto.slice(-2) : idPedidoCompleto;
 
@@ -2107,7 +2119,7 @@ app.post('/webhook', async (req, res) => {
                 try {
                   const notificationResult = await enviarNotificacionCompra(
                     customerData,
-                    { numeroDisplay, idPedidoCompleto },
+                    { numeroDisplay, idPedidoCompleto, fechaPago: fechaPedido },
                     paymentInfo
                   );
                   
@@ -2142,7 +2154,7 @@ app.post('/webhook', async (req, res) => {
                   try {
                     const forceResult = await enviarNotificacionCompra(
                       customerData,
-                      { numeroDisplay, idPedidoCompleto },
+                      { numeroDisplay, idPedidoCompleto, fechaPago: fechaPedido },
                       paymentInfo
                     );
                     console.log(`[${timestamp}] 🚀 Resultado envío forzado:`, forceResult);
@@ -2336,7 +2348,8 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
     
     const orderData = {
       numeroDisplay: compra.id_pedido?.slice(-2) || '??',
-      idPedidoCompleto: compra.id_pedido
+      idPedidoCompleto: compra.id_pedido,
+      fechaPago: compra.pedido_fecha
     };
     
     const paymentInfo = {

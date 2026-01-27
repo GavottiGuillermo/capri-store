@@ -1,12 +1,9 @@
 // Variables globales para paginación
 let todosLosProductos = [];
 let todasLasNovedades = [];
-let productosFiltrados = []; // Para almacenar productos filtrados por categoría
-let categoriaActiva = 'todos'; // Categoría actualmente seleccionada
+let productosAgrupados = new Map();
 const ITEMS_POR_PAGINA_NOVEDADES = 6; // 2 filas de 3 productos
-const ITEMS_POR_PAGINA_PRODUCTOS = 8; // 2 filas de 4 productos
 let paginaActualNovedades = 1;
-let paginaActualProductos = 1;
 
 // Orden alfabético de categorías (mismo orden que en el menú)
 const ORDEN_CATEGORIAS = [
@@ -22,21 +19,116 @@ const ORDEN_CATEGORIAS = [
   'vestidos'
 ];
 
+function obtenerSlugCategoria(valor) {
+  if (!valor) return '';
+  let base = valor.toString().trim().toLowerCase();
+  if (base.endsWith('-novedad')) {
+    base = base.replace(/-novedad$/, '');
+  }
+  base = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return base.replace(/\s+/g, '-');
+}
+
+function formatearNombreCategoria(slug) {
+  if (!slug) return 'Otros';
+  return slug
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, letra => letra.toUpperCase());
+}
+
+function agruparProductosPorCategoria(productos) {
+  const mapa = new Map();
+  productos.forEach(prod => {
+    const slug = obtenerSlugCategoria(prod.categoria);
+    const clave = slug || 'otros';
+    if (!mapa.has(clave)) {
+      mapa.set(clave, []);
+    }
+    mapa.get(clave).push(prod);
+  });
+  return mapa;
+}
+
+function obtenerCategoriasOrdenadas(mapaCategorias) {
+  const claves = Array.from(mapaCategorias.keys());
+  const definidas = ORDEN_CATEGORIAS.filter(cat => claves.includes(cat));
+  const extras = claves.filter(cat => !ORDEN_CATEGORIAS.includes(cat)).sort();
+  return [...definidas, ...extras];
+}
+
+function renderizarEnlacesCategorias(categoriasOrdenadas) {
+  const containers = document.querySelectorAll('[data-category-links]');
+  const barraCategorias = document.getElementById('categorias-nav');
+  if (barraCategorias) {
+    barraCategorias.style.display = categoriasOrdenadas.length ? 'block' : 'none';
+  }
+  if (!containers.length) return;
+  containers.forEach(container => {
+    container.innerHTML = '';
+    categoriasOrdenadas.forEach(cat => {
+      const enlace = document.createElement('a');
+      enlace.href = `#categoria-${cat}`;
+      enlace.textContent = formatearNombreCategoria(cat);
+      enlace.className = 'category-chip js-scroll-trigger';
+      enlace.setAttribute('data-category-link', cat);
+      enlace.addEventListener('click', (event) => {
+        const destino = enlace.getAttribute('href');
+        if (destino && destino.startsWith('#') && destino.length > 1) {
+          event.preventDefault();
+          const objetivo = document.querySelector(destino);
+          if (objetivo) {
+            objetivo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      });
+      container.appendChild(enlace);
+    });
+  });
+}
+
+function aplicarEstadoStock(cardElement, prod) {
+  try {
+    const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+    const m = path.match(/\/(\d+)-[^/]+/);
+    const id = m && m[1] ? parseInt(m[1], 10) : null;
+    if (!id || !window.__CAPRI_SOLD_OUT__) {
+      return;
+    }
+    if (window.__CAPRI_SOLD_OUT__.has(id)) {
+      const card = cardElement.querySelector('.card');
+      if (!card) return;
+      card.style.filter = 'grayscale(0.6)';
+      card.style.opacity = '0.8';
+      if (!card.querySelector('.badge-sin-stock')) {
+        const badge = document.createElement('div');
+        badge.textContent = 'Sin stock';
+        badge.className = 'badge-sin-stock';
+        badge.style.position = 'absolute';
+        badge.style.top = '10px';
+        badge.style.left = '10px';
+        badge.style.background = '#dc3545';
+        badge.style.color = '#fff';
+        badge.style.padding = '6px 10px';
+        badge.style.borderRadius = '8px';
+        badge.style.fontWeight = 'bold';
+        badge.style.zIndex = '15';
+        card.appendChild(badge);
+      }
+    }
+  } catch (error) {
+    console.error('[STOCK] Error al aplicar estado de stock:', error);
+  }
+}
+
 // Función para ordenar productos por categoría
 function ordenarPorCategoria(productos) {
   return productos.sort((a, b) => {
-    // Extraer categoría base (antes del guión)
-    const catA = (a.categoria || '').toLowerCase().split('-')[0];
-    const catB = (b.categoria || '').toLowerCase().split('-')[0];
-    
-    // Obtener índice en el orden de categorías
+    const catA = obtenerSlugCategoria(a.categoria);
+    const catB = obtenerSlugCategoria(b.categoria);
     const indexA = ORDEN_CATEGORIAS.indexOf(catA);
     const indexB = ORDEN_CATEGORIAS.indexOf(catB);
-    
-    // Si una categoría no está en el orden, ponerla al final
     const ordenA = indexA === -1 ? 999 : indexA;
     const ordenB = indexB === -1 ? 999 : indexB;
-    
     return ordenA - ordenB;
   });
 }
@@ -108,9 +200,9 @@ async function cargarProductosCapri() {
   
   // Ordenar productos por categoría alfabéticamente
   todosLosProductos = ordenarPorCategoria(todosLosProductos);
-  
-  // Inicializar productos filtrados con todos los productos
-  productosFiltrados = [...todosLosProductos];
+  productosAgrupados = agruparProductosPorCategoria(todosLosProductos);
+  const categoriasOrdenadas = obtenerCategoriasOrdenadas(productosAgrupados);
+  renderizarEnlacesCategorias(categoriasOrdenadas);
   
   console.log('📊 Resumen:', todasLasNovedades.length, 'novedades,', todosLosProductos.length, 'productos');
 
@@ -126,9 +218,6 @@ async function cargarProductosCapri() {
   // Renderizar la primera página
   await renderizarNovedades();
   await renderizarProductos();
-  
-  // Marcar "Todos los Productos" como activo inicialmente
-  actualizarMenuActivo('todos');
 }
 
 // Refrescar stock: vuelve a consultar al backend y re-renderiza
@@ -165,17 +254,10 @@ async function refrescarStock() {
           return categoria === 'novedades' || categoria.includes('-novedad');
         });
         todosLosProductos = productos.filter(p => p.categoria && p.categoria.toLowerCase() !== 'novedades');
-        // Ordenar productos por categoría alfabéticamente
         todosLosProductos = ordenarPorCategoria(todosLosProductos);
-        productosFiltrados = categoriaActiva === 'todos' ? [...todosLosProductos] : 
-          todosLosProductos.filter(p => {
-            if (!p.categoria) return false;
-            const categoriaProducto = p.categoria.toLowerCase();
-            const categoriaBuscada = categoriaActiva.toLowerCase();
-            if (categoriaProducto === categoriaBuscada) return true;
-            const categoriaBase = categoriaProducto.split('-')[0];
-            return categoriaBase === categoriaBuscada;
-          });
+        productosAgrupados = agruparProductosPorCategoria(todosLosProductos);
+        const categoriasOrdenadas = obtenerCategoriasOrdenadas(productosAgrupados);
+        renderizarEnlacesCategorias(categoriasOrdenadas);
       }
       
       // Re-renderizar secciones
@@ -184,7 +266,6 @@ async function refrescarStock() {
       if (novedadesList) novedadesList.innerHTML = '';
       if (productosList) productosList.innerHTML = '';
       paginaActualNovedades = 1;
-      paginaActualProductos = 1;
       await renderizarNovedades();
       await renderizarProductos();
       console.log('✅ Actualización completada');
@@ -238,51 +319,27 @@ async function renderizarNovedades() {
     novedadesList.innerHTML = '';
   }
 
+  let indiceAnimacion = (paginaActualNovedades - 1) * ITEMS_POR_PAGINA_NOVEDADES;
   for (const prod of novedadesPagina) {
     const cardHtml = await crearTarjetaProducto(prod, 'novedad');
-    novedadesList.insertAdjacentHTML('beforeend', cardHtml);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = cardHtml.trim();
+    const cardElement = tempDiv.firstElementChild;
 
-    // Marcar sin stock en Novedades sin bloquear el detalle
-    try {
-      const path = decodeURIComponent((prod.imagen || prod.txt || ''));
-      const m = path.match(/\/(\d+)-[^/]+/);
-      const id = m && m[1] ? parseInt(m[1], 10) : null;
-      const last = novedadesList.lastElementChild;
-      if (!id) {
-        console.warn('[NOVEDADES] No se pudo extraer id_articulo para', prod, 'path:', path);
-      } else {
-        if (window.__CAPRI_SOLD_OUT__) {
-          if (window.__CAPRI_SOLD_OUT__.has(id)) {
-            console.log(`[NOVEDADES] Producto id=${id} marcado como SIN STOCK`);
-            if (last) {
-              const card = last.querySelector('.card');
-              if (card) {
-                card.style.filter = 'grayscale(0.6)';
-                card.style.opacity = '0.8';
-                // Badge
-                const badge = document.createElement('div');
-                badge.textContent = 'Sin stock';
-                badge.style.position = 'absolute';
-                badge.style.top = '10px';
-                badge.style.left = '10px';
-                badge.style.background = '#dc3545';
-                badge.style.color = '#fff';
-                badge.style.padding = '6px 10px';
-                badge.style.borderRadius = '8px';
-                badge.style.fontWeight = 'bold';
-                card.appendChild(badge);
-              }
-            }
-          } else {
-            console.log(`[NOVEDADES] Producto id=${id} CON STOCK`);
-          }
-        } else {
-          console.warn('[NOVEDADES] window.__CAPRI_SOLD_OUT__ no está definido');
-        }
-      }
-    } catch (e) {
-      console.error('[NOVEDADES] Error al marcar sin stock:', e);
-    }
+    cardElement.style.opacity = '0';
+    cardElement.style.transform = 'translateY(20px) scale(0.95)';
+    cardElement.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+    novedadesList.appendChild(cardElement);
+
+    setTimeout(() => {
+      cardElement.style.opacity = '1';
+      cardElement.style.transform = 'translateY(0) scale(1)';
+      cardElement.classList.add('visible');
+    }, indiceAnimacion * 50);
+
+    aplicarEstadoStock(cardElement, prod);
+    indiceAnimacion++;
   }
 
   // Mostrar/ocultar botón "Ver más"
@@ -305,107 +362,86 @@ async function renderizarNovedades() {
   console.log('=== RENDERIZADO DE NOVEDADES COMPLETADO ===');
 }
 
-// Renderizar productos con paginación y animaciones suavizadas
+// Renderizar productos agrupados por categoría, todos visibles simultáneamente
 async function renderizarProductos() {
   const productosList = document.getElementById('productos-list');
-  
-  const inicio = (paginaActualProductos - 1) * ITEMS_POR_PAGINA_PRODUCTOS;
-  const fin = inicio + ITEMS_POR_PAGINA_PRODUCTOS;
-  const productosPagina = productosFiltrados.slice(inicio, fin);
-
   if (!productosList) {
     console.error('❌ ERROR: No se encontró el elemento productos-list');
     return;
   }
 
-  if (productosPagina.length === 0) {
-    if (paginaActualProductos === 1) {
-      productosList.innerHTML = '<div class="col-12 text-center"><p>No hay productos disponibles</p></div>';
-    }
+  productosList.innerHTML = '';
+
+  if (!productosAgrupados || productosAgrupados.size === 0) {
+    productosList.innerHTML = '<div class="alert alert-light text-center">No hay productos disponibles en este momento.</div>';
     return;
   }
 
-  // PREVENIR MOVIMIENTOS BRUSCOS - Solo limpiar si es la primera página
-  if (paginaActualProductos === 1) {
-    // Limpiar inmediatamente sin animación para evitar que los productos desaparezcan
-    productosList.innerHTML = '';
+  const categoriasOrdenadas = obtenerCategoriasOrdenadas(productosAgrupados);
+  if (!categoriasOrdenadas.length) {
+    productosList.innerHTML = '<div class="alert alert-light text-center">No hay categorías disponibles.</div>';
+    return;
   }
 
   let productosRenderizados = 0;
-  for (const prod of productosPagina) {
-    try {
-      const cardHtml = await crearTarjetaProducto(prod, 'producto');
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = cardHtml;
-      const cardElement = tempDiv.firstElementChild;
-      
-      // ANIMACIÓN SUAVE DE ENTRADA
-      cardElement.style.opacity = '0';
-      cardElement.style.transform = 'translateY(20px) scale(0.95)';
-      cardElement.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-      
-      productosList.appendChild(cardElement);
-      
-      // Animar entrada de forma escalonada
-      setTimeout(() => {
-        cardElement.style.opacity = '1';
-        cardElement.style.transform = 'translateY(0) scale(1)';
-        cardElement.classList.add('visible');
-      }, productosRenderizados * 50); // 50ms entre cada producto
-      
-      // Marcar sin stock si corresponde (sin bloquear el detalle)
+  for (const categoria of categoriasOrdenadas) {
+    const productosCategoria = productosAgrupados.get(categoria) || [];
+    if (!productosCategoria.length) continue;
+
+    const seccion = document.createElement('div');
+    seccion.className = 'categoria-section';
+    seccion.id = `categoria-${categoria}`;
+
+    const header = document.createElement('div');
+    header.className = 'd-flex justify-content-between align-items-center flex-wrap';
+    header.style.gap = '0.75rem';
+    header.innerHTML = `
+      <div>
+        <p class="text-uppercase text-muted mb-2 small">Categoría</p>
+        <h3 class="text-vino-tinto font-weight-bold mb-0">${formatearNombreCategoria(categoria)}</h3>
+      </div>
+      <a class="btn btn-outline-vino-tinto btn-sm" href="#categorias-nav">Volver a categorías</a>
+    `;
+
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    for (const prod of productosCategoria) {
       try {
-        const path = decodeURIComponent((prod.imagen || prod.txt || ''));
-        const m = path.match(/\/(\d+)-[^/]+/);
-        const id = m && m[1] ? parseInt(m[1], 10) : null;
-        
-        console.log(`[DEBUG] Procesando producto:`, {
-          path,
-          id,
-          estaEnSinStock: id && window.__CAPRI_SOLD_OUT__ ? window.__CAPRI_SOLD_OUT__.has(id) : false,
-          totalSinStock: window.__CAPRI_SOLD_OUT__ ? window.__CAPRI_SOLD_OUT__.size : 0
-        });
-        
-        if (!id) {
-          console.warn('[PRODUCTOS] No se pudo extraer id_articulo para', prod, 'path:', path);
-        } else {
-          if (window.__CAPRI_SOLD_OUT__ && window.__CAPRI_SOLD_OUT__.has(id)) {
-            console.log(`[PRODUCTOS] Producto id=${id} marcado como SIN STOCK`);
-            const card = cardElement.querySelector('.card');
-            if (card) {
-              card.style.filter = 'grayscale(0.6)';
-              card.style.opacity = '0.8';
-              const badge = document.createElement('div');
-              badge.textContent = 'Sin stock';
-              badge.style.position = 'absolute';
-              badge.style.top = '10px';
-              badge.style.left = '10px';
-              badge.style.background = '#dc3545';
-              badge.style.color = '#fff';
-              badge.style.padding = '6px 10px';
-              badge.style.borderRadius = '8px';
-              badge.style.fontWeight = 'bold';
-              badge.style.zIndex = '15';
-              card.appendChild(badge);
-            }
-          } else {
-            console.log(`[PRODUCTOS] Producto id=${id} CON STOCK disponible`);
-          }
-        }
-      } catch (e) {
-        console.error('[PRODUCTOS] Error al marcar sin stock:', e);
+        const cardHtml = await crearTarjetaProducto(prod, 'producto');
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cardHtml.trim();
+        const cardElement = tempDiv.firstElementChild;
+
+        cardElement.style.opacity = '0';
+        cardElement.style.transform = 'translateY(20px) scale(0.95)';
+        cardElement.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+        row.appendChild(cardElement);
+
+        setTimeout(() => {
+          cardElement.style.opacity = '1';
+          cardElement.style.transform = 'translateY(0) scale(1)';
+          cardElement.classList.add('visible');
+        }, productosRenderizados * 40);
+
+        aplicarEstadoStock(cardElement, prod);
+        productosRenderizados++;
+      } catch (error) {
+        console.error('❌ Error renderizando producto:', prod.id_articulo, error);
       }
-      
-      productosRenderizados++;
-    } catch (error) {
-      console.error('❌ Error renderizando producto:', prod.id_articulo, error);
     }
+
+    seccion.appendChild(header);
+    seccion.appendChild(row);
+    productosList.appendChild(seccion);
   }
 
-  // Mostrar/ocultar botón "Ver más"
-  actualizarBotonVerMas('productos', fin < productosFiltrados.length);
-  
-  console.log(`📊 RESUMEN RENDERIZADO: ${productosRenderizados}/${productosPagina.length} productos renderizados exitosamente`);
+  if (!productosList.children.length) {
+    productosList.innerHTML = '<div class="alert alert-light text-center">No hay productos disponibles en este momento.</div>';
+  }
+
+  console.log(`📊 RESUMEN RENDERIZADO: ${productosRenderizados} productos distribuidos en ${productosList.children.length} secciones`);
   console.log('=== RENDERIZADO DE PRODUCTOS COMPLETADO ===');
 }
 
@@ -481,18 +517,19 @@ async function crearTarjetaProducto(prod, tipo) {
 
 // Actualizar botón "Ver más"
 function actualizarBotonVerMas(seccion, mostrar) {
+  if (seccion !== 'novedades') {
+    return;
+  }
+
   console.log('Actualizando botón Ver más para:', seccion, 'Mostrar:', mostrar);
   let btnContainer = document.getElementById(`btn-ver-mas-${seccion}`);
   
   if (!btnContainer) {
-    // Crear el contenedor del botón si no existe
     btnContainer = document.createElement('div');
     btnContainer.id = `btn-ver-mas-${seccion}`;
     btnContainer.className = 'text-center mt-4';
     
-    const container = seccion === 'novedades' 
-      ? document.querySelector('#novedades .container')
-      : document.querySelector('#productos .container');
+    const container = document.querySelector('#novedades .container');
     
     if (container) {
       container.appendChild(btnContainer);
@@ -529,120 +566,6 @@ async function cargarMasNovedades() {
   const totalTexto = Math.min(totalMostrado, todasLasNovedades.length);
 }
 
-async function cargarMasProductos() {
-  paginaActualProductos++;
-  await renderizarProductos();
-  
-  // Actualizar contador de productos mostrados
-  const totalMostrado = paginaActualProductos * ITEMS_POR_PAGINA_PRODUCTOS;
-  const totalTexto = Math.min(totalMostrado, productosFiltrados.length);
-}
-
-// Función para mostrar productos por categoría
-async function mostrarCategoria(categoria) {
-  console.log('=== MOSTRANDO CATEGORÍA:', categoria, '===');
-  
-  // Actualizar categoría activa
-  categoriaActiva = categoria;
-  
-  // Actualizar estado visual del menú
-  actualizarMenuActivo(categoria);
-  
-  // Filtrar productos según la categoría
-  if (categoria === 'todos') {
-    productosFiltrados = [...todosLosProductos];
-  } else {
-    // Filtrar por categoría base (antes del guión) o categoría exacta
-    productosFiltrados = todosLosProductos.filter(p => {
-      if (!p.categoria) return false;
-      
-      const categoriaProducto = p.categoria.toLowerCase();
-      const categoriaBuscada = categoria.toLowerCase();
-      
-      // Verificar si coincide exactamente
-      if (categoriaProducto === categoriaBuscada) return true;
-      
-      // Verificar si la categoría base coincide (antes del guión)
-      const categoriaBase = categoriaProducto.split('-')[0];
-      return categoriaBase === categoriaBuscada;
-    });
-  }
-  
-  console.log('Productos filtrados:', productosFiltrados);
-  console.log('Total productos en categoría:', productosFiltrados.length);
-  
-  // Resetear paginación
-  paginaActualProductos = 1;
-  
-  // Actualizar título de la sección
-  const tituloProductos = document.getElementById('titulo-productos');
-  if (categoria === 'todos') {
-    tituloProductos.textContent = 'Todos los Productos';
-  } else {
-    tituloProductos.textContent = categoria;
-  }
-  
-  // Renderizar productos filtrados
-  await renderizarProductos();
-  
-  // Scroll hacia la sección de productos
-  document.getElementById('productos').scrollIntoView({ 
-    behavior: 'smooth',
-    block: 'start'
-  });
-}
-
-// Función para actualizar el estado visual del menú
-function actualizarMenuActivo(categoria) {
-  // Remover clase active de todos los elementos del menú
-  const menuItems = document.querySelectorAll('.dropdown-item');
-  menuItems.forEach(item => item.classList.remove('active'));
-  
-  // Agregar clase active al elemento seleccionado
-  let menuId = '';
-  switch(categoria.toLowerCase()) {
-    case 'todos': menuId = 'menu-todos'; break;
-    case 'tops': menuId = 'menu-tops'; break;
-    case 'polleras': menuId = 'menu-polleras'; break;
-    case 'pantalones': menuId = 'menu-pantalones'; break;
-    case 'minis': menuId = 'menu-minis'; break;
-    case 'vestidos': menuId = 'menu-vestidos'; break;
-    case 'accesorios': menuId = 'menu-accesorios'; break;
-    case 'remeras': menuId = 'menu-remeras'; break;
-    case 'bodys': menuId = 'menu-bodys'; break;
-    case 'conjuntos': menuId = 'menu-conjuntos'; break;
-    case 'shorts': menuId = 'menu-shorts'; break;
-  }
-  
-  if (menuId) {
-    const activeMenuItem = document.getElementById(menuId);
-    if (activeMenuItem) {
-      activeMenuItem.classList.add('active');
-    }
-  }
-}
-
-// Función para obtener categorías disponibles
-function obtenerCategoriasDisponibles() {
-  const categorias = todosLosProductos.map(p => {
-    if (!p.categoria) return null;
-    
-    const categoria = p.categoria.toLowerCase();
-    // Si contiene "-novedad", tomar solo la parte antes del guión
-    if (categoria.includes('-novedad')) {
-      return p.categoria.split('-')[0];
-    }
-    // Si es "novedades", no incluir
-    if (categoria === 'novedades') {
-      return null;
-    }
-    
-    return p.categoria;
-  }).filter(cat => cat); // Eliminar nulls
-  
-  // Obtener categorías únicas
-  return [...new Set(categorias)];
-}
 
 // Guardar producto en localStorage y redirigir
 function verDetalleCapri(prod) {
@@ -709,9 +632,7 @@ function verDetalleCapri(prod) {
 }
 
 // Hacer disponibles las funciones globalmente
-window.mostrarCategoria = mostrarCategoria;
 window.cargarMasNovedades = cargarMasNovedades;
-window.cargarMasProductos = cargarMasProductos;
 window.verDetalleCapri = verDetalleCapri;
 window.refrescarStock = refrescarStock;
 
@@ -749,11 +670,6 @@ document.addEventListener('click', function(e) {
     return;
   }
   
-  if (e.target.getAttribute('data-accion') === 'cargarMasProductos') {
-    e.preventDefault();
-    cargarMasProductos();
-    return;
-  }
 });
 
 // Inicializar cuando el DOM esté listo
