@@ -323,6 +323,33 @@ function validateCustomerData(data) {
   return errors;
 }
 
+// Reintenta consultas a PostgreSQL con backoff incremental
+async function executeQueryWithRetry(poolInstance, query, params = [], maxRetries = 3, baseDelayMs = 500) {
+  if (!poolInstance) {
+    throw new Error('Pool de base de datos no inicializado');
+  }
+
+  const attempts = Math.max(1, maxRetries);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await poolInstance.query(query, params);
+    } catch (error) {
+      lastError = error;
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] ❌ Query falló (intento ${attempt}/${attempts}): ${error.message}`);
+      if (attempt === attempts) {
+        throw error;
+      }
+      const delayMs = baseDelayMs * attempt;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError || new Error('executeQueryWithRetry terminó sin resultado ni error');
+}
+
 // ===============================
 // ENDPOINTS BÁSICOS
 // ===============================
@@ -766,30 +793,6 @@ app.get('/memory-status', (req, res) => {
     
     // Log si estamos cerca del límite
     if (usagePercent > 80) {
-
-  // Reintenta consultas a PostgreSQL con backoff incremental
-  async function executeQueryWithRetry(poolInstance, query, params = [], maxRetries = 3, baseDelayMs = 500) {
-    if (!poolInstance) {
-      throw new Error('Pool de base de datos no inicializado');
-    }
-    const attempts = Math.max(1, maxRetries);
-    let lastError = null;
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      try {
-        return await poolInstance.query(query, params);
-      } catch (error) {
-        lastError = error;
-        const timestamp = new Date().toISOString();
-        console.error(`[${timestamp}] ❌ Query fallo (intento ${attempt}/${attempts}): ${error.message}`);
-        if (attempt === attempts) {
-          throw error;
-        }
-        const delayMs = baseDelayMs * attempt;
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-    }
-    throw lastError || new Error('executeQueryWithRetry terminó sin resultado ni error');
-  }
       console.warn(`⚠️ Uso de memoria alto: ${usagePercent}% (${mbRss}MB/${renderLimit}MB)`);
     }
     
