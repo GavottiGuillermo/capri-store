@@ -33,25 +33,15 @@ function manejarTipoEntrega() {
   const retiroLocal = document.getElementById('retiroLocal');
   const envioDomicilio = document.getElementById('enviosDomicilio');
   const seccionDatosEnvio = document.getElementById('seccionDatosEnvio');
-  const camposDireccion = [
-    document.getElementById('calleNumero'),
-    document.getElementById('codigoPostal'),
-    document.getElementById('ciudad'),
-    document.getElementById('provincia'),
-    document.getElementById('referencias'),
-    document.getElementById('calcularEnvio')
-  ];
   if (retiroLocal && retiroLocal.checked) {
     if (seccionDatosEnvio) seccionDatosEnvio.style.display = 'none';
-    camposDireccion.forEach(campo => { if (campo) campo.disabled = true; });
     costoEnvio = 0;
-    cargarResumenCompra();
   } else if (envioDomicilio && envioDomicilio.checked) {
     if (seccionDatosEnvio) seccionDatosEnvio.style.display = 'block';
-    camposDireccion.forEach(campo => { if (campo) campo.disabled = false; });
-    // El costo de envío se calcula aparte
-    cargarResumenCompra();
+    costoEnvio = 0;
   }
+  // Siempre recalcular el resumen tras cambiar la modalidad
+  cargarResumenCompra();
 }
 // === RESUMEN DE COMPRA ===
 // Variable para evitar múltiples ejecuciones
@@ -206,52 +196,6 @@ function obtenerIdProductoDesdeCarpeta(imgPath) {
 }
 
 
-function verificarCamposCompletos() {
-  const calleNumero = document.getElementById('calleNumero');
-  const codigoPostal = document.getElementById('codigoPostal');
-  const ciudad = document.getElementById('ciudad');
-  const provincia = document.getElementById('provincia');
-  const calcularEnvioBtn = document.getElementById('calcularEnvio');
-  const camposCompletos = calleNumero && calleNumero.value.trim() && 
-                         codigoPostal && codigoPostal.value.trim() && 
-                         ciudad && ciudad.value.trim() && 
-                         provincia && provincia.value;
-  if (calcularEnvioBtn) {
-    calcularEnvioBtn.disabled = !camposCompletos;
-  }
-  return camposCompletos;
-}
-
-function calcularEnvio() {
-  if (!verificarCamposCompletos()) {
-    mostrarPopup('Por favor completa todos los campos de dirección obligatorios', 'warning');
-    return;
-  }
-  const codigoPostal = document.getElementById('codigoPostal').value.trim();
-  const ciudad = document.getElementById('ciudad').value.trim();
-  const provincia = document.getElementById('provincia').value;
-  if (!/^\d{4}$/.test(codigoPostal)) {
-    mostrarPopup('Por favor ingresa un código postal válido (4 dígitos)', 'warning');
-    return;
-  }
-  const calcularBtn = document.getElementById('calcularEnvio');
-  calcularBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculando...';
-  calcularBtn.disabled = true;
-  try {
-    const cotizaciones = generarOpcionesBasicas(codigoPostal, ciudad, provincia);
-    mostrarOpcionesEnvio(cotizaciones, { codigoPostal, ciudad, provincia });
-  } catch (error) {
-    console.error('Error al calcular envío:', error);
-    const cotizacionesFallback = generarOpcionesBasicas(codigoPostal, ciudad, provincia);
-    mostrarOpcionesEnvio(cotizacionesFallback, { codigoPostal, ciudad, provincia });
-  } finally {
-    calcularBtn.innerHTML = '<i class="fas fa-calculator mr-2"></i>Calcular costo de envío';
-    calcularBtn.disabled = false;
-  }
-}
-
-// ... (puedes agregar aquí helpers de envío, tabla de precios, etc. si lo necesitas)
-
 async function iniciarProcesoPago() {
   // LOG: Confirmar que la función fue llamada por el botón
   console.log('[checkout] iniciarProcesoPago() fue llamada');
@@ -303,11 +247,9 @@ async function iniciarProcesoPago() {
   let datosEnvio = null;
   if (tipoEntrega === 'envio') {
     datosEnvio = {
-      calleNumero: formData.get('calleNumero'),
-      codigoPostal: formData.get('codigoPostal'),
-      ciudad: formData.get('ciudad'),
-      provincia: formData.get('provincia'),
-      referencias: formData.get('referencias')
+      cotizacionAndreani: true,
+      instrucciones: 'El cliente cotizará y abonará el envío manualmente en Andreani antes del despacho',
+      enlace: 'https://www.andreani.com/?tab=cotizar-envio'
     };
   }
   // Sanitizar datos del comprador
@@ -423,23 +365,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const retiroLocal = document.getElementById('retiroLocal');
   const envioDomicilio = document.getElementById('enviosDomicilio');
   const iniciarPagoBtn = document.getElementById('iniciarPago');
-  const calcularEnvioBtn = document.getElementById('calcularEnvio');
-  const calleNumero = document.getElementById('calleNumero');
-  const codigoPostal = document.getElementById('codigoPostal');
-  const ciudad = document.getElementById('ciudad');
-  const provincia = document.getElementById('provincia');
   
   if (retiroLocal) retiroLocal.addEventListener('change', manejarTipoEntrega);
   if (envioDomicilio) envioDomicilio.addEventListener('change', manejarTipoEntrega);
-  
-  [calleNumero, codigoPostal, ciudad, provincia].forEach(campo => {
-    if (campo) {
-      campo.addEventListener('input', verificarCamposCompletos);
-      campo.addEventListener('change', verificarCamposCompletos);
-    }
-  });
-  
-  if (calcularEnvioBtn) calcularEnvioBtn.addEventListener('click', calcularEnvio);
   
   if (iniciarPagoBtn) {
     console.log('✅ Botón iniciar pago encontrado');
