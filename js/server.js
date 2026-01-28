@@ -1880,6 +1880,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   const rawPaymentId = paymentInfo?.normalized_payment_id ?? paymentInfo?.id ?? idPedidoCompleto;
   const normalizedPaymentId = normalizePaymentId(rawPaymentId);
   const paymentId = normalizedPaymentId || 'N/A';
+  const transaction_amount = Number(
+    paymentInfo?.transaction_amount ??
+    orderData?.monto_total ??
+    orderData?.montoTotal ??
+    0
+  );
   
   console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
   console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
