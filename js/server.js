@@ -127,6 +127,40 @@ const app = express();
 // Almacén en memoria para notificaciones de webhook
 const webhookNotifications = new Map();
 
+// Tracking para notificaciones WhatsApp recientes (evitar duplicados)
+const notificationSendHistory = new Map();
+const NOTIFICATION_DUPLICATE_WINDOW_MS = 2 * 60 * 1000; // 2 minutos
+const NOTIFICATION_HISTORY_TTL_MS = 15 * 60 * 1000; // 15 minutos
+
+function normalizePaymentId(rawId) {
+  if (rawId === undefined || rawId === null) {
+    return null;
+  }
+  const str = String(rawId).trim();
+  if (!str) {
+    return null;
+  }
+  const matches = str.match(/\d+/g);
+  if (matches && matches.length > 0) {
+    return matches[matches.length - 1];
+  }
+  return str;
+}
+
+function buildPaymentIdContext(rawId) {
+  const normalized = normalizePaymentId(rawId);
+  if (!normalized) {
+    return { normalized: null, sdkId: null, dbParams: [] };
+  }
+  const numericValue = Number(normalized);
+  const numeric = Number.isNaN(numericValue) ? null : numericValue;
+  return {
+    normalized,
+    sdkId: numeric ?? normalized,
+    dbParams: [normalized, numeric ?? normalized]
+  };
+}
+
 // API key para apps móviles que consultan notificaciones pendientes
 const MOBILE_NOTIFICATION_API_KEY = process.env.MOBILE_NOTIFICATION_API_KEY || process.env.NOTIFICATION_MOBILE_KEY;
 
@@ -1650,6 +1684,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         const paymentInfo = {
           transaction_amount: pedido.pedido_monto_total || 0,
           id: pedido.mp_payment_id,
+          normalized_payment_id: pedido.mp_payment_id,
           additional_info: {
             items: pedido.productos.map(prod => ({
               id: `${prod.categoria}-${prod.nombre}`.replace(/\s+/g, '-').toLowerCase(),
@@ -1748,7 +1783,10 @@ app.get('/api/notificaciones-pendientes', requireMobileApiKey, async (req, res) 
 async function actualizarEstadoWhatsApp(paymentId, estado) {
   const timestamp = new Date().toISOString();
   
-  if (!paymentId) {
+  const paymentContext = buildPaymentIdContext(paymentId);
+  const normalizedPaymentId = paymentContext.normalized;
+  
+  if (!normalizedPaymentId) {
     console.warn(`[${timestamp}] ⚠️ No se puede actualizar estado WhatsApp: paymentId faltante`);
     return;
   }
@@ -1758,12 +1796,12 @@ async function actualizarEstadoWhatsApp(paymentId, estado) {
     
     await executeQueryWithRetry(
       pool,
-      `UPDATE productos SET whatsapp_notificado = $1 WHERE mp_payment_id = $2`,
-      [estadoString, paymentId],
+      `UPDATE productos SET whatsapp_notificado = $1 WHERE mp_payment_id = $2 OR mp_payment_id = $3`,
+      [estadoString, paymentContext.dbParams[0], paymentContext.dbParams[1]],
       2
     );
     
-    console.log(`[${timestamp}] ✅ Estado WhatsApp actualizado: ${estadoString} para payment_id: ${paymentId}`);
+    console.log(`[${timestamp}] ✅ Estado WhatsApp actualizado: ${estadoString} para payment_id: ${normalizedPaymentId}`);
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error actualizando estado WhatsApp:`, error.message);
@@ -1839,7 +1877,9 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       '');
   
   const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
-  const { transaction_amount = 0, id: paymentId = 'N/A' } = paymentInfo || {};
+  const rawPaymentId = paymentInfo?.normalized_payment_id ?? paymentInfo?.id ?? idPedidoCompleto;
+  const normalizedPaymentId = normalizePaymentId(rawPaymentId);
+  const paymentId = normalizedPaymentId || 'N/A';
   
   console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
   console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
@@ -1848,6 +1888,20 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
   console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
   console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
+
+  if (!esReintento && normalizedPaymentId) {
+    const lastSentAt = notificationSendHistory.get(normalizedPaymentId);
+    if (lastSentAt && (Date.now() - lastSentAt) < NOTIFICATION_DUPLICATE_WINDOW_MS) {
+      const secondsAgo = Math.round((Date.now() - lastSentAt) / 1000);
+      console.warn(`[${timestamp}] ⚠️ Notificación duplicada detectada para pago ${normalizedPaymentId} (hace ${secondsAgo}s) - omitiendo reenvío`);
+      return {
+        success: true,
+        duplicate: true,
+        skipped: true,
+        message: `Notificación ya enviada hace ${secondsAgo}s`
+      };
+    }
+  }
     
     const fechaOptions = {
       timeZone: 'America/Argentina/Buenos_Aires',
@@ -1997,6 +2051,10 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       both_sent: resultAdmin.success && resultCliente.success
     };
     
+    if (!esReintento && normalizedPaymentId && resultado.success) {
+      notificationSendHistory.set(normalizedPaymentId, Date.now());
+    }
+    
     // Si el envío fue exitoso, marcar conexión como buena y procesar pendientes
     if (resultado.success) {
       whatsappService.marcarConexionExitosa();
@@ -2025,7 +2083,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
 // ===============================
 app.post('/webhook', async (req, res) => {
   const timestamp = new Date().toISOString();
-  let paymentId = null;
+  let paymentIdRaw = null;
+  let paymentIdContext = null;
   let shouldProcess = false;
 
   console.log(`[${timestamp}] 📬 WEBHOOK RECIBIDO:`);
@@ -2038,35 +2097,43 @@ app.post('/webhook', async (req, res) => {
     
     // Detectar el payment ID desde diferentes formatos de webhook
     if (type === 'payment' && data?.id) {
-      paymentId = data.id;
+      paymentIdRaw = data.id;
       shouldProcess = true;
-      console.log(`[${timestamp}] ✅ Webhook tipo 'payment' con ID: ${paymentId}`);
+      console.log(`[${timestamp}] ✅ Webhook tipo 'payment' detectado (raw ID: ${paymentIdRaw})`);
     } else if (action === 'payment.created' && data?.id) {
-      paymentId = data.id;
+      paymentIdRaw = data.id;
       shouldProcess = true;
-      console.log(`[${timestamp}] ✅ Webhook action 'payment.created' con ID: ${paymentId}`);
+      console.log(`[${timestamp}] ✅ Webhook action 'payment.created' detectado (raw ID: ${paymentIdRaw})`);
     } else if (topic === 'payment' && resource) {
-      paymentId = resource;
+      paymentIdRaw = resource;
       shouldProcess = true;
-      console.log(`[${timestamp}] ✅ Webhook topic 'payment' con resource: ${paymentId}`);
+      console.log(`[${timestamp}] ✅ Webhook topic 'payment' detectado (resource: ${paymentIdRaw})`);
     } else {
       console.log(`[${timestamp}] ⚠️ Webhook ignorado - type: ${type}, action: ${action}, topic: ${topic}, resource: ${resource}`);
       return res.status(200).send('OK - Ignored (not payment)');
     }
 
-    if (shouldProcess && paymentId) {
+    if (shouldProcess && paymentIdRaw) {
+      paymentIdContext = buildPaymentIdContext(paymentIdRaw);
+      const paymentKey = paymentIdContext?.normalized;
+      if (!paymentKey) {
+        console.log(`[${timestamp}] ❌ No se pudo normalizar paymentId recibido: ${paymentIdRaw}`);
+        return res.status(400).send('paymentId inválido en webhook');
+      }
+      const [dbPaymentKey, dbPaymentFallback] = paymentIdContext.dbParams;
+
       // Verificar si ya existe el pedido en BD
       let pedidoExistente = null;
       try {
         const checkPedido = await executeQueryWithRetry(
           pool,
           `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' LIMIT 1`,
-          [paymentId, paymentId.toString()],
+          [dbPaymentKey, dbPaymentFallback],
           2
         );
         if (checkPedido && checkPedido.rows && checkPedido.rows.length > 0) {
           pedidoExistente = checkPedido.rows[0].id_pedido;
-          console.log(`[${timestamp}] ✅ Pago ${paymentId} ya tiene pedido en BD: ${pedidoExistente} - Ignorado`);
+          console.log(`[${timestamp}] ✅ Pago ${paymentKey} ya tiene pedido en BD: ${pedidoExistente} - Ignorado`);
           return res.status(200).send('OK - Already processed');
         }
       } catch (err) {
@@ -2074,19 +2141,20 @@ app.post('/webhook', async (req, res) => {
       }
 
       // Verificar en memoria si ya se procesó
-      if (webhookNotifications.has(paymentId)) {
-        console.log(`[${timestamp}] ⚠️ Pago ${paymentId} ya procesado en memoria - Ignorado`);
+      if (webhookNotifications.has(paymentKey)) {
+        console.log(`[${timestamp}] ⚠️ Pago ${paymentKey} ya procesado en memoria - Ignorado`);
         return res.status(200).send('OK - Already processed (memory)');
       }
 
       // Marcar como procesado en memoria
-      webhookNotifications.set(paymentId, true);
+      webhookNotifications.set(paymentKey, Date.now());
 
       // Obtener información completa del pago de MercadoPago
       const payment = new Payment(client);
-      const paymentInfo = await payment.get({ id: paymentId });
+      const paymentInfo = await payment.get({ id: paymentIdContext.sdkId });
 
-      console.log(`[${timestamp}] 💳 Estado del pago: ${paymentInfo.status}`);
+      console.log(`[${timestamp}] 💳 Estado del pago (${paymentKey}): ${paymentInfo.status}`);
+      paymentInfo.normalized_payment_id = paymentKey;
 
       if (paymentInfo.status === 'approved') {
         // NUEVO: Verificar y reconectar WhatsApp si es necesario
@@ -2164,7 +2232,7 @@ app.post('/webhook', async (req, res) => {
           if (whatsappAvailable && whatsappReady && ADMIN_WHATSAPP) {
             try {
               const mensaje = `⚠️ *PROBLEMA CON COMPRA*\n\n` +
-                `💳 Pago ID: ${paymentId}\n` +
+                `💳 Pago ID: ${paymentKey}\n` +
                 `💰 Monto: $${paymentInfo.transaction_amount}\n` +
                 `📦 Productos sin stock: ${faltantes.join(', ')}\n\n` +
                 `👤 Cliente: ${customerData.nombre} ${customerData.apellido}\n` +
@@ -2193,7 +2261,7 @@ app.post('/webhook', async (req, res) => {
                 customerData.telefono || paymentInfo.payer?.phone?.number || '',
                 'MercadoPago',
                 'Retiro', // Tipo de entrega por defecto
-                paymentId
+                paymentKey
               ],
               2
             );
@@ -2202,7 +2270,7 @@ app.post('/webhook', async (req, res) => {
             const pedidoResult = await executeQueryWithRetry(
               pool,
               `SELECT id_pedido, pedido_fecha FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
-              [paymentId, paymentId.toString()],
+              [dbPaymentKey, dbPaymentFallback],
               2
             );
 
@@ -2256,14 +2324,14 @@ app.post('/webhook', async (req, res) => {
                   });
                   
                   // Actualizar estado en base de datos
-                  await actualizarEstadoWhatsApp(paymentId, notificationResult.success);
+                  await actualizarEstadoWhatsApp(paymentKey, notificationResult.success);
                   
                 } catch (whatsappError) {
                   console.error(`[${timestamp}] ❌ EXCEPCIÓN enviando notificación WhatsApp:`, whatsappError.message);
                   console.error(`[${timestamp}] Stack trace:`, whatsappError.stack);
                   
                   // Marcar como fallido en base de datos
-                  await actualizarEstadoWhatsApp(paymentId, false);
+                  await actualizarEstadoWhatsApp(paymentKey, false);
                 }
               } else {
                 console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible para notificación:`);
@@ -2273,7 +2341,7 @@ app.post('/webhook', async (req, res) => {
                 console.warn(`[${timestamp}] - Puede enviar calculado: ${canSendWhatsApp}`);
                 
                 // Marcar como no enviado
-                await actualizarEstadoWhatsApp(paymentId, false);
+                await actualizarEstadoWhatsApp(paymentKey, false);
                 
                 // Intentar envío forzado si el cliente está CONNECTED pero el flag es false
                 if (whatsappAvailable && realClientState === 'CONNECTED' && !whatsappReady) {
@@ -2287,7 +2355,7 @@ app.post('/webhook', async (req, res) => {
                     console.log(`[${timestamp}] 🚀 Resultado envío forzado:`, forceResult);
                     
                     // Actualizar estado según resultado del envío forzado
-                    await actualizarEstadoWhatsApp(paymentId, forceResult.success);
+                    await actualizarEstadoWhatsApp(paymentKey, forceResult.success);
                     
                   } catch (forceError) {
                     console.error(`[${timestamp}] ❌ Error en envío forzado:`, forceError.message);
@@ -2305,7 +2373,7 @@ app.post('/webhook', async (req, res) => {
           }
         }
       } else {
-        console.log(`[${timestamp}] ⚠️ Pago ${paymentId} no aprobado (estado: ${paymentInfo.status})`);
+        console.log(`[${timestamp}] ⚠️ Pago ${paymentKey} no aprobado (estado: ${paymentInfo.status})`);
       }
     } else {
       console.log(`[${timestamp}] ⚠️ Webhook recibido sin paymentId válido`);
@@ -2325,7 +2393,18 @@ app.post('/webhook', async (req, res) => {
 // ===============================
 app.get('/numero-pedido/:paymentId', async (req, res) => {
   const { paymentId } = req.params;
-  console.log(`🔍 Consultando número de pedido para payment ID: ${paymentId}`);
+  const paymentContext = buildPaymentIdContext(paymentId);
+  const normalizedPaymentId = paymentContext.normalized;
+  
+  console.log(`🔍 Consultando número de pedido para payment ID: ${paymentId} (normalizado: ${normalizedPaymentId || 'N/A'})`);
+
+  if (!normalizedPaymentId) {
+    return res.status(400).json({
+      success: false,
+      error: 'paymentId inválido',
+      payment_id: paymentId
+    });
+  }
 
   // Configuración de reintentos
   const MAX_TRIES = 5;
@@ -2336,7 +2415,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
   try {
     while (intento < MAX_TRIES && !pedidoEncontrado) {
       intento++;
-      console.log(`🔄 Intento ${intento}/${MAX_TRIES} para payment ID: ${paymentId}`);
+      console.log(`🔄 Intento ${intento}/${MAX_TRIES} para payment ID: ${normalizedPaymentId}`);
 
       try {
         const pedidoResult = await executeQueryWithRetry(
@@ -2348,7 +2427,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
            AND p.id_pedido != '' 
            ORDER BY p.pedido_fecha DESC 
            LIMIT 1`,
-          [paymentId, paymentId.toString()],
+          paymentContext.dbParams,
           2
         );
 
@@ -2381,17 +2460,17 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         fecha: pedidoEncontrado.pedido_fecha,
         cliente: pedidoEncontrado.pedido_nombre_cliente,
         monto: pedidoEncontrado.pedido_monto_total,
-        payment_id: paymentId
+        payment_id: normalizedPaymentId
       });
     } else {
-      console.warn(`⚠️ Pedido no encontrado para payment_id: ${paymentId} después de ${MAX_TRIES} intentos`);
+      console.warn(`⚠️ Pedido no encontrado para payment_id: ${normalizedPaymentId} después de ${MAX_TRIES} intentos`);
       
       res.json({
         success: false,
         pedido_encontrado: false,
         numero_pedido: null,
         message: 'Pedido no encontrado. Es posible que aún se esté procesando.',
-        payment_id: paymentId,
+        payment_id: normalizedPaymentId,
         intentos_realizados: MAX_TRIES
       });
     }
@@ -2401,7 +2480,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
       success: false,
       error: 'Error interno del servidor',
       message: error.message,
-      payment_id: paymentId
+      payment_id: normalizedPaymentId
     });
   }
 });
@@ -2412,9 +2491,19 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
 app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
   const timestamp = new Date().toISOString();
   const { paymentId } = req.params;
+  const paymentContext = buildPaymentIdContext(paymentId);
+  const normalizedPaymentId = paymentContext.normalized;
   
   console.log(`[${timestamp}] 🔄 === REINTENTO MANUAL WHATSAPP ===`);
-  console.log(`[${timestamp}] 📱 Payment ID: ${paymentId}`);
+  console.log(`[${timestamp}] 📱 Payment ID recibido: ${paymentId} (normalizado: ${normalizedPaymentId || 'N/A'})`);
+  
+  if (!normalizedPaymentId) {
+    return res.status(400).json({
+      success: false,
+      error: 'paymentId inválido',
+      payment_id: paymentId
+    });
+  }
   
   try {
     // Verificar estado de WhatsApp
@@ -2442,8 +2531,8 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
         p.whatsapp_notificado,
         p.estado
        FROM productos p 
-       WHERE p.mp_payment_id = $1`,
-      [paymentId],
+       WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2`,
+      paymentContext.dbParams,
       2
     );
     
@@ -2451,7 +2540,7 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
       return res.json({
         success: false,
         error: 'Compra no encontrada',
-        payment_id: paymentId
+        payment_id: normalizedPaymentId
       });
     }
     
@@ -2481,7 +2570,8 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
     
     const paymentInfo = {
       transaction_amount: compra.pedido_monto_total || 0,
-      id: paymentId
+      id: normalizedPaymentId,
+      normalized_payment_id: normalizedPaymentId
     };
     
     console.log(`[${timestamp}] 📨 Intentando envío WhatsApp...`);
@@ -2496,7 +2586,7 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
     
     // Actualizar estado en BD
     const estadoAnterior = compra.whatsapp_notificado;
-    await actualizarEstadoWhatsApp(paymentId, resultado.success);
+    await actualizarEstadoWhatsApp(normalizedPaymentId, resultado.success);
     const estadoNuevo = resultado.success ? 'True' : 'False';
     
     console.log(`[${timestamp}] 💾 Estado actualizado: ${estadoAnterior} → ${estadoNuevo}`);
@@ -2504,7 +2594,7 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
     res.json({
       success: true,
       reintento_exitoso: resultado.success,
-      payment_id: paymentId,
+      payment_id: normalizedPaymentId,
       id_pedido: compra.id_pedido,
       cliente: compra.pedido_nombre_cliente,
       estado_anterior: estadoAnterior,
@@ -2519,7 +2609,7 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
       success: false,
       error: 'Error interno en reintento',
       message: error.message,
-      payment_id: paymentId,
+      payment_id: normalizedPaymentId || paymentId,
       timestamp: timestamp
     });
   }
@@ -2608,6 +2698,19 @@ function setupMemoryOptimization() {
       
       if (cleaned > 0) {
         console.log(`🧹 Limpiadas ${cleaned} notificaciones webhook antiguas`);
+      }
+      
+      // Limpiar historial de envíos duplicados
+      const now = Date.now();
+      let historyCleaned = 0;
+      for (const [key, sentAt] of notificationSendHistory.entries()) {
+        if (now - sentAt > NOTIFICATION_HISTORY_TTL_MS) {
+          notificationSendHistory.delete(key);
+          historyCleaned++;
+        }
+      }
+      if (historyCleaned > 0) {
+        console.log(`🧹 Historial de notificaciones reducido (${historyCleaned} entradas)`);
       }
       
       const memUsage = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);

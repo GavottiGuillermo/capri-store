@@ -95,6 +95,7 @@ const MAX_QR_ATTEMPTS = 5;
 let sessionIsOld = false; // Bandera para sesiones >24h
 let isConnecting = false; // 🔒 Flag para bloquear otros procesos durante conexión
 let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
+let initializationPromise = null; // Evitar inicializaciones concurrentes
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -758,71 +759,83 @@ async function cleanup() {
 // ===============================
 
 // Función para inicializar WhatsApp (simplificada - NO destroy)
-async function inicializarWhatsApp() {
-  console.log('🔵 inicializarWhatsApp() LLAMADA');
+async function inicializarWhatsApp(options = {}) {
+  const { force = false, reason = 'manual' } = options;
+  console.log(`🔵 inicializarWhatsApp() LLAMADA - motivo: ${reason}`);
   console.log('📍 Stack trace:');
   console.trace();
-  
-  try {
-    // SOLO REINICIALIZAR - NO DESTRUIR
-    // El destroy() causa "Could not find expected browser" porque elimina Puppeteer
-    
-    if (!whatsappClient) {
-      console.log('🆕 Creando nuevo cliente WhatsApp (primera vez)...');
-      
-      whatsappClient = new Client({
-        authStrategy: new LocalAuth({
-          clientId: 'capri-store-session',
-          dataPath: authPath
-        }),
-        puppeteer: {
-          headless: true,
-          args: puppeteerArgs,
-          timeout: 180000, // ⏰ 3 minutos - Render Free necesita más tiempo
-          executablePath: chromiumPath, // Usar el path detectado
-          handleSIGINT: false,
-          handleSIGTERM: false,
-          handleSIGHUP: false
-        },
-        webVersionCache: {
-          type: 'remote',
-          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-        },
-        qrMaxRetries: 3,
-        authTimeoutMs: 180000, // ⏰ 3 minutos para autenticación en Render Free
-        takeoverOnConflict: true,
-        takeoverTimeoutMs: 120000 // ⏰ 2 minutos para takeover
-      });
-      
-      // Registrar eventos
-      registrarEventosWhatsApp(whatsappClient);
-      console.log('✅ Cliente creado y eventos registrados');
-    } else {
-      console.log('🔄 Cliente existente - reinicializando sin destruir...');
-      // El cliente ya existe, solo reinicializar
-    }
-    
-    console.log('🚀 Inicializando WhatsApp Business...');
-    console.log('📱 Inicializando cliente WhatsApp (LocalAuth stateless)...');
-    await whatsappClient.initialize();
-    
-    console.log('✅ WhatsApp Business inicializado correctamente');
-    
-  } catch (error) {
-    console.error('❌ Error inicializando WhatsApp:', error);
-    
-    // Detectar errores específicos de sesión expirada/corrupta
-    const isContextError = error.message && error.message.includes('Execution context was destroyed');
-    const isSessionError = error.message && (
-      error.message.includes('Protocol error') ||
-      error.message.includes('Target closed') ||
-      error.message.includes('Session closed') ||
-      error.message.includes('Invalid session') ||
-      error.message.includes('Authentication failed')
-    );
-    
-    throw error;
+
+  if (initializationPromise && !force) {
+    console.log('⏳ Inicialización ya en curso - reutilizando promesa existente');
+    return initializationPromise;
   }
+
+  if (isConnecting && !force) {
+    console.log('🔒 WhatsApp está conectándose actualmente - omitiendo nueva inicialización');
+    return { success: false, skipped: true, reason: 'connecting' };
+  }
+
+  if (whatsappReady && !force) {
+    console.log('✅ WhatsApp ya está listo - no se reinicia');
+    return { success: true, skipped: true, reason: 'already_ready' };
+  }
+
+  const initTask = (async () => {
+    try {
+      setIsConnecting(true);
+
+      if (!whatsappClient) {
+        console.log('🆕 Creando nuevo cliente WhatsApp (primera vez)...');
+        
+        whatsappClient = new Client({
+          authStrategy: new LocalAuth({
+            clientId: 'capri-store-session',
+            dataPath: authPath
+          }),
+          puppeteer: {
+            headless: true,
+            args: puppeteerArgs,
+            timeout: 180000, // ⏰ 3 minutos - Render Free necesita más tiempo
+            executablePath: chromiumPath, // Usar el path detectado
+            handleSIGINT: false,
+            handleSIGTERM: false,
+            handleSIGHUP: false
+          },
+          webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+          },
+          qrMaxRetries: 3,
+          authTimeoutMs: 180000, // ⏰ 3 minutos para autenticación en Render Free
+          takeoverOnConflict: true,
+          takeoverTimeoutMs: 120000 // ⏰ 2 minutos para takeover
+        });
+        
+        registrarEventosWhatsApp(whatsappClient);
+        console.log('✅ Cliente creado y eventos registrados');
+      } else {
+        console.log('🔄 Cliente existente - reinicializando sin destruir...');
+      }
+      
+      console.log('🚀 Inicializando WhatsApp Business...');
+      console.log('📱 Inicializando cliente WhatsApp (LocalAuth stateless)...');
+      await whatsappClient.initialize();
+      
+      console.log('✅ WhatsApp Business inicializado correctamente');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error inicializando WhatsApp:', error);
+      throw error;
+    } finally {
+      initializationPromise = null;
+      if (!whatsappReady) {
+        setIsConnecting(false);
+      }
+    }
+  })();
+
+  initializationPromise = initTask;
+  return initTask;
 }
 
 // Función para enviar mensajes
