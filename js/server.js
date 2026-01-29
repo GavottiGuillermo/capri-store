@@ -131,6 +131,7 @@ const webhookNotifications = new Map();
 const notificationSendHistory = new Map();
 const NOTIFICATION_DUPLICATE_WINDOW_MS = 2 * 60 * 1000; // 2 minutos
 const NOTIFICATION_HISTORY_TTL_MS = 15 * 60 * 1000; // 15 minutos
+const notificationSendInFlight = new Set();
 
 function normalizePaymentId(rawId) {
   if (rawId === undefined || rawId === null) {
@@ -1886,6 +1887,18 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     orderData?.montoTotal ??
     0
   );
+
+  if (normalizedPaymentId) {
+    if (notificationSendInFlight.has(normalizedPaymentId)) {
+      console.warn(`[${timestamp}] ⚠️ Envío ya en curso para pago ${normalizedPaymentId} - omitiendo duplicado`);
+      return {
+        success: false,
+        skipped: true,
+        reason: 'in_flight'
+      };
+    }
+    notificationSendInFlight.add(normalizedPaymentId);
+  }
   
   console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
   console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
@@ -2057,8 +2070,10 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       both_sent: resultAdmin.success && resultCliente.success
     };
     
-    if (!esReintento && normalizedPaymentId && resultado.success) {
-      notificationSendHistory.set(normalizedPaymentId, Date.now());
+    if (normalizedPaymentId) {
+      if (!esReintento && resultado.success) {
+        notificationSendHistory.set(normalizedPaymentId, Date.now());
+      }
     }
     
     // Si el envío fue exitoso, marcar conexión como buena y procesar pendientes
@@ -2081,6 +2096,10 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     console.error(`[${timestamp}] ❌ ERROR CRÍTICO en enviarNotificacionCompra:`, error.message);
     console.error(`[${timestamp}] Stack trace:`, error.stack);
     return { success: false, error: error.message, stack: error.stack };
+  } finally {
+    if (normalizedPaymentId) {
+      notificationSendInFlight.delete(normalizedPaymentId);
+    }
   }
 }
 
