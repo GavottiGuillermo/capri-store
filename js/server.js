@@ -1813,6 +1813,10 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] 🔔 === INICIANDO NOTIFICACIÓN DE COMPRA ===`);
   
+  let normalizedPaymentId = null;
+  let paymentId = 'N/A';
+  let rawPaymentId = null;
+
   try {
     // Validación de parámetros críticos
     if (!customerData || typeof customerData !== 'object') {
@@ -1878,9 +1882,9 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       '');
   
   const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
-  const rawPaymentId = paymentInfo?.normalized_payment_id ?? paymentInfo?.id ?? idPedidoCompleto;
-  const normalizedPaymentId = normalizePaymentId(rawPaymentId);
-  const paymentId = normalizedPaymentId || 'N/A';
+  rawPaymentId = paymentInfo?.normalized_payment_id ?? paymentInfo?.id ?? idPedidoCompleto;
+  normalizedPaymentId = normalizePaymentId(rawPaymentId);
+  paymentId = normalizedPaymentId || 'N/A';
   const transaction_amount = Number(
     paymentInfo?.transaction_amount ??
     orderData?.monto_total ??
