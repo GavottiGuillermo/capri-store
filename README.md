@@ -153,4 +153,4 @@ MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_produccion
 - Las páginas de retorno manejan automáticamente el estado del pago
 
 ---
-&copy; 2024 Capri Store - Todos los derechos reservados
+&copy; 2026 Capri Store - Todos los derechos reservados
