@@ -39,6 +39,17 @@ MERCADOPAGO_ACCESS_TOKEN_TEST=TEST-tu_access_token_de_test
 MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_produccion
 ```
 
+### 4. Configurar WhatsApp Cloud API (opcional)
+```env
+# Activa el nuevo flujo oficial solo cuando tengas las credenciales de Meta
+USE_WHATSAPP_API=false
+WHATSAPP_API_PHONE_NUMBER_ID=tu_phone_number_id_de_meta
+WHATSAPP_API_TOKEN=tu_token_permanente
+```
+- `USE_WHATSAPP_API=false` mantiene el flujo actual con whatsapp-web.js.
+- Cuando lo cambies a `true` y completes las credenciales, las confirmaciones se enviarán usando la API oficial y solo al cliente.
+- Puedes ajustar `WHATSAPP_API_VERSION`, `WHATSAPP_API_BASE_URL` o `WHATSAPP_API_TIMEOUT_MS` si Meta lo requiere.
+
 ## Instalación y Ejecución
 
 ### Para probar localmente:
@@ -77,6 +88,10 @@ MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_produccion
 2. **Notificaciones de compras** - Envío automático cuando se realiza una compra
 3. **Información detallada** - Datos del cliente, productos y totales
 4. **Conexión robusta** - Manejo automático de reconexiones
+
+#### Modos de envío disponibles
+- **Cliente web (por defecto)**: usa `whatsapp-web.js`, envía la notificación al admin y al cliente como hasta ahora.
+- **WhatsApp Cloud API**: al activar `USE_WHATSAPP_API`, la confirmación sale directamente desde el número oficial configurado en Meta y solo hacia el cliente, dejando el registro en ese chat.
 
 ### Primera configuración de WhatsApp Business:
 1. Ejecutar `npm start` para iniciar el servidor
@@ -118,6 +133,7 @@ MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_produccion
 │   ├── events.js          # Manejo de eventos y contacto
 │   ├── server.js          # Servidor Express (backend)
 │   ├── whatsapp-service.js # Servicio de WhatsApp Business
+│   ├── whatsapp-api-service.js # Cliente híbrido para WhatsApp Cloud API
 │   └── andreani-api.js    # Integración con Andreani
 └── assets/
     └── img/               # Imágenes del sitio

@@ -3,6 +3,13 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
 
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+// Cargar variables de entorno antes de inicializar servicios dependientes
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const whatsappApiService = require('./whatsapp-api-service');
 
 // Optional DB objects (may remain null in stateless mode)
 let pool = null;
@@ -67,12 +74,6 @@ try {
 }
 
 const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-
-// Cargar variables de entorno desde .env en la carpeta padre
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // ===============================
 // MANEJADORES GLOBALES DE ERRORES
@@ -1816,6 +1817,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   let normalizedPaymentId = null;
   let paymentId = 'N/A';
   let rawPaymentId = null;
+  const whatsappApiStatus = whatsappApiService.getWhatsAppApiStatus();
+  const useCloudApi = whatsappApiService.shouldUseWhatsAppApi();
 
   try {
     // Validación de parámetros críticos
@@ -1833,99 +1836,106 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       console.error(`[${timestamp}] ❌ paymentInfo inválido:`, paymentInfo);
       return { success: false, error: 'Información de pago inválida' };
     }
-  
-    // Log de estado de WhatsApp
-    console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
-    console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-    console.log(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
-    console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
+
+    console.log(`[${timestamp}] ☁️ WhatsApp API - flagEnabled: ${whatsappApiStatus.flagEnabled}, configurada: ${whatsappApiStatus.configured}, en uso: ${useCloudApi}`);
+    if (whatsappApiStatus.flagEnabled && !whatsappApiStatus.configured) {
+      console.warn(`[${timestamp}] ⚠️ WhatsApp API habilitada pero faltan variables: ${whatsappApiStatus.missing.join(', ')}`);
+    }
     
-    if (!whatsappAvailable) {
-      console.error(`[${timestamp}] ❌ WhatsApp service no está disponible (no se pudo cargar el módulo)`);
-      return { success: false, error: 'WhatsApp service no disponible' };
+    if (useCloudApi) {
+      console.log(`[${timestamp}] ☁️ Se utilizará la API oficial de WhatsApp para esta notificación`);
+    } else {
+      // Log de estado de WhatsApp (cliente web)
+      console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
+      console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
+      console.log(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
+      console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
+      
+      if (!whatsappAvailable) {
+        console.error(`[${timestamp}] ❌ WhatsApp service no está disponible (no se pudo cargar el módulo)`);
+        return { success: false, error: 'WhatsApp service no disponible' };
+      }
+  
+      // VERIFICACIÓN MEJORADA: Usar sistema de flags inteligente
+      const estadoWhatsApp = await verificarEstadoWhatsApp();
+      
+      console.log(`[${timestamp}] 🔍 Verificación mejorada en enviarNotificacionCompra:`);
+      console.log(`[${timestamp}] - Disponible: ${estadoWhatsApp.disponible}`);
+      console.log(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
+      console.log(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
+      console.log(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
+      console.log(`[${timestamp}] - Tiempo desde última conexión: ${estadoWhatsApp.tiempoDesdeUltimaConexion}s`);
+  
+      if (!estadoWhatsApp.disponible) {
+        console.error(`[${timestamp}] ❌ WhatsApp no está disponible:`);
+        console.error(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
+        console.error(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
+        console.error(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
+        return { success: false, error: `WhatsApp no disponible: ${estadoWhatsApp.razon}` };
+      }
+  
+      if (!ADMIN_WHATSAPP) {
+        console.error(`[${timestamp}] ❌ ADMIN_WHATSAPP no está configurado en variables de entorno`);
+        return { success: false, error: 'Número de administrador no configurado' };
+      }
     }
 
-  // VERIFICACIÓN MEJORADA: Usar sistema de flags inteligente
-  const estadoWhatsApp = await verificarEstadoWhatsApp();
-  
-  console.log(`[${timestamp}] 🔍 Verificación mejorada en enviarNotificacionCompra:`);
-  console.log(`[${timestamp}] - Disponible: ${estadoWhatsApp.disponible}`);
-  console.log(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
-  console.log(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
-  console.log(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
-  console.log(`[${timestamp}] - Tiempo desde última conexión: ${estadoWhatsApp.tiempoDesdeUltimaConexion}s`);
-
-  if (!estadoWhatsApp.disponible) {
-    console.error(`[${timestamp}] ❌ WhatsApp no está disponible:`);
-    console.error(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
-    console.error(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
-    console.error(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
-    return { success: false, error: `WhatsApp no disponible: ${estadoWhatsApp.razon}` };
-  }
-
-  if (!ADMIN_WHATSAPP) {
-    console.error(`[${timestamp}] ❌ ADMIN_WHATSAPP no está configurado en variables de entorno`);
-    return { success: false, error: 'Número de administrador no configurado' };
-  }
-
-  console.log(`[${timestamp}] 📋 Datos de la compra:`);
+    console.log(`[${timestamp}] 📋 Datos de la compra:`);
     
-  // Extraer datos con valores por defecto seguros
-  const { first_name = '', last_name = '', phone } = customerData || {};
-  const nombre = first_name;
-  const apellido = last_name;
-  // CORREGIDO: Usar teléfono completo de la base de datos en lugar de reconstruir
-  // El teléfono de la BD ya tiene el formato completo (ej: 5491165031329)
-  const telefono = customerData?.telefono || 
-    (phone ? 
-      (typeof phone === 'string' ? phone : `${phone.area_code}${phone.number}`) : 
-      '');
-  
-  const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
-  rawPaymentId = paymentInfo?.normalized_payment_id ?? paymentInfo?.id ?? idPedidoCompleto;
-  normalizedPaymentId = normalizePaymentId(rawPaymentId);
-  paymentId = normalizedPaymentId || 'N/A';
-  const transaction_amount = Number(
-    paymentInfo?.transaction_amount ??
-    orderData?.monto_total ??
-    orderData?.montoTotal ??
-    0
-  );
-
-  if (normalizedPaymentId) {
-    if (notificationSendInFlight.has(normalizedPaymentId)) {
-      console.warn(`[${timestamp}] ⚠️ Envío ya en curso para pago ${normalizedPaymentId} - omitiendo duplicado`);
-      return {
-        success: false,
-        skipped: true,
-        reason: 'in_flight'
-      };
-    }
-    notificationSendInFlight.add(normalizedPaymentId);
-  }
-  
-  console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
-  console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
-  console.log(`[${timestamp}] - Teléfono RAW:`, phone);
-  console.log(`[${timestamp}] - CustomerData completo:`, customerData);
-  console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
-  console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
-  console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
-
-  if (!esReintento && normalizedPaymentId) {
-    const lastSentAt = notificationSendHistory.get(normalizedPaymentId);
-    if (lastSentAt && (Date.now() - lastSentAt) < NOTIFICATION_DUPLICATE_WINDOW_MS) {
-      const secondsAgo = Math.round((Date.now() - lastSentAt) / 1000);
-      console.warn(`[${timestamp}] ⚠️ Notificación duplicada detectada para pago ${normalizedPaymentId} (hace ${secondsAgo}s) - omitiendo reenvío`);
-      return {
-        success: true,
-        duplicate: true,
-        skipped: true,
-        message: `Notificación ya enviada hace ${secondsAgo}s`
-      };
-    }
-  }
+    // Extraer datos con valores por defecto seguros
+    const { first_name = '', last_name = '', phone } = customerData || {};
+    const nombre = first_name;
+    const apellido = last_name;
+    const telefono = customerData?.telefono || 
+      (phone ? 
+        (typeof phone === 'string' ? phone : `${phone.area_code}${phone.number}`) : 
+        '');
     
+    const { numeroDisplay = 'N/A', idPedidoCompleto = 'N/A' } = orderData || {};
+    rawPaymentId = paymentInfo?.normalized_payment_id ?? paymentInfo?.id ?? idPedidoCompleto;
+    normalizedPaymentId = normalizePaymentId(rawPaymentId);
+    paymentId = normalizedPaymentId || 'N/A';
+    const transaction_amount = Number(
+      paymentInfo?.transaction_amount ??
+      orderData?.monto_total ??
+      orderData?.montoTotal ??
+      0
+    );
+  
+    if (normalizedPaymentId) {
+      if (notificationSendInFlight.has(normalizedPaymentId)) {
+        console.warn(`[${timestamp}] ⚠️ Envío ya en curso para pago ${normalizedPaymentId} - omitiendo duplicado`);
+        return {
+          success: false,
+          skipped: true,
+          reason: 'in_flight'
+        };
+      }
+      notificationSendInFlight.add(normalizedPaymentId);
+    }
+    
+    console.log(`[${timestamp}] - Cliente: ${nombre} ${apellido}`);
+    console.log(`[${timestamp}] - Teléfono: ${telefono || 'No proporcionado'}`);
+    console.log(`[${timestamp}] - Teléfono RAW:`, phone);
+    console.log(`[${timestamp}] - CustomerData completo:`, customerData);
+    console.log(`[${timestamp}] - Pedido: ${numeroDisplay} (${idPedidoCompleto})`);
+    console.log(`[${timestamp}] - Monto: $${transaction_amount}`);
+    console.log(`[${timestamp}] - Payment ID: ${paymentId}`);
+  
+    if (!esReintento && normalizedPaymentId) {
+      const lastSentAt = notificationSendHistory.get(normalizedPaymentId);
+      if (lastSentAt && (Date.now() - lastSentAt) < NOTIFICATION_DUPLICATE_WINDOW_MS) {
+        const secondsAgo = Math.round((Date.now() - lastSentAt) / 1000);
+        console.warn(`[${timestamp}] ⚠️ Notificación duplicada detectada para pago ${normalizedPaymentId} (hace ${secondsAgo}s) - omitiendo reenvío`);
+        return {
+          success: true,
+          duplicate: true,
+          skipped: true,
+          message: `Notificación ya enviada hace ${secondsAgo}s`
+        };
+      }
+    }
+      
     const fechaOptions = {
       timeZone: 'America/Argentina/Buenos_Aires',
       year: 'numeric',
@@ -1956,7 +1966,6 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     let productosTexto = '';
     if (Array.isArray(items) && items.length > 0) {
       if (esReintento) {
-        // Para reintentos: solo mostrar nombres de productos
         productosTexto = items.map((item, index) => {
           const title = item?.title || 'Producto sin nombre';
           const quantity = item?.quantity || 1;
@@ -1965,7 +1974,6 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
           return quantity > 1 ? `• ${title} (${quantity})` : `• ${title}`;
         }).join('\n');
       } else {
-        // Para compras nuevas: mostrar información completa
         productosTexto = items.map((item, index) => {
           const title = item?.title || 'Producto sin nombre';
           const quantity = item?.quantity || 1;
@@ -1980,12 +1988,9 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       productosTexto = '• Información de productos no disponible';
     }
     
-    // Mensaje para administrador
     const businessName = BUSINESS_NAME || 'Tienda Online';
-    
-    // Mensaje base para el admin
     const tipoNotificacion = esReintento ? '🔄 *REINTENTO DE NOTIFICACIÓN*' : '🛒 *NUEVA COMPRA*';
-    let mensajeAdmin = `${tipoNotificacion} - ${businessName}\n\n` +
+    const mensajeAdmin = `${tipoNotificacion} - ${businessName}\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
       `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
@@ -1996,83 +2001,117 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `✅ *${esReintento ? 'Notificación reenviada al cliente automáticamente' : '¡Pago confirmado! Proceder con el envío'}*`;
     
-    console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
-    console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
+    const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
+      `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
+      `📋 *Detalles de tu pedido:*\n` +
+      `🆔 *ID Número Pedido:* ${numeroDisplay}\n` +
+      `📅 *Fecha del pago:* ${fechaHora}\n` +
+      `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
+      `🛍️ *Productos:*\n${productosTexto}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📞 *Te contactaremos pronto para coordinar la entrega*\n\n` +
+      `¡Gracias por elegirnos! 💜`;
     
-    // Normalizar número del administrador antes de enviar
-    const adminNormalizado = normalizePhoneNumber(ADMIN_WHATSAPP);
-    console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
+    let resultado = null;
     
-    // 1. ENVIAR NOTIFICACIÓN AL ADMINISTRADOR
-    const resultAdmin = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
-    
-    // Logging seguro del resultado para evitar [object Object]
-    const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
-      ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
-      : resultAdmin.messageId;
+    if (useCloudApi) {
+      const resultAdmin = { success: false, skipped: true, reason: 'cloud_api_mode' };
+      let resultCliente = { success: false, error: 'No se intentó enviar' };
       
-    console.log(`[${timestamp}] 📡 Resultado del envío al ADMIN:`, {
-      success: resultAdmin.success,
-      error: resultAdmin.error,
-      messageId: safeMessageId
-    });
-    
-    if (resultAdmin.success) {
-      console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente`);
-    } else {
-      console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador:`, resultAdmin.error);
-    }
-    
-    // 2. ENVIAR CONFIRMACIÓN AL CLIENTE (siempre, tanto en compras nuevas como en reintentos)
-    let resultCliente = { success: false, error: 'No se intentó enviar' };
-    
-    if (telefono && telefono.trim()) {
-      console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
-      
-      // Mensaje para el cliente
-      const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
-        `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
-        `📋 *Detalles de tu pedido:*\n` +
-        `🆔 *ID Número Pedido:* ${numeroDisplay}\n` +
-        `📅 *Fecha del pago:* ${fechaHora}\n` +
-        `💰 *Total:* $${transaction_amount.toLocaleString('es-AR')}\n\n` +
-        `🛍️ *Productos:*\n${productosTexto}\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `📞 *Te contactaremos pronto para coordinar la entrega*\n\n` +
-        `¡Gracias por elegirnos! 💜`;
-      
-      // Normalizar teléfono del cliente
-      const clienteNormalizado = normalizePhoneNumber(telefono);
-      console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
-      
-      if (clienteNormalizado) {
-        resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
+      if (telefono && telefono.trim()) {
+        console.log(`[${timestamp}] 📱 Enviando confirmación vía WhatsApp API al cliente: ${telefono}`);
+        const clienteNormalizado = normalizePhoneNumber(telefono);
+        console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
         
-        console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE:`, {
-          success: resultCliente.success,
-          error: resultCliente.error
-        });
-        
-        if (resultCliente.success) {
-          console.log(`[${timestamp}] ✅ Confirmación al CLIENTE enviada exitosamente`);
+        if (clienteNormalizado) {
+          resultCliente = await whatsappApiService.sendWhatsAppApiMessage(clienteNormalizado, mensajeCliente, {
+            paymentId,
+            orderId: idPedidoCompleto,
+            esReintento
+          });
+          
+          console.log(`[${timestamp}] 📡 Resultado del envío vía API:`, {
+            success: resultCliente.success,
+            error: resultCliente.error,
+            messageId: resultCliente.messageId
+          });
         } else {
-          console.error(`[${timestamp}] ❌ FALLO enviando confirmación al cliente:`, resultCliente.error);
+          console.error(`[${timestamp}] ❌ No se pudo normalizar teléfono del cliente para WhatsApp API: ${telefono}`);
+          resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
         }
       } else {
-        console.error(`[${timestamp}] ❌ No se pudo normalizar teléfono del cliente: ${telefono}`);
-        resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
+        console.warn(`[${timestamp}] ⚠️ No hay teléfono del cliente para enviar confirmación (WhatsApp API)`);
+        resultCliente = { success: false, error: 'Teléfono del cliente no disponible' };
       }
+      
+      resultado = {
+        success: resultCliente.success,
+        admin_result: resultAdmin,
+        cliente_result: resultCliente,
+        both_sent: resultCliente.success,
+        transport: 'whatsapp_api'
+      };
     } else {
-      console.warn(`[${timestamp}] ⚠️ No hay teléfono del cliente para enviar confirmación`);
+      console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
+      console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
+      
+      const adminNormalizado = normalizePhoneNumber(ADMIN_WHATSAPP);
+      console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
+      
+      const resultAdmin = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
+      
+      const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
+        ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
+        : resultAdmin.messageId;
+        
+      console.log(`[${timestamp}] 📡 Resultado del envío al ADMIN:`, {
+        success: resultAdmin.success,
+        error: resultAdmin.error,
+        messageId: safeMessageId
+      });
+      
+      if (resultAdmin.success) {
+        console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente`);
+      } else {
+        console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador:`, resultAdmin.error);
+      }
+      
+      let resultCliente = { success: false, error: 'No se intentó enviar' };
+      
+      if (telefono && telefono.trim()) {
+        console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
+        const clienteNormalizado = normalizePhoneNumber(telefono);
+        console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
+        
+        if (clienteNormalizado) {
+          resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
+          
+          console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE:`, {
+            success: resultCliente.success,
+            error: resultCliente.error
+          });
+          
+          if (resultCliente.success) {
+            console.log(`[${timestamp}] ✅ Confirmación al CLIENTE enviada exitosamente`);
+          } else {
+            console.error(`[${timestamp}] ❌ FALLO enviando confirmación al cliente:`, resultCliente.error);
+          }
+        } else {
+          console.error(`[${timestamp}] ❌ No se pudo normalizar teléfono del cliente: ${telefono}`);
+          resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
+        }
+      } else {
+        console.warn(`[${timestamp}] ⚠️ No hay teléfono del cliente para enviar confirmación`);
+      }
+      
+      resultado = {
+        success: resultAdmin.success,
+        admin_result: resultAdmin,
+        cliente_result: resultCliente,
+        both_sent: resultAdmin.success && resultCliente.success,
+        transport: 'web_client'
+      };
     }
-    
-    // Retornar resultado combinado
-    const resultado = {
-      success: resultAdmin.success,
-      admin_result: resultAdmin,
-      cliente_result: resultCliente,
-      both_sent: resultAdmin.success && resultCliente.success
-    };
     
     if (normalizedPaymentId) {
       if (!esReintento && resultado.success) {
@@ -2080,11 +2119,11 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       }
     }
     
-    // Si el envío fue exitoso, marcar conexión como buena y procesar pendientes
-    if (resultado.success) {
-      whatsappService.marcarConexionExitosa();
+    if (resultado.success && resultado.transport === 'web_client') {
+      if (whatsappService && typeof whatsappService.marcarConexionExitosa === 'function') {
+        whatsappService.marcarConexionExitosa();
+      }
       
-      // Procesar notificaciones pendientes en background
       setImmediate(async () => {
         try {
           await procesarNotificacionesPendientes();
