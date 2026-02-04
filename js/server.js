@@ -11,6 +11,10 @@ const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const whatsappApiService = require('./whatsapp-api-service');
 
+const DEFAULT_DB_SCHEMA = process.env.DB_SCHEMA || 'public';
+const DB_SCHEMA = sanitizeIdentifier(DEFAULT_DB_SCHEMA, 'public');
+const PRODUCTOS_TABLE = qualifyTable('productos');
+
 // Optional DB objects (may remain null in stateless mode)
 let pool = null;
 
@@ -22,6 +26,7 @@ async function initializeDatabase() {
   
   // Crear pool de conexiones PostgreSQL
   console.log('🔌 Inicializando conexión a PostgreSQL...');
+  console.log('🏷️ Esquema PostgreSQL seleccionado:', DB_SCHEMA);
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
@@ -38,6 +43,21 @@ async function initializeDatabase() {
   client.release();
   
   return pool;
+}
+
+function sanitizeIdentifier(value, fallback) {
+  const fallbackIdentifier = fallback || 'public';
+  if (!value || typeof value !== 'string') {
+    return fallbackIdentifier;
+  }
+  const trimmed = value.trim();
+  const safe = trimmed.replace(/[^a-zA-Z0-9_]/g, '');
+  return safe || fallbackIdentifier;
+}
+
+function qualifyTable(tableName) {
+  const safeTable = sanitizeIdentifier(tableName, tableName);
+  return `"${DB_SCHEMA}"."${safeTable}"`;
 }
 
 // SYSTEM SIMPLIFIED: PostgreSQL session persistence working perfectly - v4.0
@@ -1121,7 +1141,7 @@ app.get('/stock-agotado', async (req, res) => {
     // Según la estructura de la tabla: estado != 'Disponible' significa agotado/vendido/reservado
     const result = await pool.query(`
       SELECT id_articulo 
-      FROM productos 
+      FROM ${PRODUCTOS_TABLE} 
       WHERE estado IS NULL OR estado != 'Disponible'
       ORDER BY id_articulo
     `);
@@ -1170,7 +1190,7 @@ app.get('/stock-producto/:id', async (req, res) => {
     // Consultar el producto específico
     const result = await pool.query(`
       SELECT id_articulo, estado, publicado_en_web
-      FROM productos 
+      FROM ${PRODUCTOS_TABLE} 
       WHERE id_articulo = $1
     `, [idArticulo]);
     
@@ -1242,7 +1262,7 @@ app.post('/validar-stock-carrito', express.json(), async (req, res) => {
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
     const query = `
       SELECT id_articulo, estado, publicado_en_web
-      FROM productos 
+      FROM ${PRODUCTOS_TABLE} 
       WHERE id_articulo IN (${placeholders})
     `;
     
@@ -1591,7 +1611,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         p.precio_venta_efectivo,
         p.precio_venta_transferencia,
         p.pedido_tipo_entrega
-       FROM productos p 
+      FROM ${PRODUCTOS_TABLE} p 
        WHERE p.estado LIKE '%Pendiente%' 
        AND p.whatsapp_notificado = 'False'
        ORDER BY p.pedido_fecha ASC, p.mp_payment_id, p.id_articulo 
@@ -1758,7 +1778,7 @@ app.get('/api/notificaciones-pendientes', requireMobileApiKey, async (req, res) 
         p.talle,
         p.precio_venta_transferencia,
         p.precio_venta_efectivo
-       FROM productos p
+      FROM ${PRODUCTOS_TABLE} p
        WHERE p.estado ILIKE '%Pendiente%'
          AND (p.whatsapp_notificado = 'False' OR p.whatsapp_notificado IS NULL)
          AND p.pedido_fecha >= $1
@@ -1798,7 +1818,7 @@ async function actualizarEstadoWhatsApp(paymentId, estado) {
     
     await executeQueryWithRetry(
       pool,
-      `UPDATE productos SET whatsapp_notificado = $1 WHERE mp_payment_id = $2 OR mp_payment_id = $3`,
+      `UPDATE ${PRODUCTOS_TABLE} SET whatsapp_notificado = $1 WHERE mp_payment_id = $2 OR mp_payment_id = $3`,
       [estadoString, paymentContext.dbParams[0], paymentContext.dbParams[1]],
       2
     );
@@ -2195,7 +2215,7 @@ app.post('/webhook', async (req, res) => {
       try {
         const checkPedido = await executeQueryWithRetry(
           pool,
-          `SELECT id_pedido FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' LIMIT 1`,
+          `SELECT id_pedido FROM ${PRODUCTOS_TABLE} WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' LIMIT 1`,
           [dbPaymentKey, dbPaymentFallback],
           2
         );
@@ -2285,7 +2305,7 @@ app.post('/webhook', async (req, res) => {
         if (idsArray.length > 0 && pool) {
           try {
             const placeholders = idsArray.map((_, i) => `$${i + 1}`).join(',');
-            const query = `SELECT id_articulo FROM productos WHERE id_articulo IN (${placeholders}) AND estado != 'Disponible'`;
+            const query = `SELECT id_articulo FROM ${PRODUCTOS_TABLE} WHERE id_articulo IN (${placeholders}) AND estado != 'Disponible'`;
             const result = await executeQueryWithRetry(pool, query, idsArray, 2);
             faltantes = result.rows.map(row => row.id_articulo);
           } catch (error) {
@@ -2337,7 +2357,7 @@ app.post('/webhook', async (req, res) => {
             // Obtener el ID del pedido creado
             const pedidoResult = await executeQueryWithRetry(
               pool,
-              `SELECT id_pedido, pedido_fecha FROM productos WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
+              `SELECT id_pedido, pedido_fecha FROM ${PRODUCTOS_TABLE} WHERE (mp_payment_id = $1 OR mp_payment_id = $2) AND id_pedido IS NOT NULL AND id_pedido != '' ORDER BY pedido_fecha DESC LIMIT 1`,
               [dbPaymentKey, dbPaymentFallback],
               2
             );
@@ -2489,7 +2509,7 @@ app.get('/numero-pedido/:paymentId', async (req, res) => {
         const pedidoResult = await executeQueryWithRetry(
           pool,
           `SELECT p.id_pedido, p.pedido_fecha, p.pedido_nombre_cliente, p.pedido_monto_total, p.mp_payment_id 
-           FROM productos p 
+           FROM ${PRODUCTOS_TABLE} p 
            WHERE (p.mp_payment_id = $1 OR p.mp_payment_id = $2) 
            AND p.id_pedido IS NOT NULL 
            AND p.id_pedido != '' 
@@ -2598,7 +2618,7 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
         p.pedido_fecha,
         p.whatsapp_notificado,
         p.estado
-       FROM productos p 
+      FROM ${PRODUCTOS_TABLE} p 
        WHERE p.mp_payment_id = $1 OR p.mp_payment_id = $2`,
       paymentContext.dbParams,
       2

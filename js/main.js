@@ -5,6 +5,19 @@ let productosAgrupados = new Map();
 const ITEMS_POR_PAGINA_NOVEDADES = 6; // 2 filas de 3 productos
 let paginaActualNovedades = 1;
 
+const CAPRI_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
+  (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
+    ? window.CapriConfig.getApiBaseUrl()
+    : '');
+
+function resolveCapriApiUrl(pathname) {
+  if (typeof buildCapriApiUrl === 'function') {
+    return buildCapriApiUrl(pathname);
+  }
+  const path = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : `/${pathname || ''}`;
+  return CAPRI_API_BASE ? `${CAPRI_API_BASE}${path}` : path;
+}
+
 // Orden alfabético de categorías (mismo orden que en el menú)
 const ORDEN_CATEGORIAS = [
   'accesorios',
@@ -157,11 +170,9 @@ async function cargarProductosCapri() {
   // Obtener IDs vendidos (sin stock) desde backend; usar cache solo como fallback
   let soldOutIds = [];
   try {
-    const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
-      ? 'https://capri-store.onrender.com'
-      : '';
     console.log('📦 Solicitando stock agotado desde backend...');
-    const respAg = await fetch(`${API_BASE}/stock-agotado?t=${timestamp}`, { cache: 'no-store' });
+    const stockUrl = `${resolveCapriApiUrl('/stock-agotado')}?t=${timestamp}`;
+    const respAg = await fetch(stockUrl, { cache: 'no-store' });
     if (respAg.ok) {
       const js = await respAg.json();
       if (Array.isArray(js.ids)) {
@@ -225,12 +236,9 @@ async function refrescarStock() {
   try {
     const link = document.getElementById('link-refrescar');
     if (link) { link.textContent = '🔄 Actualizando...'; link.style.pointerEvents = 'none'; }
-    const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
-      ? 'https://capri-store.onrender.com'
-      : '';
     const timestamp = new Date().getTime();
     console.log('🔄 Refrescando stock desde servidor...');
-    const respAg = await fetch(`${API_BASE}/stock-agotado?t=${timestamp}`, { cache: 'no-store' });
+    const respAg = await fetch(`${resolveCapriApiUrl('/stock-agotado')}?t=${timestamp}`, { cache: 'no-store' });
     if (respAg.ok) {
       const js = await respAg.json();
       const ids = Array.isArray(js.ids) ? js.ids : [];

@@ -7,6 +7,19 @@
   
   // ==== CARRITO DE COMPRAS UNIFICADO (SIDEBAR) ====
 
+const SCRIPTS_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
+  (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
+    ? window.CapriConfig.getApiBaseUrl()
+    : '');
+
+function scriptsResolveApiUrl(pathname) {
+  if (typeof buildCapriApiUrl === 'function') {
+    return buildCapriApiUrl(pathname);
+  }
+  const path = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : `/${pathname || ''}`;
+  return SCRIPTS_API_BASE ? `${SCRIPTS_API_BASE}${path}` : path;
+}
+
 // Declarar variable global del carrito (se inicializa en inicializarCarrito)
 let cartItems;
 
@@ -388,7 +401,7 @@ async function finalizarCompraSidebar() {
   }
   try {
     // Validar stock en backend
-    const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+    const resp = await fetch(scriptsResolveApiUrl('/validar-stock-carrito'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids })

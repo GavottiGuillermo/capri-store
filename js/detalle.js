@@ -1,6 +1,19 @@
 // detalle.js
 // Lógica exclusiva para la ventana de detalle de producto en Capri Store
 
+const DETALLE_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
+  (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
+    ? window.CapriConfig.getApiBaseUrl()
+    : '');
+
+function detalleResolveApiUrl(pathname) {
+  if (typeof buildCapriApiUrl === 'function') {
+    return buildCapriApiUrl(pathname);
+  }
+  const path = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : `/${pathname || ''}`;
+  return DETALLE_API_BASE ? `${DETALLE_API_BASE}${path}` : path;
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
   // Obtener el producto seleccionado desde localStorage
   const productoStr = localStorage.getItem('productoDetalle');
@@ -69,12 +82,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         const m = path.match(/\/(\d+)-[^/]+/);
         const id = m && m[1] ? parseInt(m[1], 10) : null;
         if (id) {
-          const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
-            ? 'https://capri-store.onrender.com'
-            : '';
           let stockDisponible = 0;
           try {
-            const stockResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
+                const stockResp = await fetch(detalleResolveApiUrl(`/stock-producto/${id}`), { cache: 'no-store' });
             if (stockResp.ok) {
               const stockData = await stockResp.json();
               if (stockData && typeof stockData.stock !== 'undefined') {
@@ -415,11 +425,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       try {
-        const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
-          ? 'https://capri-store.onrender.com'
-          : '';
-          
-        const stockResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
+        const stockResp = await fetch(detalleResolveApiUrl(`/stock-producto/${id}`), { cache: 'no-store' });
         
         if (stockResp.ok) {
           const stockData = await stockResp.json();
@@ -475,11 +481,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // VALIDACIÓN FINAL: Verificar una última vez el stock justo antes de agregar
       console.log('🔍 VALIDACIÓN FINAL - Última verificación de stock...');
       try {
-        const API_BASE = (window.location.hostname.includes('capristorezte.com.ar'))
-          ? 'https://capri-store.onrender.com'
-          : '';
-          
-        const stockFinalResp = await fetch(`${API_BASE}/stock-producto/${id}`, { cache: 'no-store' });
+        const stockFinalResp = await fetch(detalleResolveApiUrl(`/stock-producto/${id}`), { cache: 'no-store' });
         
         if (stockFinalResp.ok) {
           const stockFinalData = await stockFinalResp.json();

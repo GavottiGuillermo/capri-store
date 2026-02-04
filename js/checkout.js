@@ -1,3 +1,16 @@
+const CHECKOUT_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
+  (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
+    ? window.CapriConfig.getApiBaseUrl()
+    : '');
+
+function checkoutResolveApiUrl(pathname) {
+  if (typeof buildCapriApiUrl === 'function') {
+    return buildCapriApiUrl(pathname);
+  }
+  const path = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : `/${pathname || ''}`;
+  return CHECKOUT_API_BASE ? `${CHECKOUT_API_BASE}${path}` : path;
+}
+
 // === PREPARAR ITEMS PARA MERCADO PAGO ===
 function prepararItemsParaMP(cartItems) {
   // Función para sanitizar strings y evitar problemas con CSP de MercadoPago
@@ -154,7 +167,7 @@ async function validarStockAsync(cartItems) {
   
   try {
     console.log('🔍 Validando stock para:', ids);
-    const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+      const resp = await fetch(checkoutResolveApiUrl('/validar-stock-carrito'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids })
@@ -213,7 +226,7 @@ async function iniciarProcesoPago() {
   // Validar stock antes de iniciar pago
   const ids = cartItems.map(item => item.id_articulo || item.id).filter(Boolean);
   try {
-    const resp = await fetch('https://capri-store.onrender.com/validar-stock-carrito', {
+    const resp = await fetch(checkoutResolveApiUrl('/validar-stock-carrito'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids })
@@ -311,7 +324,7 @@ async function iniciarProcesoPago() {
   console.log('==============================');
   try {
     // Usar la URL absoluta del backend en Render
-    const API_URL = 'https://capri-store.onrender.com/crear-preferencia';
+    const API_URL = checkoutResolveApiUrl('/crear-preferencia');
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

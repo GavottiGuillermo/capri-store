@@ -1,5 +1,18 @@
 // Event listeners y inicialización de componentes
 // Animaciones globales y helpers UI
+
+const EVENTS_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
+  (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
+    ? window.CapriConfig.getApiBaseUrl()
+    : '');
+
+function eventsResolveApiUrl(pathname) {
+  if (typeof buildCapriApiUrl === 'function') {
+    return buildCapriApiUrl(pathname);
+  }
+  const path = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : `/${pathname || ''}`;
+  return EVENTS_API_BASE ? `${EVENTS_API_BASE}${path}` : path;
+}
 function parallaxEffect() {
   const scrolled = window.pageYOffset;
   const parallaxElements = document.querySelectorAll('.parallax-element');
@@ -74,23 +87,9 @@ async function setupContactLinks() {
   try {
     console.log('🔄 Cargando información de contacto del servidor...');
     
-    // Determinar la URL base del API
-    let apiBaseUrl = '';
-    
-    if (window.location.hostname === 'capristorezte.com.ar' || window.location.hostname === 'www.capristorezte.com.ar') {
-      // En producción, usar la URL del backend en Render
-      apiBaseUrl = 'https://capri-store.onrender.com';
-      console.log('🌐 Modo producción: usando backend en Render');
-    } else {
-      // En desarrollo o localhost, usar rutas relativas
-      apiBaseUrl = '';
-      console.log('🔧 Modo desarrollo: usando rutas relativas');
-    }
-    
-    // Intentar con diferentes URLs
     const urls = [
-      `${apiBaseUrl}/contact-info`,
-      `${apiBaseUrl}/api/contact-info`,
+      eventsResolveApiUrl('/contact-info'),
+      eventsResolveApiUrl('/api/contact-info'),
       '/contact-info'
     ];
     

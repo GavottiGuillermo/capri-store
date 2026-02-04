@@ -6,6 +6,19 @@ console.log('📅 Timestamp:', new Date().toISOString());
 console.log('🌐 URL actual:', window.location.href);
 console.log('📋 Parámetros URL:', window.location.search);
 
+const SUCCESS_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
+    (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
+        ? window.CapriConfig.getApiBaseUrl()
+        : '');
+
+function successResolveApiUrl(pathname) {
+    if (typeof buildCapriApiUrl === 'function') {
+        return buildCapriApiUrl(pathname);
+    }
+    const path = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : `/${pathname || ''}`;
+    return SUCCESS_API_BASE ? `${SUCCESS_API_BASE}${path}` : path;
+}
+
 // Test inmediato (sin esperar DOM)
 console.log('🧪 TEST INMEDIATO - Archivo success.js cargado');
 
@@ -93,7 +106,7 @@ function consultarNumeroPedido(paymentId) {
     console.log('💳 PaymentId:', paymentId);
     console.log('🔄 Intento:', intentosRealizados + 1, 'de', MAX_INTENTOS);
     
-    const apiUrl = `https://capri-store.onrender.com/numero-pedido/${paymentId}`;
+    const apiUrl = successResolveApiUrl(`/numero-pedido/${paymentId}`);
     console.log('🌐 URL de consulta:', apiUrl);
     
     fetch(apiUrl, {
