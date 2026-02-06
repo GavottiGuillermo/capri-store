@@ -1728,8 +1728,8 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         
         const resultado = await enviarNotificacionCompra(customerData, orderData, paymentInfo, true);
         
-        // Actualizar estado según resultado
-        await actualizarEstadoWhatsApp(pedido.mp_payment_id, resultado.success);
+        const clienteNotificado = Boolean(resultado?.cliente_result?.success);
+        await actualizarEstadoWhatsApp(pedido.mp_payment_id, clienteNotificado);
         
         if (resultado.success) {
           console.log(`[${timestamp}] ✅ Reintento exitoso para pedido: ${pedido.id_pedido}`);
@@ -1815,6 +1815,7 @@ async function actualizarEstadoWhatsApp(paymentId, estado) {
   
   try {
     const estadoString = estado ? 'True' : 'False';
+    const scope = estado ? 'CLIENTE ENTREGADO' : 'CLIENTE PENDIENTE';
     
     await executeQueryWithRetry(
       pool,
@@ -1823,7 +1824,7 @@ async function actualizarEstadoWhatsApp(paymentId, estado) {
       2
     );
     
-    console.log(`[${timestamp}] ✅ Estado WhatsApp actualizado: ${estadoString} para payment_id: ${normalizedPaymentId}`);
+    console.log(`[${timestamp}] ✅ Estado WhatsApp (${scope}) actualizado a ${estadoString} para payment_id: ${normalizedPaymentId}`);
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error actualizando estado WhatsApp:`, error.message);
@@ -2412,7 +2413,7 @@ app.post('/webhook', async (req, res) => {
                   });
                   
                   // Actualizar estado en base de datos
-                  await actualizarEstadoWhatsApp(paymentKey, notificationResult.success);
+                  await actualizarEstadoWhatsApp(paymentKey, Boolean(notificationResult?.cliente_result?.success));
                   
                 } catch (whatsappError) {
                   console.error(`[${timestamp}] ❌ EXCEPCIÓN enviando notificación WhatsApp:`, whatsappError.message);
@@ -2443,7 +2444,7 @@ app.post('/webhook', async (req, res) => {
                     console.log(`[${timestamp}] 🚀 Resultado envío forzado:`, forceResult);
                     
                     // Actualizar estado según resultado del envío forzado
-                    await actualizarEstadoWhatsApp(paymentKey, forceResult.success);
+                    await actualizarEstadoWhatsApp(paymentKey, Boolean(forceResult?.cliente_result?.success));
                     
                   } catch (forceError) {
                     console.error(`[${timestamp}] ❌ Error en envío forzado:`, forceError.message);
@@ -2674,7 +2675,8 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
     
     // Actualizar estado en BD
     const estadoAnterior = compra.whatsapp_notificado;
-    await actualizarEstadoWhatsApp(normalizedPaymentId, resultado.success);
+    const clienteNotificado = Boolean(resultado?.cliente_result?.success);
+    await actualizarEstadoWhatsApp(normalizedPaymentId, clienteNotificado);
     const estadoNuevo = resultado.success ? 'True' : 'False';
     
     console.log(`[${timestamp}] 💾 Estado actualizado: ${estadoAnterior} → ${estadoNuevo}`);

@@ -87,6 +87,7 @@ if (!chromiumPath) {
 // Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP; // Número del admin
+const READY_ADMIN_NOTIFICATION_DELAY_MS = 12000; // 12s para estabilizar antes de avisar al admin
 
 let whatsappReady = false;
 let qrGenerated = false;
@@ -104,7 +105,6 @@ const ADMIN_MESSAGE_MAX_RETRIES = 3;
 const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
 const ADMIN_NUMBER_ID_MAX_ATTEMPTS = 5;
 const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
-const READY_SETTLE_DELAY_MS = parseInt(process.env.WHATSAPP_READY_SETTLE_MS || '8000', 10);
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
@@ -594,10 +594,10 @@ function registrarEventosWhatsApp(client) {
       
       // ✅ ENVIAR MENSAJE AL ADMIN - Esperar más tiempo para que WhatsApp termine de sincronizar
       if (state === 'CONNECTED') {
-        const settleSeconds = READY_SETTLE_DELAY_MS / 1000;
-        if (READY_SETTLE_DELAY_MS > 0) {
+        const settleSeconds = READY_ADMIN_NOTIFICATION_DELAY_MS / 1000;
+        if (READY_ADMIN_NOTIFICATION_DELAY_MS > 0) {
           console.log(`⏳ Esperando ${settleSeconds}s para que WhatsApp estabilice antes de notificar al administrador...`);
-          await sleep(READY_SETTLE_DELAY_MS);
+          await sleep(READY_ADMIN_NOTIFICATION_DELAY_MS);
         }
 
         const postDelayState = await client.getState().catch(() => null);
