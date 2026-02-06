@@ -104,6 +104,7 @@ const ADMIN_MESSAGE_MAX_RETRIES = 3;
 const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
 const ADMIN_NUMBER_ID_MAX_ATTEMPTS = 5;
 const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
+const READY_SETTLE_DELAY_MS = parseInt(process.env.WHATSAPP_READY_SETTLE_MS || '8000', 10);
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
@@ -593,7 +594,18 @@ function registrarEventosWhatsApp(client) {
       
       // ✅ ENVIAR MENSAJE AL ADMIN - Esperar más tiempo para que WhatsApp termine de sincronizar
       if (state === 'CONNECTED') {
-        await enviarMensajeConfirmacionAdmin(client);
+        const settleSeconds = READY_SETTLE_DELAY_MS / 1000;
+        if (READY_SETTLE_DELAY_MS > 0) {
+          console.log(`⏳ Esperando ${settleSeconds}s para que WhatsApp estabilice antes de notificar al administrador...`);
+          await sleep(READY_SETTLE_DELAY_MS);
+        }
+
+        const postDelayState = await client.getState().catch(() => null);
+        if (postDelayState === 'CONNECTED') {
+          await enviarMensajeConfirmacionAdmin(client);
+        } else {
+          console.warn('⚠️ Cliente dejó de estar CONNECTED tras la espera de estabilización; se omite la notificación al admin');
+        }
       }
     } catch (infoError) {
       console.log('⚠️ No se pudo obtener info del estado');
