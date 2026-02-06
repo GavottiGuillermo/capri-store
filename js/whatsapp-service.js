@@ -102,6 +102,8 @@ let ultimaConexionExitosa = null;
 
 const ADMIN_MESSAGE_MAX_RETRIES = 3;
 const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
+const ADMIN_NUMBER_ID_MAX_ATTEMPTS = 5;
+const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
@@ -188,7 +190,7 @@ async function enviarMensajeConfirmacionAdmin(client) {
   let numberId;
   try {
     console.log('📤 Obteniendo ID del número administrador...');
-    numberId = await client.getNumberId(ADMIN_WHATSAPP);
+    numberId = await obtenerNumeroAdministrador(client);
   } catch (error) {
     console.error('❌ Error obteniendo el ID del número administrador:', error.message);
     return;
@@ -231,6 +233,48 @@ async function enviarMensajeConfirmacionAdmin(client) {
 
   console.error('❌ No se pudo enviar el mensaje de confirmación al administrador tras agotar los reintentos');
 }
+async function obtenerNumeroAdministrador(client) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= ADMIN_NUMBER_ID_MAX_ATTEMPTS; attempt += 1) {
+    const state = await client.getState().catch(() => null);
+    if (state !== 'CONNECTED') {
+      console.warn(`⚠️ Estado del cliente (${state}) antes de getNumberId - intento ${attempt}/${ADMIN_NUMBER_ID_MAX_ATTEMPTS}`);
+    }
+
+    try {
+      const numberId = await client.getNumberId(ADMIN_WHATSAPP);
+      if (numberId) {
+        return numberId;
+      }
+      console.warn(`⚠️ getNumberId devolvió vacío - intento ${attempt}/${ADMIN_NUMBER_ID_MAX_ATTEMPTS}`);
+    } catch (error) {
+      lastError = error;
+      const message = error && error.message ? error.message : '';
+      const commsNotReady = message.includes('sendIq') || message.includes('startComms');
+
+      if (commsNotReady && attempt < ADMIN_NUMBER_ID_MAX_ATTEMPTS) {
+        console.warn(`⏳ WhatsApp aún inicializando (sendIq/startComms) - reintentando en ${ADMIN_NUMBER_ID_RETRY_DELAY_MS / 1000}s (intento ${attempt}/${ADMIN_NUMBER_ID_MAX_ATTEMPTS})`);
+        await sleep(ADMIN_NUMBER_ID_RETRY_DELAY_MS);
+        continue;
+      }
+
+      throw error;
+    }
+
+    if (attempt < ADMIN_NUMBER_ID_MAX_ATTEMPTS) {
+      console.log(`⏳ Reintentando obtener ID en ${ADMIN_NUMBER_ID_RETRY_DELAY_MS / 1000}s...`);
+      await sleep(ADMIN_NUMBER_ID_RETRY_DELAY_MS);
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  return null;
+}
+
 
 
 
