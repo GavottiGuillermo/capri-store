@@ -20,22 +20,22 @@ function resolveCapriApiUrl(pathname) {
 
 // Orden alfabético de categorías (mismo orden que en el menú)
 const ORDEN_CATEGORIAS = [
-  'accesorios',
   'bodys',
-  'carteras',
   'conjuntos',
   'minis',
-  'onafitness',
   'pantalones',
   'polleras',
   'remeras',
   'shorts',
   'tops',
-  'vestidos'
+  'vestidos',
+  'accesorios',
+  'carteras',
+  'onafitness'
 ];
 
 const NOMBRES_CATEGORIAS_PERSONALIZADOS = {
-  onafitness: 'OnaFitness'
+  onafitness: 'Onna Fitness'
 };
 
 function obtenerSlugCategoria(valor) {
@@ -46,7 +46,7 @@ function obtenerSlugCategoria(valor) {
   }
   base = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   base = base.replace(/\s+/g, '-');
-  if (base === 'ona-fitness') {
+  if (base === 'ona-fitness' || base === 'onna-fitness' || base === 'onafitness' || base === 'onnafitness') {
     base = 'onafitness';
   }
   return base;

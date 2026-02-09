@@ -14,10 +14,18 @@ function detalleResolveApiUrl(pathname) {
   return DETALLE_API_BASE ? `${DETALLE_API_BASE}${path}` : path;
 }
 
+const CATEGORIAS_SIN_TALLE = ['accesorios', 'carteras', 'onafitness'];
+const VALORES_TALLE_OPCIONAL = new Set(['', 'sin talle', 'sin-talle', 'sintalle', 'unitalla', 'unico', 'único', 'ajustable', 'na', 'n/a', 'u']);
+
 document.addEventListener('DOMContentLoaded', async function() {
   // Obtener el producto seleccionado desde localStorage
   const productoStr = localStorage.getItem('productoDetalle');
   const producto = productoStr ? JSON.parse(productoStr) : null;
+  const selectTalleGlobal = document.getElementById('size');
+  const inputCantidadGlobal = document.getElementById('quantity');
+  if (selectTalleGlobal) {
+    configurarCampoTalle(selectTalleGlobal, producto?.talle, producto);
+  }
   if (producto && producto.txt) {
     try {
       // Obtener los datos actualizados desde el .txt del producto
@@ -61,14 +69,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         seccionDetalles.style.display = 'none';
       }
       
-      // Configurar talle y cantidad fijos
-      const selectTalle = document.getElementById('size');
-      const inputCantidad = document.getElementById('quantity');
-      if (selectTalle && talle) {
-        selectTalle.value = talle;
-        selectTalle.disabled = true;
-        selectTalle.style.backgroundColor = '#f8f9fa';
-        selectTalle.style.cursor = 'not-allowed';
+      const selectTalle = selectTalleGlobal;
+      const inputCantidad = inputCantidadGlobal;
+      if (selectTalle) {
+        configurarCampoTalle(selectTalle, talle, producto);
       }
       if (inputCantidad) {
         inputCantidad.value = 1;
@@ -221,15 +225,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
       } catch {}
       // Configurar talle y cantidad fijos (fallback)
-      const selectTalle = document.getElementById('size');
-      const inputCantidad = document.getElementById('quantity');
+      const selectTalle = selectTalleGlobal;
+      const inputCantidad = inputCantidadGlobal;
       if (selectTalle) {
-        if (producto.talle) {
-          selectTalle.value = producto.talle;
-        }
-        selectTalle.disabled = true;
-        selectTalle.style.backgroundColor = '#f8f9fa';
-        selectTalle.style.cursor = 'not-allowed';
+        configurarCampoTalle(selectTalle, producto?.talle, producto);
       }
       if (inputCantidad) {
         inputCantidad.value = 1;
@@ -246,15 +245,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
     document.querySelector('.descripcion-producto').textContent = producto.desc;
     // Configurar talle y cantidad fijos
-    const selectTalle = document.getElementById('size');
-    const inputCantidad = document.getElementById('quantity');
+    const selectTalle = selectTalleGlobal;
+    const inputCantidad = inputCantidadGlobal;
     if (selectTalle) {
-      if (producto.talle) {
-        selectTalle.value = producto.talle;
-      }
-      selectTalle.disabled = true;
-      selectTalle.style.backgroundColor = '#f8f9fa';
-      selectTalle.style.cursor = 'not-allowed';
+      configurarCampoTalle(selectTalle, producto?.talle, producto);
     }
     if (inputCantidad) {
       inputCantidad.value = 1;
@@ -267,12 +261,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('precio-producto').textContent = '';
     document.querySelector('.descripcion-producto').textContent = '';
     // Deshabilitar campos cuando no hay producto
-    const selectTalle = document.getElementById('size');
-    const inputCantidad = document.getElementById('quantity');
+    const selectTalle = selectTalleGlobal;
+    const inputCantidad = inputCantidadGlobal;
     if (selectTalle) {
-      selectTalle.disabled = true;
-      selectTalle.style.backgroundColor = '#f8f9fa';
-      selectTalle.style.cursor = 'not-allowed';
+      configurarCampoTalle(selectTalle, '', producto);
     }
     if (inputCantidad) {
       inputCantidad.value = 1;
@@ -303,16 +295,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Obtener el producto para usar su talle original
     const productoStr = localStorage.getItem('productoDetalle');
     const producto = productoStr ? JSON.parse(productoStr) : null;
-    const talleOriginal = producto?.talle || "M";
+    const metaTalleInicial = obtenerInfoTalleFormulario(producto?.talle, producto);
+    const talleOriginal = metaTalleInicial.valor;
     
     selectTalle.value = talleOriginal;
+    if (metaTalleInicial.opcional) {
+      selectTalle.dataset.optional = 'true';
+      selectTalle.required = false;
+    }
     inputCantidad.value = 1;
     btnAgregar.disabled = false;
     btnAgregar.classList.remove('btn-secondary');
     btnAgregar.classList.add('btn-vino-tinto');
     
     function validarFormulario() {
-      const talleValido = selectTalle.value !== "";
+      const talleOpcional = selectTalle.dataset.optional === 'true';
+      const talleValido = talleOpcional || selectTalle.value !== "";
       const cantidadInput = parseInt(inputCantidad.value) || 0;
       const maxStock = parseInt(inputCantidad.max) || 999; // Valor por defecto alto si no hay max establecido
       const cantidadValida = cantidadInput > 0 && cantidadInput <= maxStock;
@@ -369,11 +367,14 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       const productoStr = localStorage.getItem('productoDetalle');
       const producto = productoStr ? JSON.parse(productoStr) : null;
-      const size = selectTalle.value;
+      const talleOpcional = selectTalle.dataset.optional === 'true';
+      const sizeValue = selectTalle.value || '';
+      const size = talleOpcional ? (sizeValue || 'UNICO') : sizeValue;
+      const sizeLabel = talleOpcional ? 'Único' : size;
       const quantity = parseInt(inputCantidad.value);
       const maxStock = parseInt(inputCantidad.max) || 0;
       
-      if (!producto || !size || !quantity || quantity < 1) {
+      if (!producto || (!size && !talleOpcional) || !quantity || quantity < 1) {
         console.log('❌ Datos incompletos del formulario');
         return;
       }
@@ -406,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
       let cantidadEnCarrito = 0;
       try {
         // Usar la misma lógica que agregarAlCarrito - buscar por nombre e img
-        const nombreCompleto = `${producto.nombre} (Talle: ${size})`;
+        const nombreCompleto = `${producto.nombre} (Talle: ${sizeLabel})`;
         const cartRaw = localStorage.getItem("carrito");
         const cartItems = cartRaw ? JSON.parse(cartRaw) : [];
         
@@ -492,7 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // VALIDACIÓN FINAL CON CARRITO EN TIEMPO REAL
             let cantidadFinalEnCarrito = 0;
             try {
-              const nombreCompleto = `${producto.nombre} (Talle: ${size})`;
+              const nombreCompleto = `${producto.nombre} (Talle: ${sizeLabel})`;
               const cartRaw = localStorage.getItem("carrito");
               const cartItems = cartRaw ? JSON.parse(cartRaw) : [];
               
@@ -558,14 +559,14 @@ document.addEventListener('DOMContentLoaded', function() {
       // Lógica para agregar al carrito (usa función global)
       if (typeof agregarAlCarrito === 'function') {
         agregarAlCarrito(
-          `${producto.nombre} (Talle: ${size})`,
+          `${producto.nombre} (Talle: ${sizeLabel})`,
           Number(producto.precio),
           producto.img,
           quantity,
           producto
         );
         if (typeof mostrarPopup === 'function') {
-          mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${size}) x${quantity}`);
+          mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${sizeLabel}) x${quantity}`);
         }
         console.log('✅ Producto agregado exitosamente al carrito');
       } else {
@@ -577,8 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Resetear formulario solo si se agregó exitosamente
       productForm.reset();
       // Mantener el talle original del producto (no forzar "M")
-      const talleOriginal = producto.talle || "M";
-      selectTalle.value = talleOriginal;
+      configurarCampoTalle(selectTalle, producto?.talle, producto);
       inputCantidad.value = 1;
       btnAgregar.disabled = false;
       btnAgregar.classList.remove('btn-secondary');
@@ -587,6 +587,62 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+function obtenerInfoTalleFormulario(talle, producto) {
+  const valorNormalizado = (talle && talle !== 'null') ? talle.toString().trim() : '';
+  const opcional = esTalleOpcionalPorDatos(valorNormalizado, producto);
+  const valor = opcional ? 'UNICO' : (valorNormalizado || 'M');
+  const etiqueta = opcional ? 'Único / Sin talle' : valor;
+  return { valor, etiqueta, opcional };
+}
+
+function configurarCampoTalle(selectElement, talle, producto) {
+  if (!selectElement) return;
+  const infoTalle = obtenerInfoTalleFormulario(talle, producto);
+  selectElement.dataset.optional = infoTalle.opcional ? 'true' : 'false';
+  selectElement.required = !infoTalle.opcional;
+  let option = Array.from(selectElement.options || []).find(opt => opt.value === infoTalle.valor);
+  if (!option) {
+    option = document.createElement('option');
+    option.value = infoTalle.valor;
+    option.textContent = infoTalle.etiqueta;
+    selectElement.appendChild(option);
+  } else if (infoTalle.opcional) {
+    option.textContent = infoTalle.etiqueta;
+  }
+  selectElement.value = infoTalle.valor;
+  selectElement.disabled = true;
+  selectElement.style.backgroundColor = '#f8f9fa';
+  selectElement.style.cursor = 'not-allowed';
+}
+
+function esTalleOpcionalPorDatos(talle, producto) {
+  const valor = (talle || '').toString().trim().toLowerCase();
+  if (VALORES_TALLE_OPCIONAL.has(valor)) {
+    return true;
+  }
+  const categoria = obtenerCategoriaDesdeProducto(producto);
+  const slug = obtenerSlugCategoriaDetalle(categoria);
+  if (slug && CATEGORIAS_SIN_TALLE.includes(slug)) {
+    return true;
+  }
+  return false;
+}
+
+function obtenerCategoriaDesdeProducto(producto) {
+  return (producto && producto.originalData && producto.originalData.categoria) || producto?.categoria || '';
+}
+
+function obtenerSlugCategoriaDetalle(valor) {
+  if (!valor) return '';
+  let slug = valor.toString().trim().toLowerCase();
+  slug = slug.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  slug = slug.replace(/\s+/g, '-');
+  if (slug === 'ona-fitness' || slug === 'onna-fitness' || slug === 'onafitness' || slug === 'onnafitness') {
+    return 'onafitness';
+  }
+  return slug;
+}
 
 // Función para mostrar el stock disponible
 function mostrarStockDisponible(stock) {
