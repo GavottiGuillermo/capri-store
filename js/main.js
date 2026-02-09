@@ -22,8 +22,10 @@ function resolveCapriApiUrl(pathname) {
 const ORDEN_CATEGORIAS = [
   'accesorios',
   'bodys',
+  'carteras',
   'conjuntos',
   'minis',
+  'onafitness',
   'pantalones',
   'polleras',
   'remeras',
@@ -32,6 +34,10 @@ const ORDEN_CATEGORIAS = [
   'vestidos'
 ];
 
+const NOMBRES_CATEGORIAS_PERSONALIZADOS = {
+  onafitness: 'OnaFitness'
+};
+
 function obtenerSlugCategoria(valor) {
   if (!valor) return '';
   let base = valor.toString().trim().toLowerCase();
@@ -39,11 +45,18 @@ function obtenerSlugCategoria(valor) {
     base = base.replace(/-novedad$/, '');
   }
   base = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return base.replace(/\s+/g, '-');
+  base = base.replace(/\s+/g, '-');
+  if (base === 'ona-fitness') {
+    base = 'onafitness';
+  }
+  return base;
 }
 
 function formatearNombreCategoria(slug) {
   if (!slug) return 'Otros';
+  if (NOMBRES_CATEGORIAS_PERSONALIZADOS[slug]) {
+    return NOMBRES_CATEGORIAS_PERSONALIZADOS[slug];
+  }
   return slug
     .replace(/-/g, ' ')
     .replace(/\b\w/g, letra => letra.toUpperCase());
