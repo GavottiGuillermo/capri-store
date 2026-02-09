@@ -110,6 +110,8 @@ const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
 let onWhatsAppReadyCallback = null;
 let lastCallbackExecution = 0;
 const CALLBACK_DEBOUNCE_MS = 30000; // 30 segundos entre ejecuciones
+const CHAT_SYNC_MAX_ATTEMPTS = 20;
+const CHAT_SYNC_DELAY_MS = 4000;
 
 // Función para configurar el callback
 function setOnWhatsAppReadyCallback(callback) {
@@ -147,6 +149,30 @@ function sleep(ms) {
 
 function chatHasUnreadState(chat) {
   return Boolean(chat && chat.msgs && typeof chat.msgs.markedUnread !== 'undefined');
+}
+
+// Espera a que WhatsApp termine de sincronizar los chats iniciales
+async function esperarSincronizacionChats(client, options = {}) {
+  const maxAttempts = options.maxAttempts || CHAT_SYNC_MAX_ATTEMPTS;
+  const delayMs = options.delayMs || CHAT_SYNC_DELAY_MS;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const ts = new Date().toISOString();
+    try {
+      const chats = await client.getChats();
+      if (Array.isArray(chats) && chats.length > 0) {
+        console.log(`[${ts}] ✅ Chats sincronizados (${chats.length}) en intento ${attempt}/${maxAttempts}`);
+        return true;
+      }
+      console.log(`[${ts}] ⏳ Chats aún no disponibles (intento ${attempt}/${maxAttempts})`);
+    } catch (error) {
+      console.log(`[${ts}] ⚠️ Chats no disponibles todavía (intento ${attempt}/${maxAttempts}): ${error.message}`);
+    }
+    await sleep(delayMs);
+  }
+
+  console.warn(`[${new Date().toISOString()}] ⚠️ Timeout esperando sincronización de chats tras ${(maxAttempts * delayMs) / 1000}s`);
+  return false;
 }
 
 
@@ -451,7 +477,12 @@ function registrarEventosWhatsApp(client) {
     }
     
     console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
-    whatsappReady = true;
+    const chatsSincronizados = await esperarSincronizacionChats(client);
+    if (chatsSincronizados) {
+      console.log('✅ Chats iniciales disponibles - es seguro enviar notificaciones pendientes');
+    } else {
+      console.warn('⚠️ No se confirmó la sincronización completa de chats antes del timeout (se continuará con precaución)');
+    }
     
     // RESETEAR CONTADOR DE QR cuando se conecta exitosamente
     qrAttempts = 0;
@@ -940,16 +971,30 @@ async function enviarWhatsApp(numero, mensaje) {
       };
     }
 
-    // Formatear número (agregar @c.us si no lo tiene)
-    const numeroFormateado = numero.includes('@') ? numero : `${numero}@c.us`;
-    console.log(`[${timestamp}] 📱 Número formateado: ${numeroFormateado}`);
+    // Formatear y validar número (agregar @c.us si no lo tiene)
+    const numeroLimpio = numero.replace(/@.*$/, '').replace(/\D/g, '') || numero.replace(/@.*$/, '');
+    let numeroDestino = numero.includes('@') ? numero : `${numero}@c.us`;
+
+    try {
+      const numberIdInfo = await whatsappClient.getNumberId(numeroLimpio);
+      if (numberIdInfo && numberIdInfo._serialized) {
+        numeroDestino = numberIdInfo._serialized;
+        console.log(`[${timestamp}] 🆔 Número validado mediante getNumberId: ${numeroDestino}`);
+      } else {
+        console.warn(`[${timestamp}] ⚠️ getNumberId no devolvió datos para ${numero}`);
+      }
+    } catch (numberIdError) {
+      console.warn(`[${timestamp}] ⚠️ Error verificando número con getNumberId (${numero}): ${numberIdError.message}`);
+    }
+
+    console.log(`[${timestamp}] 📱 Número formateado final: ${numeroDestino}`);
     
     console.log(`[${timestamp}] 💧 Hidratando chat destino antes de enviar...`);
-    await ensureChatHydrated(whatsappClient, numeroFormateado);
+    await ensureChatHydrated(whatsappClient, numeroDestino);
 
     // Enviar mensaje directamente con client para evitar inconsistencias en chats sin sincronizar
     console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage...`);
-    const messageResult = await whatsappClient.sendMessage(numeroFormateado, mensaje, { sendSeen: false });
+    const messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje, { sendSeen: false });
     console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
     
     // Mejorar el logging del messageId para evitar [object Object]
