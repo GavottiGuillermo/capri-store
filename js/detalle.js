@@ -36,14 +36,25 @@ document.addEventListener('DOMContentLoaded', async function() {
       const txt = decoder.decode(buffer);
       // Extraer información entre llaves en formato secuencial
       // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
-      const matches = txt.match(/\{([^}]+)\}/g);
-      let nombre = producto.nombre, textoTarjeta = producto.desc, precio = producto.precio, talle = producto.talle || 'M', detalle = '';
-      if (matches && matches.length >= 5) {
-        nombre = matches[0].replace(/[{}]/g, '').trim();
-        textoTarjeta = matches[1].replace(/[{}]/g, '').trim();
-        precio = matches[2].replace(/[{}]/g, '').trim();
-        talle = matches[3].replace(/[{}]/g, '').trim();
-        detalle = matches[4].replace(/[{}]/g, '').trim();
+      const matches = txt.match(/\{([^}]+)\}/g) || [];
+      let nombre = producto.nombre;
+      let textoTarjeta = producto.desc;
+      let precio = producto.precio;
+      let talle = producto.talle || 'M';
+      let detalle = '';
+
+      const limpiarCampo = (valor) => {
+        const limpio = (valor || '').replace(/[{}]/g, '').trim();
+        if (!limpio) return '';
+        const normalizado = limpio.toLowerCase();
+        return normalizado === 'null' || normalizado === 'undefined' ? '' : limpio;
+      };
+      if (matches.length) {
+        if (matches[0]) nombre = limpiarCampo(matches[0]) || nombre;
+        if (matches[1]) textoTarjeta = limpiarCampo(matches[1]) || textoTarjeta;
+        if (matches[2]) precio = limpiarCampo(matches[2]) || precio;
+        if (matches[3]) talle = limpiarCampo(matches[3]) || talle;
+        if (matches[4]) detalle = limpiarCampo(matches[4]) || detalle;
       }
       document.getElementById('mainImage').src = producto.img;
       document.getElementById('mainImage').alt = nombre;
