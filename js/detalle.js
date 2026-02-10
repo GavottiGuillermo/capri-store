@@ -629,6 +629,10 @@ function configurarCampoTalle(selectElement, talle, producto) {
 
 function esTalleOpcionalPorDatos(talle, producto) {
   const valor = (talle || '').toString().trim().toLowerCase();
+  if (valor && !VALORES_TALLE_OPCIONAL.has(valor)) {
+    // Si el .txt trae un talle real (ej. S, M, L) respetarlo, aunque la categoría sea de accesorios
+    return false;
+  }
   if (VALORES_TALLE_OPCIONAL.has(valor)) {
     return true;
   }
