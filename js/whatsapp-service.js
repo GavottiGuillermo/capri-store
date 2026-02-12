@@ -243,18 +243,13 @@ async function enviarMensajeConfirmacionAdmin(client, options = {}) {
     }
 
     console.log(`📨 Intento ${attempt}/${ADMIN_MESSAGE_MAX_RETRIES} de enviar mensaje al administrador...`);
-    const chat = await ensureChatHydrated(client, numberId._serialized);
-    if (!chatHasUnreadState(chat)) {
-      console.warn('⚠️ Chat del administrador aún no está completamente hidratado (faltan datos de msgs)');
-    } else {
-      try {
-        await client.sendMessage(numberId._serialized, message, { sendSeen: false });
-        console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
-        return;
-      } catch (error) {
-        console.error('❌ Error enviando mensaje al admin:', error.message);
-        console.error('📋 Stack:', error.stack);
-      }
+    try {
+      await client.sendMessage(numberId._serialized, message, { sendSeen: false });
+      console.log('✅✅✅ Mensaje de confirmación enviado exitosamente al administrador');
+      return;
+    } catch (error) {
+      console.error('❌ Error enviando mensaje al admin:', error.message);
+      console.error('📋 Stack:', error.stack);
     }
 
     if (attempt < ADMIN_MESSAGE_MAX_RETRIES) {
@@ -509,12 +504,7 @@ function registrarEventosWhatsApp(client) {
     }
     
     console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
-    const chatsSincronizados = await esperarSincronizacionChats(client);
-    if (chatsSincronizados) {
-      console.log('✅ Chats iniciales disponibles - es seguro enviar notificaciones pendientes');
-    } else {
-      console.warn('⚠️ No se confirmó la sincronización completa de chats antes del timeout (se continuará con precaución)');
-    }
+    console.log('ℹ️ Se omite la espera de sincronización de chats para evitar bloqueos');
     
     // RESETEAR CONTADOR DE QR cuando se conecta exitosamente
     qrAttempts = 0;
@@ -1029,10 +1019,6 @@ async function enviarWhatsApp(numero, mensaje) {
 
     console.log(`[${timestamp}] 📱 Número formateado final: ${numeroDestino}`);
     
-    console.log(`[${timestamp}] 💧 Hidratando chat destino antes de enviar...`);
-    await ensureChatHydrated(whatsappClient, numeroDestino);
-
-    // Enviar mensaje directamente con client para evitar inconsistencias en chats sin sincronizar
     console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage...`);
     const messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje, { sendSeen: false });
     console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
