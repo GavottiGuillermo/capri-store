@@ -1985,6 +1985,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     console.log(`[${timestamp}] 📦 Items de la compra: ${items.length} productos`);
     
     let productosTexto = '';
+    let productosTextoTemplate = '';
     if (Array.isArray(items) && items.length > 0) {
       if (esReintento) {
         productosTexto = items.map((item, index) => {
@@ -2004,9 +2005,16 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
           return `• ${title} x${quantity} - $${unit_price.toLocaleString('es-AR')}`;
         }).join('\n');
       }
+
+      productosTextoTemplate = items.map((item) => {
+        const title = item?.title || 'Producto sin nombre';
+        const quantity = item?.quantity || 1;
+        return quantity > 1 ? `- ${title} (${quantity})` : `- ${title}`;
+      }).join('\n');
     } else {
       console.log(`[${timestamp}] ⚠️ No se encontraron items válidos en paymentInfo`);
       productosTexto = '• Información de productos no disponible';
+      productosTextoTemplate = '- Informacion de productos no disponible';
     }
     
     const businessName = BUSINESS_NAME || 'Tienda Online';
@@ -2038,6 +2046,9 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     if (useCloudApi) {
       const resultAdmin = { success: false, skipped: true, reason: 'cloud_api_mode' };
       let resultCliente = { success: false, error: 'No se intentó enviar' };
+      const templateName = process.env.WHATSAPP_API_TEMPLATE_NAME;
+      const templateLanguage = process.env.WHATSAPP_API_TEMPLATE_LANGUAGE || 'es';
+      const useTemplate = Boolean(templateName);
       
       if (telefono && telefono.trim()) {
         console.log(`[${timestamp}] 📱 Enviando confirmación vía WhatsApp API al cliente: ${telefono}`);
@@ -2045,11 +2056,35 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
         console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
         
         if (clienteNormalizado) {
-          resultCliente = await whatsappApiService.sendWhatsAppApiMessage(clienteNormalizado, mensajeCliente, {
-            paymentId,
-            orderId: idPedidoCompleto,
-            esReintento
-          });
+          if (useTemplate && typeof whatsappApiService.sendWhatsAppApiTemplateMessage === 'function') {
+            const totalTexto = `$${transaction_amount.toLocaleString('es-AR')}`;
+            const nombreCliente = nombre?.trim() || 'Cliente';
+            const parametros = [
+              nombreCliente,
+              numeroDisplay,
+              fechaHora,
+              totalTexto,
+              productosTextoTemplate
+            ];
+
+            resultCliente = await whatsappApiService.sendWhatsAppApiTemplateMessage(
+              clienteNormalizado,
+              templateName,
+              templateLanguage,
+              parametros,
+              {
+                paymentId,
+                orderId: idPedidoCompleto,
+                esReintento
+              }
+            );
+          } else {
+            resultCliente = await whatsappApiService.sendWhatsAppApiMessage(clienteNormalizado, mensajeCliente, {
+              paymentId,
+              orderId: idPedidoCompleto,
+              esReintento
+            });
+          }
           
           console.log(`[${timestamp}] 📡 Resultado del envío vía API:`, {
             success: resultCliente.success,

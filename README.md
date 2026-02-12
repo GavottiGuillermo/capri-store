@@ -45,10 +45,14 @@ MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_produccion
 USE_WHATSAPP_API=false
 WHATSAPP_API_PHONE_NUMBER_ID=tu_phone_number_id_de_meta
 WHATSAPP_API_TOKEN=tu_token_permanente
+# Nombre y idioma de la plantilla aprobada
+WHATSAPP_API_TEMPLATE_NAME=order_management_1
+WHATSAPP_API_TEMPLATE_LANGUAGE=es
 ```
 - `USE_WHATSAPP_API=false` mantiene el flujo actual con whatsapp-web.js.
 - Cuando lo cambies a `true` y completes las credenciales, las confirmaciones se enviarán usando la API oficial y solo al cliente.
 - Puedes ajustar `WHATSAPP_API_VERSION`, `WHATSAPP_API_BASE_URL` o `WHATSAPP_API_TIMEOUT_MS` si Meta lo requiere.
+- Si `WHATSAPP_API_TEMPLATE_NAME` está configurada, se enviará la plantilla con los datos del pedido.
 
 ## Instalación y Ejecución
 
@@ -92,6 +96,14 @@ WHATSAPP_API_TOKEN=tu_token_permanente
 #### Modos de envío disponibles
 - **Cliente web (por defecto)**: usa `whatsapp-web.js`, envía la notificación al admin y al cliente como hasta ahora.
 - **WhatsApp Cloud API**: al activar `USE_WHATSAPP_API`, la confirmación sale directamente desde el número oficial configurado en Meta y solo hacia el cliente, dejando el registro en ese chat.
+
+#### Plantillas para WhatsApp Cloud API
+Si `WHATSAPP_API_TEMPLATE_NAME` esta configurada, el backend envia la plantilla con las variables en este orden:
+1. Nombre del cliente
+2. Numero de pedido
+3. Fecha y hora
+4. Total
+5. Listado de productos (una linea por producto)
 
 ### Primera configuración de WhatsApp Business:
 1. Ejecutar `npm start` para iniciar el servidor

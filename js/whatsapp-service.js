@@ -97,6 +97,8 @@ let sessionIsOld = false; // Bandera para sesiones >24h
 let isConnecting = false; // 🔒 Flag para bloquear otros procesos durante conexión
 let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
 let initializationPromise = null; // Evitar inicializaciones concurrentes
+let adminNotificationSent = false;
+let adminNotificationInFlight = false;
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -204,11 +206,13 @@ async function ensureChatHydrated(client, chatId) {
   }
 }
 
-async function enviarMensajeConfirmacionAdmin(client) {
+async function enviarMensajeConfirmacionAdmin(client, options = {}) {
   if (!ADMIN_WHATSAPP) {
     console.log('⚠️ ADMIN_WHATSAPP no está configurado; se omite la notificación');
     return;
   }
+
+  const allowUnknownState = Boolean(options.allowUnknownState);
 
   console.log('📱 Enviando mensaje de confirmación al administrador (controlado con reintentos)...');
 
@@ -232,8 +236,9 @@ async function enviarMensajeConfirmacionAdmin(client) {
 
   for (let attempt = 1; attempt <= ADMIN_MESSAGE_MAX_RETRIES; attempt += 1) {
     const state = await client.getState().catch(() => null);
-    if (state !== 'CONNECTED') {
-      console.warn(`⚠️ Cliente dejó de estar CONNECTED antes de enviar el mensaje (estado actual: ${state})`);
+    const canSend = state === 'CONNECTED' || (allowUnknownState && (state === null || state === undefined));
+    if (!canSend) {
+      console.warn(`⚠️ Cliente no está CONNECTED antes de enviar el mensaje (estado actual: ${state})`);
       return;
     }
 
@@ -259,6 +264,33 @@ async function enviarMensajeConfirmacionAdmin(client) {
   }
 
   console.error('❌ No se pudo enviar el mensaje de confirmación al administrador tras agotar los reintentos');
+}
+
+async function notifyAdminOnce(client, reason) {
+  if (adminNotificationSent || adminNotificationInFlight) {
+    return;
+  }
+  if (!ADMIN_WHATSAPP) {
+    return;
+  }
+
+  adminNotificationInFlight = true;
+  try {
+    const state = await client.getState().catch(() => null);
+    const allowUnknownState = state === null || state === undefined;
+
+    if (state && state !== 'CONNECTED') {
+      console.warn(`⚠️ Estado no conectado para notificar admin (${reason}): ${state}`);
+      return;
+    }
+
+    await enviarMensajeConfirmacionAdmin(client, { allowUnknownState });
+    adminNotificationSent = true;
+  } catch (error) {
+    console.warn(`⚠️ No se pudo notificar al admin (${reason}): ${error.message}`);
+  } finally {
+    adminNotificationInFlight = false;
+  }
 }
 async function obtenerNumeroAdministrador(client) {
   let lastError = null;
@@ -595,6 +627,8 @@ function registrarEventosWhatsApp(client) {
     // Marcar conexión exitosa para verificación de disponibilidad
     console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
     marcarConexionExitosa();
+
+    await notifyAdminOnce(client, 'ready');
     
     // Procesar notificaciones pendientes en background
     if (onWhatsAppReadyCallback) {
@@ -677,6 +711,8 @@ function registrarEventosWhatsApp(client) {
             
             // Log simple - no enviar mensaje
             console.log(`[${ts}] 💡 WhatsApp conectado vía activación manual - Admin: ${ADMIN_WHATSAPP || 'No configurado'}`);
+
+            await notifyAdminOnce(client, 'manual-activation');
             
             // Ejecutar callback de notificaciones pendientes
             if (onWhatsAppReadyCallback) {
@@ -709,6 +745,8 @@ function registrarEventosWhatsApp(client) {
     whatsappReady = false;
     qrGenerated = false;
     readyEventCount = 0; // Resetear contador de ready
+    adminNotificationSent = false;
+    adminNotificationInFlight = false;
     setIsConnecting(false); // 🔓 Desbloquear si se desconecta
     
     console.log('\n========================================');
@@ -869,6 +907,8 @@ async function inicializarWhatsApp(options = {}) {
 
   const initTask = (async () => {
     try {
+      adminNotificationSent = false;
+      adminNotificationInFlight = false;
       setIsConnecting(true);
 
       if (!whatsappClient) {
