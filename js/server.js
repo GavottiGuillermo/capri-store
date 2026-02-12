@@ -2353,7 +2353,7 @@ app.post('/webhook', async (req, res) => {
         if (faltantes.length > 0) {
           console.log(`[${timestamp}] ⚠️ Productos sin stock: ${faltantes.join(', ')}`);
           // Enviar notificación de productos no disponibles
-          if (whatsappAvailable && whatsappReady && ADMIN_WHATSAPP) {
+          if (whatsappAvailable && getWhatsAppReady() && ADMIN_WHATSAPP) {
             try {
               const mensaje = `⚠️ *PROBLEMA CON COMPRA*\n\n` +
                 `💳 Pago ID: ${paymentKey}\n` +
@@ -2404,14 +2404,15 @@ app.post('/webhook', async (req, res) => {
                 idPedidoCompleto.slice(-2) : idPedidoCompleto;
 
               console.log(`[${timestamp}] ✅ Pedido creado exitosamente: ${idPedidoCompleto} (Display: ${numeroDisplay})`);
+              await actualizarEstadoWhatsApp(paymentKey, false);
 
               // Enviar notificación de compra por WhatsApp
               console.log(`[${timestamp}] 📱 Intentando enviar notificación WhatsApp...`);
               console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-              console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
+              console.log(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
               
               // MEJORA: Esperar un poco si WhatsApp se está inicializando
-              if (whatsappAvailable && !whatsappReady) {
+              if (whatsappAvailable && !getWhatsAppReady()) {
                 console.log(`[${timestamp}] ⏳ WhatsApp disponible pero no listo, esperando 3 segundos...`);
                 await new Promise(resolve => setTimeout(resolve, 3000));
               }
@@ -2428,7 +2429,7 @@ app.post('/webhook', async (req, res) => {
                 realClientState = 'ASSUMED_CONNECTED';
                 
                 console.log(`[${timestamp}] 🔍 Verificación estado real:`);
-                console.log(`[${timestamp}] - Flag whatsappReady: ${whatsappReady}`);
+                console.log(`[${timestamp}] - Flag whatsappReady: ${getWhatsAppReady()}`);
                 console.log(`[${timestamp}] - Estado asumido: ${realClientState}`);
                 console.log(`[${timestamp}] - Puede enviar: ${canSendWhatsApp}`);
               }
