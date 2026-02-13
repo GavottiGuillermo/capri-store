@@ -856,13 +856,19 @@ app.post('/whatsapp-test-template', async (req, res) => {
       { test: true }
     );
 
+    // Log detallado de error si falla
+    if (!resultado.success) {
+      console.error(`[${timestamp}] ❌ WhatsApp Cloud API error detail:`, JSON.stringify(resultado, null, 2));
+    }
+
     return res.status(resultado.success ? 200 : 500).json({
       success: resultado.success,
       template_name: templateName,
       template_language: templateLanguage,
       to,
       parametros,
-      resultado
+      resultado,
+      error_detail: resultado.details || resultado.error || null
     });
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error en /whatsapp-test-template: ${error.message}`);
