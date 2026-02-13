@@ -793,6 +793,86 @@ app.get('/whatsapp-status', async (req, res) => {
   }
 });
 
+// === PRUEBA DE PLANTILLA WHATSAPP CLOUD API ===
+app.post('/whatsapp-test-template', async (req, res) => {
+  const timestamp = new Date().toISOString();
+
+  try {
+    const whatsappApiStatus = whatsappApiService.getWhatsAppApiStatus();
+    const useCloudApi = whatsappApiService.shouldUseWhatsAppApi();
+    const templateName = process.env.WHATSAPP_API_TEMPLATE_NAME;
+    const templateLanguage = process.env.WHATSAPP_API_TEMPLATE_LANGUAGE || 'es';
+
+    if (!useCloudApi) {
+      return res.status(400).json({
+        success: false,
+        error: 'WhatsApp Cloud API no habilitada o mal configurada',
+        status: whatsappApiStatus
+      });
+    }
+
+    if (!templateName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Falta WHATSAPP_API_TEMPLATE_NAME en variables de entorno'
+      });
+    }
+
+    const toRaw = req.body?.to || req.body?.telefono || process.env.ADMIN_WHATSAPP;
+    const to = normalizePhoneNumber(String(toRaw || '').trim());
+    if (!to) {
+      return res.status(400).json({
+        success: false,
+        error: 'Número destino inválido. Envía { "to": "549..." } o configura ADMIN_WHATSAPP'
+      });
+    }
+
+    const nombre = String(req.body?.nombre || 'Guillermo');
+    const pedido = String(req.body?.pedido || '07');
+    const fecha = String(req.body?.fecha || new Date().toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }));
+    const total = String(req.body?.total || '$69.000');
+    const productos = String(
+      req.body?.productos ||
+      '* Spicy\n* Vestido valen\n* Musculosa escote V\n* Mini short flecos'
+    );
+
+    const parametros = [nombre, pedido, fecha, total, productos];
+
+    console.log(`[${timestamp}] 🧪 Enviando plantilla de prueba vía Cloud API a ${to}`);
+    console.log(`[${timestamp}] 🧪 Plantilla: ${templateName} (${templateLanguage})`);
+
+    const resultado = await whatsappApiService.sendWhatsAppApiTemplateMessage(
+      to,
+      templateName,
+      templateLanguage,
+      parametros,
+      { test: true }
+    );
+
+    return res.status(resultado.success ? 200 : 500).json({
+      success: resultado.success,
+      template_name: templateName,
+      template_language: templateLanguage,
+      to,
+      parametros,
+      resultado
+    });
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error en /whatsapp-test-template: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // === REGENERAR QR DE WHATSAPP ===
 app.get('/whatsapp-regenerar-qr', async (req, res) => {
   console.log('🔄 Solicitud de regeneración de QR desde:', req.ip);
@@ -1072,6 +1152,7 @@ app.get('/debug', (req, res) => {
       '/contact-info',
       '/whatsapp-status',
       '/test-whatsapp (POST)',
+      '/whatsapp-test-template (POST)',
       '/whatsapp-reconnect (POST)',
       '/whatsapp-clean-session (POST)',
       '/whatsapp-full-reset (POST)',
@@ -1426,7 +1507,8 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       notification_url: `https://capri-store.onrender.com/webhook`,
       // Metadata simplificado para identificación en webhook
       metadata: {
-        telefono: String(datosComprador.telefono).replace(/\D/g, '').substring(0, 15)
+        telefono: String(datosComprador.telefono).replace(/\D/g, '').substring(0, 15),
+        email: String(datosComprador.email || '').trim().toLowerCase().substring(0, 254)
       },
       // External reference para tracking adicional
       external_reference: `TEL${datosComprador.telefono}_${Date.now()}`
@@ -2018,12 +2100,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       productosTextoTemplate = items.map((item) => {
         const title = item?.title || 'Producto sin nombre';
         const quantity = item?.quantity || 1;
-        return quantity > 1 ? `- ${title} (${quantity})` : `- ${title}`;
+        return quantity > 1 ? `* ${title} (${quantity})` : `* ${title}`;
       }).join('\n');
     } else {
       console.log(`[${timestamp}] ⚠️ No se encontraron items válidos en paymentInfo`);
       productosTexto = '• Información de productos no disponible';
-      productosTextoTemplate = '- Informacion de productos no disponible';
+      productosTextoTemplate = '* Informacion de productos no disponible';
     }
     
     const businessName = BUSINESS_NAME || 'Tienda Online';
@@ -2323,7 +2405,7 @@ app.post('/webhook', async (req, res) => {
             customerData = {
               nombre: paymentInfo.payer?.first_name || '',
               apellido: paymentInfo.payer?.last_name || '',
-              email: paymentInfo.payer?.email || '',
+              email: paymentInfo.metadata.email || paymentInfo.payer?.email || '',
               telefono: paymentInfo.metadata.telefono || paymentInfo.payer?.phone?.number || ''
             };
           }
@@ -2331,7 +2413,7 @@ app.post('/webhook', async (req, res) => {
           console.error(`[${timestamp}] ⚠️ Error extrayendo customer data:`, error.message);
         }
 
-        const emailCliente = customerData.email || paymentInfo.payer?.email || `cliente${String(customerData.telefono || '').replace(/\D/g, '')}@mp.com.ar`;
+        const emailCliente = customerData.email || paymentInfo.metadata?.email || paymentInfo.payer?.email || `cliente${String(customerData.telefono || '').replace(/\D/g, '')}@mp.com.ar`;
 
         // Extraer IDs de productos
         let productIds = '';
