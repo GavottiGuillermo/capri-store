@@ -153,6 +153,7 @@ const notificationSendHistory = new Map();
 const NOTIFICATION_DUPLICATE_WINDOW_MS = 2 * 60 * 1000; // 2 minutos
 const NOTIFICATION_HISTORY_TTL_MS = 15 * 60 * 1000; // 15 minutos
 const notificationSendInFlight = new Set();
+let pendingNotificationsProcessing = false;
 
 function normalizePaymentId(rawId) {
   if (rawId === undefined || rawId === null) {
@@ -1557,6 +1558,12 @@ async function verificarEstadoWhatsApp() {
 // Función para procesar notificaciones pendientes
 async function procesarNotificacionesPendientes(reintentos = 0) {
   const timestamp = new Date().toISOString();
+
+  if (pendingNotificationsProcessing) {
+    console.log(`[${timestamp}] ⏭️ procesarNotificacionesPendientes ya está en ejecución; se omite invocación duplicada`);
+    return;
+  }
+  pendingNotificationsProcessing = true;
   
   try {
     console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}, reintentos: ${reintentos}`);
@@ -1747,6 +1754,8 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error en procesarNotificacionesPendientes:`, error.message);
+  } finally {
+    pendingNotificationsProcessing = false;
   }
 }
 
@@ -2175,7 +2184,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       }
     }
     
-    if (resultado.success && resultado.transport === 'web_client') {
+    if (resultado.success && resultado.transport === 'web_client' && !esReintento) {
       if (whatsappService && typeof whatsappService.marcarConexionExitosa === 'function') {
         whatsappService.marcarConexionExitosa();
       }
@@ -2314,12 +2323,15 @@ app.post('/webhook', async (req, res) => {
             customerData = {
               nombre: paymentInfo.payer?.first_name || '',
               apellido: paymentInfo.payer?.last_name || '',
+              email: paymentInfo.payer?.email || '',
               telefono: paymentInfo.metadata.telefono || paymentInfo.payer?.phone?.number || ''
             };
           }
         } catch (error) {
           console.error(`[${timestamp}] ⚠️ Error extrayendo customer data:`, error.message);
         }
+
+        const emailCliente = customerData.email || paymentInfo.payer?.email || `cliente${String(customerData.telefono || '').replace(/\D/g, '')}@mp.com.ar`;
 
         // Extraer IDs de productos
         let productIds = '';
@@ -2381,7 +2393,7 @@ app.post('/webhook', async (req, res) => {
                 productIds,
                 paymentInfo.transaction_amount,
                 paymentInfo.payer?.first_name || 'Cliente Web',
-                'cliente@whatsapp.temp', // Email temporal ya que no usamos email
+                emailCliente,
                 customerData.telefono || paymentInfo.payer?.phone?.number || '',
                 'MercadoPago',
                 'Retiro', // Tipo de entrega por defecto
