@@ -374,6 +374,46 @@ function normalizePhoneNumber(phone) {
   return cleanNumber; // Devolver lo que se pueda
 }
 
+function sanitizeTemplateText(value, fallback = '') {
+  const safeValue = value === undefined || value === null ? '' : String(value);
+  const baseText = safeValue || fallback || '';
+
+  return baseText
+    .normalize('NFC')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\u00A0/g, ' ')
+    .replace(/\uFFFD/g, '')
+    .replace(/[ ]{2,}/g, ' ')
+    .trim();
+}
+
+function normalizeProductsForTemplate(value, fallback = 'Informacion de productos no disponible') {
+  const raw = value === undefined || value === null ? '' : String(value);
+  const withSeparators = raw.replace(/[\r\n\t]+/g, ', ');
+  const withoutBullets = withSeparators.replace(/[•*]+/g, ' ');
+  const normalized = sanitizeTemplateText(withoutBullets, fallback);
+  return normalized || fallback;
+}
+
+function formatTemplateTotal(value, fallback = '$69.000') {
+  const raw = sanitizeTemplateText(value, '');
+  if (!raw) {
+    return fallback;
+  }
+
+  const digitsOnly = raw.replace(/\D/g, '');
+  if (!digitsOnly) {
+    return fallback;
+  }
+
+  const amount = Number(digitsOnly);
+  if (!Number.isFinite(amount)) {
+    return fallback;
+  }
+
+  return `$${amount.toLocaleString('es-AR')}`;
+}
+
 // Generar ID único para pedidos
 function generateOrderId() {
   const timestamp = Date.now().toString();
@@ -818,7 +858,7 @@ app.post('/whatsapp-test-template', async (req, res) => {
       });
     }
 
-    const toRaw = req.body?.to || req.body?.telefono || process.env.ADMIN_WHATSAPP;
+    const toRaw = req.body?.to || req.body?.telefono || req.body?.numero || process.env.ADMIN_WHATSAPP;
     const to = normalizePhoneNumber(String(toRaw || '').trim());
     if (!to) {
       return res.status(400).json({
@@ -827,21 +867,27 @@ app.post('/whatsapp-test-template', async (req, res) => {
       });
     }
 
-    const nombre = String(req.body?.nombre || 'Guillermo');
-    const pedido = String(req.body?.pedido || '07');
-    const fecha = String(req.body?.fecha || new Date().toLocaleString('es-AR', {
+    const requestParameters = Array.isArray(req.body?.parameters) ? req.body.parameters : null;
+
+    const nombreRaw = requestParameters?.[0] ?? req.body?.nombre ?? 'Guillermo';
+    const pedidoRaw = requestParameters?.[1] ?? req.body?.pedido ?? '07';
+    const fechaRaw = requestParameters?.[2] ?? req.body?.fecha ?? new Date().toLocaleString('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit'
-    }));
-    const total = String(req.body?.total || '$69.000');
-    const productos = String(
-      req.body?.productos ||
+    });
+    const totalRaw = requestParameters?.[3] ?? req.body?.total ?? '$69.000';
+    const productosRaw = requestParameters?.[4] ?? req.body?.productos ??
       '* Spicy\n* Vestido valen\n* Musculosa escote V\n* Mini short flecos'
-    );
+
+    const nombre = sanitizeTemplateText(nombreRaw, 'Guillermo');
+    const pedido = sanitizeTemplateText(pedidoRaw, '07');
+    const fecha = sanitizeTemplateText(fechaRaw);
+    const total = formatTemplateTotal(totalRaw, '$69.000');
+    const productos = normalizeProductsForTemplate(productosRaw, 'Spicy, Vestido valen, Musculosa escote V, Mini short flecos');
 
     const parametros = [nombre, pedido, fecha, total, productos];
 
@@ -861,6 +907,16 @@ app.post('/whatsapp-test-template', async (req, res) => {
       console.error(`[${timestamp}] ❌ WhatsApp Cloud API error detail:`, JSON.stringify(resultado, null, 2));
     }
 
+    let pedidoUpdate = null;
+    const paymentIdToUpdate = req.body?.paymentId || req.body?.payment_id || req.body?.mp_payment_id || req.body?.id_pago;
+    if (resultado.success && paymentIdToUpdate) {
+      await actualizarEstadoWhatsApp(paymentIdToUpdate, true);
+      pedidoUpdate = {
+        payment_id: normalizePaymentId(paymentIdToUpdate),
+        whatsapp_notificado: 'True'
+      };
+    }
+
     return res.status(resultado.success ? 200 : 500).json({
       success: resultado.success,
       template_name: templateName,
@@ -868,6 +924,7 @@ app.post('/whatsapp-test-template', async (req, res) => {
       to,
       parametros,
       resultado,
+      pedido_update: pedidoUpdate,
       error_detail: resultado.details || resultado.error || null
     });
   } catch (error) {
@@ -2106,8 +2163,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       productosTextoTemplate = items.map((item) => {
         const title = item?.title || 'Producto sin nombre';
         const quantity = item?.quantity || 1;
-        return quantity > 1 ? `* ${title} (${quantity})` : `* ${title}`;
-      }).join('\n');
+        return quantity > 1 ? `${title} (${quantity})` : `${title}`;
+      }).join(', ');
     } else {
       console.log(`[${timestamp}] ⚠️ No se encontraron items válidos en paymentInfo`);
       productosTexto = '• Información de productos no disponible';
@@ -2154,14 +2211,17 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
         
         if (clienteNormalizado) {
           if (useTemplate && typeof whatsappApiService.sendWhatsAppApiTemplateMessage === 'function') {
-            const totalTexto = `$${transaction_amount.toLocaleString('es-AR')}`;
-            const nombreCliente = nombre?.trim() || 'Cliente';
+            const totalTexto = formatTemplateTotal(transaction_amount, '$0');
+            const nombreCliente = sanitizeTemplateText(nombre?.trim() || 'Cliente', 'Cliente');
+            const numeroTemplate = sanitizeTemplateText(numeroDisplay, 'N/A');
+            const fechaTemplate = sanitizeTemplateText(fechaHora);
+            const productosTemplate = normalizeProductsForTemplate(productosTextoTemplate);
             const parametros = [
               nombreCliente,
-              numeroDisplay,
-              fechaHora,
+              numeroTemplate,
+              fechaTemplate,
               totalTexto,
-              productosTextoTemplate
+              productosTemplate
             ];
 
             resultCliente = await whatsappApiService.sendWhatsAppApiTemplateMessage(
@@ -2561,7 +2621,7 @@ app.post('/webhook', async (req, res) => {
               } else {
                 console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible para notificación:`);
                 console.warn(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-                console.warn(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
+                console.warn(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
                 console.warn(`[${timestamp}] - Estado real cliente: ${realClientState}`);
                 console.warn(`[${timestamp}] - Puede enviar calculado: ${canSendWhatsApp}`);
                 
@@ -2569,7 +2629,7 @@ app.post('/webhook', async (req, res) => {
                 await actualizarEstadoWhatsApp(paymentKey, false);
                 
                 // Intentar envío forzado si el cliente está CONNECTED pero el flag es false
-                if (whatsappAvailable && realClientState === 'CONNECTED' && !whatsappReady) {
+                if (whatsappAvailable && realClientState === 'CONNECTED' && !getWhatsAppReady()) {
                   console.log(`[${timestamp}] 🔄 INTENTO FORZADO: Cliente CONNECTED pero flag false`);
                   try {
                     const forceResult = await enviarNotificacionCompra(
