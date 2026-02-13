@@ -93,6 +93,17 @@ try {
   };
 }
 
+
+// Permitir múltiples administradores: separar por coma o punto y coma
+function getAdminNumbers() {
+  if (!ADMIN_WHATSAPP) return [];
+  if (Array.isArray(ADMIN_WHATSAPP)) return ADMIN_WHATSAPP;
+  return String(ADMIN_WHATSAPP)
+    .split(/[;,]/)
+    .map(n => n.trim())
+    .filter(Boolean);
+}
+
 const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 
 // ===============================
@@ -2173,7 +2184,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     
     const businessName = BUSINESS_NAME || 'Tienda Online';
     const tipoNotificacion = esReintento ? '🔄 *REINTENTO DE NOTIFICACIÓN*' : '🛒 *NUEVA COMPRA*';
-    const mensajeAdmin = `${tipoNotificacion} - ${businessName}\n\n` +
+    // Nuevo título para aviso a admin
+    const mensajeAdmin = `🟢 Nuevo Pedido Registrado en el Sistema Capri\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
       `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
       `📅 *Fecha:* ${fechaHora}\n\n` +
@@ -2265,32 +2277,31 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
         transport: 'whatsapp_api'
       };
     } else {
-      console.log(`[${timestamp}] 📝 Mensaje construido, enviando a: ${ADMIN_WHATSAPP}`);
-      console.log(`[${timestamp}] 📄 Preview del mensaje: ${mensajeAdmin.substring(0, 200)}...`);
-      
-      const adminNormalizado = normalizePhoneNumber(ADMIN_WHATSAPP);
-      console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
-      
-      const resultAdmin = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
-      
-      const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
-        ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
-        : resultAdmin.messageId;
-        
-      console.log(`[${timestamp}] 📡 Resultado del envío al ADMIN:`, {
-        success: resultAdmin.success,
-        error: resultAdmin.error,
-        messageId: safeMessageId
-      });
-      
-      if (resultAdmin.success) {
-        console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente`);
-      } else {
-        console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador:`, resultAdmin.error);
+      const adminNumbers = getAdminNumbers();
+      let adminResults = [];
+      for (const adminNum of adminNumbers) {
+        const adminNormalizado = normalizePhoneNumber(adminNum);
+        console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
+        const resultAdmin = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
+        const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
+          ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
+          : resultAdmin.messageId;
+        console.log(`[${timestamp}] 📡 Resultado del envío al ADMIN:`, {
+          admin: adminNum,
+          success: resultAdmin.success,
+          error: resultAdmin.error,
+          messageId: safeMessageId
+        });
+        if (resultAdmin.success) {
+          console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente (${adminNum})`);
+        } else {
+          console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador (${adminNum}):`, resultAdmin.error);
+        }
+        adminResults.push({ admin: adminNum, ...resultAdmin });
       }
-      
+
       let resultCliente = { success: false, error: 'No se intentó enviar' };
-      
+
       if (telefono && telefono.trim()) {
         console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
         const clienteNormalizado = normalizePhoneNumber(telefono);
@@ -2318,10 +2329,10 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       }
       
       resultado = {
-        success: resultAdmin.success,
-        admin_result: resultAdmin,
+        success: adminResults.every(r => r.success),
+        admin_result: adminResults,
         cliente_result: resultCliente,
-        both_sent: resultAdmin.success && resultCliente.success,
+        both_sent: adminResults.every(r => r.success) && resultCliente.success,
         transport: 'web_client'
       };
     }
