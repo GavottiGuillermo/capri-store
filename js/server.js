@@ -145,21 +145,22 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ UNHANDLED REJECTION en:', promise);
-  console.error('Razón:', reason);
-  
-  // Si es error de WhatsApp, no crashear
-  if (reason && reason.message && (
-    reason.message.includes('temp-auth') ||
-    reason.message.includes('wwebjs') ||
-    reason.message.includes('Session closed') ||
-    reason.message.includes('Execution context was destroyed') ||
-    reason.message.includes('Target closed') ||
-    reason.message.includes('Runtime.callFunctionOn')
-  )) {
-    console.log('⚠️ Error de WhatsApp detectado - servidor continúa funcionando');
+  const reasonMessage = String(reason?.message || reason || '');
+
+  if (
+    reasonMessage.includes('temp-auth') ||
+    reasonMessage.includes('wwebjs') ||
+    reasonMessage.includes('Session closed') ||
+    reasonMessage.includes('Execution context was destroyed') ||
+    reasonMessage.includes('Target closed') ||
+    reasonMessage.includes('Runtime.callFunctionOn')
+  ) {
+    console.log('⚠️ Error de WhatsApp detectado (esperable por navegación/logout) - servidor continúa funcionando');
     return;
   }
+
+  console.error('❌ UNHANDLED REJECTION en:', promise);
+  console.error('Razón:', reason);
 });
 
 // Logging inicial para debugging
@@ -2342,7 +2343,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
           console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
 
           if (clienteNormalizado) {
-            resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
+            resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente, { maxAttempts: 1 });
             console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE (one-shot):`, {
               success: resultCliente.success,
               error: resultCliente.error
@@ -2370,7 +2371,11 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       for (const adminNum of adminNumbers) {
         const adminNormalizado = normalizePhoneNumber(adminNum);
         console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
-        const resultAdmin = await enviarWhatsApp(adminNormalizado, mensajeAdmin);
+        const resultAdmin = await enviarWhatsApp(
+          adminNormalizado,
+          mensajeAdmin,
+          oneShotDispatch ? { maxAttempts: 1 } : undefined
+        );
         const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
           ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
           : resultAdmin.messageId;

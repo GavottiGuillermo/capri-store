@@ -110,8 +110,8 @@ const ADMIN_MESSAGE_MAX_RETRIES = 3;
 const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
 const ADMIN_NUMBER_ID_MAX_ATTEMPTS = 5;
 const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
-const SEND_RETRY_MAX_ATTEMPTS = 3;
-const SEND_RETRY_DELAY_MS = 4000;
+const SEND_RETRY_MAX_ATTEMPTS = 2;
+const SEND_RETRY_DELAY_MS = 1200;
 const SEND_START_COMMS_SETTLE_MS = 5000;
 const PENDING_AFTER_READY_DELAY_MS = 250;
 const ON_DEMAND_CONNECT_MAX_WAIT_MS = 180000;
@@ -1037,8 +1037,11 @@ async function inicializarWhatsApp(options = {}) {
 }
 
 // Función para enviar mensajes
-async function enviarWhatsApp(numero, mensaje) {
+async function enviarWhatsApp(numero, mensaje, options = {}) {
   const timestamp = new Date().toISOString();
+  const maxAttempts = Number.isInteger(options.maxAttempts) && options.maxAttempts > 0
+    ? options.maxAttempts
+    : SEND_RETRY_MAX_ATTEMPTS;
   console.log(`[${timestamp}] 📤 INICIANDO ENVÍO DE WHATSAPP`);
   console.log(`[${timestamp}] 📱 Número destino: ${numero}`);
   console.log(`[${timestamp}] 📝 Mensaje (primeros 100 chars): ${mensaje.substring(0, 100)}...`);
@@ -1103,10 +1106,10 @@ async function enviarWhatsApp(numero, mensaje) {
     let messageResult = null;
     let lastSendError = null;
 
-    for (let intento = 1; intento <= SEND_RETRY_MAX_ATTEMPTS; intento++) {
+    for (let intento = 1; intento <= maxAttempts; intento++) {
       try {
         if (intento > 1) {
-          console.warn(`[${timestamp}] 🔁 Reintento de envío WhatsApp ${intento}/${SEND_RETRY_MAX_ATTEMPTS} tras espera de estabilización...`);
+          console.warn(`[${timestamp}] 🔁 Reintento de envío WhatsApp ${intento}/${maxAttempts} tras espera de estabilización...`);
           await sleep(SEND_RETRY_DELAY_MS * intento);
 
           try {
@@ -1119,16 +1122,16 @@ async function enviarWhatsApp(numero, mensaje) {
           }
         }
 
-        console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage (intento ${intento}/${SEND_RETRY_MAX_ATTEMPTS})...`);
+        console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage (intento ${intento}/${maxAttempts})...`);
         messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje, { sendSeen: false });
         lastSendError = null;
         break;
       } catch (sendError) {
         lastSendError = sendError;
         const retryable = isTransientSendError(sendError);
-        console.error(`[${timestamp}] ❌ Error en envío intento ${intento}/${SEND_RETRY_MAX_ATTEMPTS}: ${sendError.message}`);
+        console.error(`[${timestamp}] ❌ Error en envío intento ${intento}/${maxAttempts}: ${sendError.message}`);
 
-        if (!retryable || intento === SEND_RETRY_MAX_ATTEMPTS) {
+        if (!retryable || intento === maxAttempts) {
           throw sendError;
         }
 
