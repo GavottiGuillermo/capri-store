@@ -1735,19 +1735,31 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
   try {
     console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}, reintentos: ${reintentos}`);
     
-    // OPTIMIZACIÓN: Verificar primero si WhatsApp está disponible SIN consultar BBDD
-    // Solo si está disponible, entonces proceder a consultar notificaciones pendientes
-    if (!whatsappAvailable || !getWhatsAppReady()) {
-      // Si no está listo y es el primer intento, reintentar después de 10 segundos
-      if (reintentos === 0) {
-        console.log(`[${timestamp}] ⏳ WhatsApp no listo aún - reintentando en 10 segundos...`);
-        setTimeout(() => {
-          procesarNotificacionesPendientes(1);
-        }, 10000);
+    // Conexión bajo demanda: si el servicio está disponible pero no listo, intentar inicializar
+    if (!whatsappAvailable) {
+      console.log(`[${timestamp}] ⏭️ WhatsApp service no disponible para pendientes`);
+      return;
+    }
+
+    if (!getWhatsAppReady()) {
+      try {
+        console.log(`[${timestamp}] ⏳ WhatsApp no listo - iniciando conexión bajo demanda para pendientes...`);
+        await inicializarWhatsApp({ reason: 'pending-notifications' });
+      } catch (initError) {
+        console.warn(`[${timestamp}] ⚠️ Error inicializando WhatsApp para pendientes: ${initError.message}`);
+      }
+
+      if (!getWhatsAppReady()) {
+        if (reintentos === 0) {
+          console.log(`[${timestamp}] ⏳ WhatsApp aún no listo tras init - reintentando en 10 segundos...`);
+          setTimeout(() => {
+            procesarNotificacionesPendientes(1);
+          }, 10000);
+          return;
+        }
+        console.log(`[${timestamp}] ⏭️ WhatsApp no disponible después de reintento - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}`);
         return;
       }
-      console.log(`[${timestamp}] ⏭️ WhatsApp no disponible después de reintento - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}`);
-      return;
     }
     
     console.log(`[${timestamp}] ✅ WhatsApp disponible - verificando estado completo...`);
@@ -2064,11 +2076,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       console.log(`[${timestamp}] - Tiempo desde última conexión: ${estadoWhatsApp.tiempoDesdeUltimaConexion}s`);
   
       if (!estadoWhatsApp.disponible) {
-        console.error(`[${timestamp}] ❌ WhatsApp no está disponible:`);
-        console.error(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
-        console.error(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
-        console.error(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
-        return { success: false, error: `WhatsApp no disponible: ${estadoWhatsApp.razon}` };
+        console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible según chequeo previo (${estadoWhatsApp.razon}) - intentando inicialización bajo demanda...`);
+        try {
+          await inicializarWhatsApp({ reason: 'purchase-notification' });
+        } catch (initError) {
+          console.warn(`[${timestamp}] ⚠️ Inicialización on-demand falló: ${initError.message}`);
+        }
       }
   
       if (!ADMIN_WHATSAPP) {

@@ -110,7 +110,9 @@ const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
 const SEND_RETRY_MAX_ATTEMPTS = 3;
 const SEND_RETRY_DELAY_MS = 4000;
 const SEND_START_COMMS_SETTLE_MS = 5000;
-const PENDING_AFTER_READY_DELAY_MS = 12000;
+const PENDING_AFTER_READY_DELAY_MS = 1500;
+const ON_DEMAND_CONNECT_MAX_WAIT_MS = 180000;
+const ON_DEMAND_CONNECT_POLL_MS = 3000;
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
@@ -168,6 +170,56 @@ function isTransientSendError(error) {
 
 function chatHasUnreadState(chat) {
   return Boolean(chat && chat.msgs && typeof chat.msgs.markedUnread !== 'undefined');
+}
+
+async function getClientStateSafe(client) {
+  try {
+    return await client.getState();
+  } catch (_) {
+    return null;
+  }
+}
+
+async function waitUntilClientConnected(client, timeoutMs = ON_DEMAND_CONNECT_MAX_WAIT_MS) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const state = await getClientStateSafe(client);
+    if (state === 'CONNECTED') {
+      if (!whatsappReady) {
+        marcarConexionExitosa();
+      }
+      return true;
+    }
+    await sleep(ON_DEMAND_CONNECT_POLL_MS);
+  }
+
+  return false;
+}
+
+async function ensureClientReadyForSend(reason = 'send-on-demand') {
+  if (!whatsappClient) {
+    await inicializarWhatsApp({ reason });
+  }
+
+  const currentState = await getClientStateSafe(whatsappClient);
+  if (whatsappReady && currentState === 'CONNECTED') {
+    return { ready: true, state: currentState };
+  }
+
+  console.log(`⏳ WhatsApp no está listo para enviar (${currentState || 'UNKNOWN'}) - inicializando bajo demanda...`);
+  await inicializarWhatsApp({ reason });
+  const connected = await waitUntilClientConnected(whatsappClient);
+
+  const finalState = await getClientStateSafe(whatsappClient);
+  if (connected || finalState === 'CONNECTED') {
+    if (!whatsappReady) {
+      marcarConexionExitosa();
+    }
+    return { ready: true, state: finalState || 'CONNECTED' };
+  }
+
+  return { ready: false, state: finalState || 'UNKNOWN' };
 }
 
 // Espera a que WhatsApp termine de sincronizar los chats iniciales
@@ -635,11 +687,12 @@ function registrarEventosWhatsApp(client) {
     console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
     marcarConexionExitosa();
 
-    await notifyAdminOnce(client, 'ready');
+    // No enviar aviso automático al admin en ready.
+    // El envío a admins se realiza junto con las notificaciones de compra/pendientes.
     
     // Procesar notificaciones pendientes en background
     if (onWhatsAppReadyCallback) {
-      console.log(`🔄 Programando callback de notificaciones pendientes en ${PENDING_AFTER_READY_DELAY_MS / 1000}s para evitar carrera de inicialización...`);
+      console.log(`🔄 Programando callback de notificaciones pendientes en ${PENDING_AFTER_READY_DELAY_MS / 1000}s (modo conexión efímera)...`);
       setTimeout(async () => {
         try {
           await onWhatsAppReadyCallback();
@@ -664,21 +717,7 @@ function registrarEventosWhatsApp(client) {
       console.log('🛍️ ¡Los clientes ya pueden contactarte por WhatsApp!');
       console.log('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
       
-      // ✅ ENVIAR MENSAJE AL ADMIN - Esperar más tiempo para que WhatsApp termine de sincronizar
-      if (state === 'CONNECTED') {
-        const settleSeconds = READY_ADMIN_NOTIFICATION_DELAY_MS / 1000;
-        if (READY_ADMIN_NOTIFICATION_DELAY_MS > 0) {
-          console.log(`⏳ Esperando ${settleSeconds}s para que WhatsApp estabilice antes de notificar al administrador...`);
-          await sleep(READY_ADMIN_NOTIFICATION_DELAY_MS);
-        }
-
-        const postDelayState = await client.getState().catch(() => null);
-        if (postDelayState === 'CONNECTED') {
-          await enviarMensajeConfirmacionAdmin(client);
-        } else {
-          console.warn('⚠️ Cliente dejó de estar CONNECTED tras la espera de estabilización; se omite la notificación al admin');
-        }
-      }
+      // No se envía mensaje de "conectado" al admin para evitar carga extra en sesiones inestables.
     } catch (infoError) {
       console.log('⚠️ No se pudo obtener info del estado');
     }
@@ -719,7 +758,7 @@ function registrarEventosWhatsApp(client) {
             // Log simple - no enviar mensaje
             console.log(`[${ts}] 💡 WhatsApp conectado vía activación manual - Admin: ${ADMIN_WHATSAPP || 'No configurado'}`);
 
-            await notifyAdminOnce(client, 'manual-activation');
+            // No enviar aviso automático al admin en activación manual.
             
             // Ejecutar callback de notificaciones pendientes
             if (onWhatsAppReadyCallback) {
@@ -768,63 +807,11 @@ function registrarEventosWhatsApp(client) {
     console.log('');
     console.log('========================================\n');
     
-    // 🧹 LIMPIEZA CRÍTICA: Si es LOGOUT o NAVIGATION, destruir cliente y recrear desde cero
+    // Modo conexión efímera: no reconectar automáticamente en LOGOUT/NAVIGATION.
+    // Se reconecta manualmente mediante /whatsapp-regenerar-qr cuando haya nuevos pendientes.
     if (reason === 'NAVIGATION' || reason === 'LOGOUT') {
-      console.log(`[${timestamp}] 🧹 Sesión perdida - LIMPIANDO cliente completamente...`);
-      
-      try {
-        // Destruir cliente antiguo
-        if (whatsappClient) {
-          console.log(`[${timestamp}] 🗑️ Destruyendo cliente antiguo...`);
-          await whatsappClient.destroy();
-          console.log(`[${timestamp}] ✅ Cliente destruido`);
-        }
-        
-        // Resetear variable
-        whatsappClient = null;
-        
-        // Esperar 2 segundos antes de recrear
-        console.log(`[${timestamp}] ⏳ Esperando 2 segundos antes de recrear...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Recrear cliente desde cero
-        console.log(`[${timestamp}] 🆕 Recreando cliente WhatsApp desde cero...`);
-        const { LocalAuth } = require('whatsapp-web.js');
-        const path = require('path');
-        const authPath = path.join(__dirname, '..', '.wwebjs_auth');
-        
-        whatsappClient = new Client({
-          authStrategy: new LocalAuth({
-            clientId: 'capri-store-session',
-            dataPath: authPath
-          }),
-          puppeteer: {
-            headless: true,
-            args: puppeteerArgs,
-            timeout: 180000,
-            executablePath: chromiumPath,
-            handleSIGINT: false,
-            handleSIGTERM: false,
-            handleSIGHUP: false
-          },
-          webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-          },
-          qrMaxRetries: 3,
-          authTimeoutMs: 180000,
-          takeoverOnConflict: true,
-          takeoverTimeoutMs: 120000
-        });
-        
-        // Re-registrar eventos
-        registrarEventosWhatsApp(whatsappClient);
-        console.log(`[${timestamp}] ✅ Cliente recreado - listo para nueva inicialización`);
-        
-      } catch (cleanupError) {
-        console.error(`[${timestamp}] ❌ Error en limpieza:`, cleanupError.message);
-      }
-      
+      console.log(`[${timestamp}] ℹ️ Sesión cerrada (${reason}) en modo efímero. No se auto-reconecta.`);
+      console.log(`[${timestamp}] ℹ️ Para próxima tanda de pendientes: GET /whatsapp-regenerar-qr y escanear QR manualmente.`);
       return;
     }
     
@@ -980,6 +967,15 @@ async function enviarWhatsApp(numero, mensaje) {
   console.log(`[${timestamp}] 📝 Mensaje (primeros 100 chars): ${mensaje.substring(0, 100)}...`);
   
   try {
+    const ensureStatus = await ensureClientReadyForSend('send-message');
+    if (!ensureStatus.ready) {
+      console.error(`[${timestamp}] ❌ WhatsApp no quedó listo tras autoconexión. Estado final: ${ensureStatus.state}`);
+      return {
+        success: false,
+        error: `WhatsApp no está listo después de autoconexión. Estado: ${ensureStatus.state}`
+      };
+    }
+
     // Verificar múltiples condiciones de estado
     console.log(`[${timestamp}] 🔍 Verificando estado de WhatsApp...`);
     console.log(`[${timestamp}] - whatsappReady flag: ${whatsappReady}`);
