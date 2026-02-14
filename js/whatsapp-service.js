@@ -108,7 +108,9 @@ const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
 const ADMIN_NUMBER_ID_MAX_ATTEMPTS = 5;
 const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
 const SEND_RETRY_MAX_ATTEMPTS = 3;
-const SEND_RETRY_DELAY_MS = 2500;
+const SEND_RETRY_DELAY_MS = 4000;
+const SEND_START_COMMS_SETTLE_MS = 5000;
+const PENDING_AFTER_READY_DELAY_MS = 12000;
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
@@ -155,7 +157,10 @@ function isTransientSendError(error) {
   const errorText = String(error?.message || error || '').toLowerCase();
   return (
     errorText.includes('sendiq called before startcomms') ||
+    errorText.includes('startcomms') ||
+    errorText.includes('evaluation failed') ||
     errorText.includes('minified invariant #56367') ||
+    errorText.includes('executioncontext') ||
     errorText.includes('getchattable') ||
     errorText.includes('getstorage')
   );
@@ -634,15 +639,15 @@ function registrarEventosWhatsApp(client) {
     
     // Procesar notificaciones pendientes en background
     if (onWhatsAppReadyCallback) {
-      console.log('🔄 Ejecutando callback para notificaciones pendientes (WhatsApp ready confirmado)...');
-      setImmediate(async () => {
+      console.log(`🔄 Programando callback de notificaciones pendientes en ${PENDING_AFTER_READY_DELAY_MS / 1000}s para evitar carrera de inicialización...`);
+      setTimeout(async () => {
         try {
           await onWhatsAppReadyCallback();
           lastCallbackExecution = Date.now();
         } catch (error) {
           console.error('❌ Error en callback de notificaciones pendientes:', error);
         }
-      });
+      }, PENDING_AFTER_READY_DELAY_MS);
     }
     
     // Verificar estado real y mostrar info
@@ -1017,6 +1022,7 @@ async function enviarWhatsApp(numero, mensaje) {
     const numeroLimpio = numero.replace(/@.*$/, '').replace(/\D/g, '') || numero.replace(/@.*$/, '');
     let numeroDestino = numero.includes('@') ? numero : `${numero}@c.us`;
 
+    let shouldWaitBeforeSend = false;
     try {
       const numberIdInfo = await whatsappClient.getNumberId(numeroLimpio);
       if (numberIdInfo && numberIdInfo._serialized) {
@@ -1027,9 +1033,17 @@ async function enviarWhatsApp(numero, mensaje) {
       }
     } catch (numberIdError) {
       console.warn(`[${timestamp}] ⚠️ Error verificando número con getNumberId (${numero}): ${numberIdError.message}`);
+      if (String(numberIdError?.message || '').toLowerCase().includes('startcomms')) {
+        shouldWaitBeforeSend = true;
+      }
     }
 
     console.log(`[${timestamp}] 📱 Número formateado final: ${numeroDestino}`);
+
+    if (shouldWaitBeforeSend) {
+      console.warn(`[${timestamp}] ⏳ getNumberId indicó startComms no listo. Esperando ${SEND_START_COMMS_SETTLE_MS}ms antes del primer envío...`);
+      await sleep(SEND_START_COMMS_SETTLE_MS);
+    }
     
     let messageResult = null;
     let lastSendError = null;
