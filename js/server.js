@@ -2184,7 +2184,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     
     const businessName = BUSINESS_NAME || 'Tienda Online';
     const tipoNotificacion = esReintento ? '🔄 *REINTENTO DE NOTIFICACIÓN*' : '🛒 *NUEVA COMPRA*';
-    // Nuevo título para aviso a admin
+    // Nuevo título para aviso a admin.
     const mensajeAdmin = `🟢 Nuevo Pedido Registrado en el Sistema Capri\n\n` +
       `👤 *Cliente:* ${nombre} ${apellido}\n` +
       `📱 *Teléfono:* ${telefono || 'No proporcionado'}\n` +
