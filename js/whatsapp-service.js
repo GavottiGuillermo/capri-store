@@ -99,6 +99,7 @@ let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
 let initializationPromise = null; // Evitar inicializaciones concurrentes
 let adminNotificationSent = false;
 let adminNotificationInFlight = false;
+let ephemeralShutdownInProgress = false;
 
 // Variables para tracking de conexión (evitar dependencia circular)
 let ultimaConexionExitosa = null;
@@ -110,7 +111,7 @@ const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
 const SEND_RETRY_MAX_ATTEMPTS = 3;
 const SEND_RETRY_DELAY_MS = 4000;
 const SEND_START_COMMS_SETTLE_MS = 5000;
-const PENDING_AFTER_READY_DELAY_MS = 1500;
+const PENDING_AFTER_READY_DELAY_MS = 250;
 const ON_DEMAND_CONNECT_MAX_WAIT_MS = 180000;
 const ON_DEMAND_CONNECT_POLL_MS = 3000;
 
@@ -786,6 +787,19 @@ function registrarEventosWhatsApp(client) {
   // Evento disconnected
   client.on('disconnected', async (reason) => {
     const timestamp = new Date().toISOString();
+
+    if (ephemeralShutdownInProgress) {
+      console.log(`[${timestamp}] ✅ Cierre efímero intencional completado (reason: ${reason})`);
+      whatsappReady = false;
+      qrGenerated = false;
+      readyEventCount = 0;
+      adminNotificationSent = false;
+      adminNotificationInFlight = false;
+      setIsConnecting(false);
+      ephemeralShutdownInProgress = false;
+      return;
+    }
+
     console.log(`[${timestamp}] ⚠️ WhatsApp desconectado - Razón: ${reason}`);
     console.log(`[${timestamp}] 🔄 Marcando como no listo y reseteando flags...`);
     whatsappReady = false;
@@ -871,6 +885,37 @@ async function cleanup() {
   }
   
   console.log('✅ Cleanup completado');
+}
+
+async function cerrarSesionEfimera(options = {}) {
+  const reason = options.reason || 'post-pending-dispatch';
+  const timestamp = new Date().toISOString();
+
+  try {
+    console.log(`[${timestamp}] 📴 Iniciando cierre efímero de sesión WhatsApp (${reason})...`);
+    whatsappReady = false;
+    qrGenerated = false;
+    readyEventCount = 0;
+    adminNotificationSent = false;
+    adminNotificationInFlight = false;
+    setIsConnecting(false);
+
+    if (!whatsappClient || typeof whatsappClient.destroy !== 'function') {
+      console.log(`[${timestamp}] ℹ️ No hay cliente activo para cerrar`);
+      return { success: true, skipped: true, reason: 'no_client' };
+    }
+
+    ephemeralShutdownInProgress = true;
+    await whatsappClient.destroy();
+    whatsappClient = null;
+
+    console.log(`[${timestamp}] ✅ Sesión efímera cerrada correctamente`);
+    return { success: true };
+  } catch (error) {
+    ephemeralShutdownInProgress = false;
+    console.warn(`[${timestamp}] ⚠️ Error en cierre efímero: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 }
 
 // ===============================
@@ -1555,6 +1600,7 @@ module.exports = {
   getIsConnecting,
   setIsConnecting,
   setOnWhatsAppReadyCallback,
+  cerrarSesionEfimera,
   limpiarMemoriaProactiva,
   ultimaConexionExitosa,
   sessionIsOld,

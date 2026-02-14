@@ -78,8 +78,19 @@ try {
   
   // Configurar callback para procesar notificaciones pendientes cuando WhatsApp se conecte
   whatsappService.setOnWhatsAppReadyCallback(async () => {
-    console.log('🔄 WhatsApp conectado - procesando notificaciones pendientes...');
-    await procesarNotificacionesPendientes();
+    const ts = new Date().toISOString();
+    console.log(`[${ts}] 🚀 Modo QR one-shot: procesando pendientes inmediatamente tras ready...`);
+    let resumen = null;
+    try {
+      resumen = await procesarNotificacionesPendientes(0, { fastTrack: true, source: 'ready-oneshot' });
+      console.log(`[${ts}] 📦 One-shot finalizado:`, resumen || { note: 'sin resumen' });
+    } catch (error) {
+      console.error(`[${ts}] ❌ Error en procesamiento one-shot:`, error.message);
+    } finally {
+      if (whatsappService && typeof whatsappService.cerrarSesionEfimera === 'function') {
+        await whatsappService.cerrarSesionEfimera({ reason: 'ready-oneshot-complete' });
+      }
+    }
   });
   
 } catch (error) {
@@ -115,7 +126,7 @@ function getPrimaryAdminNumber() {
   return admins.length > 0 ? admins[0] : '';
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, cerrarSesionEfimera, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 
 // ===============================
 // MANEJADORES GLOBALES DE ERRORES
@@ -143,7 +154,8 @@ process.on('unhandledRejection', (reason, promise) => {
   if (reason && reason.message && (
     reason.message.includes('temp-auth') ||
     reason.message.includes('wwebjs') ||
-    reason.message.includes('Session closed')
+    reason.message.includes('Session closed') ||
+    reason.message.includes('Execution context was destroyed')
   )) {
     console.log('⚠️ Error de WhatsApp detectado - servidor continúa funcionando');
     return;
@@ -1723,12 +1735,16 @@ async function verificarEstadoWhatsApp() {
 
 // Función para marcar conexión exitosa
 // Función para procesar notificaciones pendientes
-async function procesarNotificacionesPendientes(reintentos = 0) {
+async function procesarNotificacionesPendientes(reintentos = 0, options = {}) {
   const timestamp = new Date().toISOString();
+  const fastTrack = Boolean(options.fastTrack);
+  const source = options.source || 'default';
+  let pedidosProcesados = 0;
+  let pedidosExitosos = 0;
 
   if (pendingNotificationsProcessing) {
     console.log(`[${timestamp}] ⏭️ procesarNotificacionesPendientes ya está en ejecución; se omite invocación duplicada`);
-    return;
+    return { skipped: true, reason: 'already_processing', source };
   }
   pendingNotificationsProcessing = true;
   
@@ -1762,15 +1778,16 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
       }
     }
     
-    console.log(`[${timestamp}] ✅ WhatsApp disponible - verificando estado completo...`);
-    
-    // Si WhatsApp está disponible, ahora sí verificar estado completo (puede consultar BBDD si es necesario)
-    const estadoWhatsApp = await verificarEstadoWhatsApp();
-    console.log(`[${timestamp}] 🔍 Estado WhatsApp:`, estadoWhatsApp);
-    
-    if (!estadoWhatsApp.disponible) {
-      console.log(`[${timestamp}] ⏭️ WhatsApp conectado pero no operativo: ${estadoWhatsApp.razon}`);
-      return;
+    if (!fastTrack) {
+      console.log(`[${timestamp}] ✅ WhatsApp disponible - verificando estado completo...`);
+      const estadoWhatsApp = await verificarEstadoWhatsApp();
+      console.log(`[${timestamp}] 🔍 Estado WhatsApp:`, estadoWhatsApp);
+      if (!estadoWhatsApp.disponible) {
+        console.log(`[${timestamp}] ⏭️ WhatsApp conectado pero no operativo: ${estadoWhatsApp.razon}`);
+        return { skipped: true, reason: estadoWhatsApp.razon, source };
+      }
+    } else {
+      console.log(`[${timestamp}] ⚡ FastTrack (${source}): omitiendo verificación pesada de estado`);
     }
     
     console.log(`[${timestamp}] ✅ WhatsApp operativo - buscando notificaciones pendientes...`);
@@ -1812,7 +1829,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
     
     if (!resultPendientes || !resultPendientes.rows || resultPendientes.rows.length === 0) {
       console.log(`[${timestamp}] ✅ No hay notificaciones WhatsApp pendientes`);
-      return;
+      return { success: true, source, fastTrack, totalPendientes: 0, pedidosProcesados: 0, pedidosExitosos: 0 };
     }
     
     console.log(`[${timestamp}] 📬 Procesando ${resultPendientes.rows.length} productos de notificaciones pendientes...`);
@@ -1871,6 +1888,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
     // Procesar cada pedido agrupado
     for (const pedido of pedidosMap.values()) {
       try {
+        pedidosProcesados += 1;
         console.log(`[${timestamp}] 🔄 Reintentando notificación para pedido: ${pedido.id_pedido} (${pedido.productos.length} productos únicos)`);
         
         const customerData = {
@@ -1918,6 +1936,7 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         await actualizarEstadoWhatsApp(pedido.mp_payment_id, clienteNotificado);
         
         if (resultado.success) {
+          pedidosExitosos += 1;
           console.log(`[${timestamp}] ✅ Reintento exitoso para pedido: ${pedido.id_pedido}`);
         } else {
           console.log(`[${timestamp}] ❌ Reintento falló para pedido: ${pedido.id_pedido} - ${resultado.error}`);
@@ -1930,9 +1949,19 @@ async function procesarNotificacionesPendientes(reintentos = 0) {
         console.error(`[${timestamp}] ❌ Error procesando pedido ${pedido.id_pedido}:`, error.message);
       }
     }
+
+    return {
+      success: pedidosExitosos > 0,
+      source,
+      fastTrack,
+      totalPendientes: pedidosMap.size,
+      pedidosProcesados,
+      pedidosExitosos
+    };
     
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error en procesarNotificacionesPendientes:`, error.message);
+    return { success: false, source, fastTrack, error: error.message, pedidosProcesados, pedidosExitosos };
   } finally {
     pendingNotificationsProcessing = false;
   }
