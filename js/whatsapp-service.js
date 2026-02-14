@@ -96,6 +96,8 @@ const MAX_QR_ATTEMPTS = 5;
 let sessionIsOld = false; // Bandera para sesiones >24h
 let isConnecting = false; // 🔒 Flag para bloquear otros procesos durante conexión
 let readyEventCount = 0; // 🔍 Contador para detectar eventos ready duplicados
+let authenticatedEventCount = 0; // 🔍 Contador para detectar authenticated duplicados por ciclo
+let authenticatedFallbackTimer = null;
 let initializationPromise = null; // Evitar inicializaciones concurrentes
 let adminNotificationSent = false;
 let adminNotificationInFlight = false;
@@ -502,6 +504,11 @@ function registrarEventosWhatsApp(client) {
   client.on('qr', (qr) => {
     setIsConnecting(true); // 🔒 Bloquear otros procesos durante conexión
     qrAttempts++;
+    authenticatedEventCount = 0;
+    if (authenticatedFallbackTimer) {
+      clearTimeout(authenticatedFallbackTimer);
+      authenticatedFallbackTimer = null;
+    }
     
     if (qrAttempts > MAX_QR_ATTEMPTS) {
       console.error(`\n${'='.repeat(70)}`);
@@ -683,6 +690,11 @@ function registrarEventosWhatsApp(client) {
     
     setIsConnecting(false); // 🔓 Desbloquear inmediatamente
     console.log('🔓 Sistema desbloqueado para otras operaciones');
+    authenticatedEventCount = 0;
+    if (authenticatedFallbackTimer) {
+      clearTimeout(authenticatedFallbackTimer);
+      authenticatedFallbackTimer = null;
+    }
     
     // Marcar conexión exitosa para verificación de disponibilidad
     console.log('🎯 PRINCIPAL: Marcando conexión desde evento ready');
@@ -727,6 +739,13 @@ function registrarEventosWhatsApp(client) {
   // Evento authenticated - Solo para logging, el evento 'ready' es el definitivo
   client.on('authenticated', async () => {
     const timestamp = new Date().toISOString();
+    authenticatedEventCount += 1;
+
+    if (authenticatedEventCount > 1) {
+      console.warn(`[${timestamp}] ⚠️ EVENTO AUTHENTICATED DUPLICADO #${authenticatedEventCount} - IGNORANDO para evitar carreras`);
+      return;
+    }
+
     console.log(`[${timestamp}] 🔐 WhatsApp autenticado correctamente`);
     console.log(`[${timestamp}] ⏳ Esperando evento ready para confirmar conexión completa...`);
     console.log(`[${timestamp}] ℹ️ Esto puede tomar 1-2 minutos en Render Free (recursos limitados)`);
@@ -739,7 +758,13 @@ function registrarEventosWhatsApp(client) {
     }
     
     // 🛟 BACKUP: Si después de 2 minutos no hay evento ready, verificar manualmente
-    setTimeout(async () => {
+    if (authenticatedFallbackTimer) {
+      clearTimeout(authenticatedFallbackTimer);
+      authenticatedFallbackTimer = null;
+    }
+
+    authenticatedFallbackTimer = setTimeout(async () => {
+      authenticatedFallbackTimer = null;
       if (!whatsappReady) {
         const ts = new Date().toISOString();
         console.log(`[${ts}] ⚠️ Han pasado 2 minutos desde authenticated y no hay evento ready`);
@@ -805,6 +830,11 @@ function registrarEventosWhatsApp(client) {
     whatsappReady = false;
     qrGenerated = false;
     readyEventCount = 0; // Resetear contador de ready
+    authenticatedEventCount = 0;
+    if (authenticatedFallbackTimer) {
+      clearTimeout(authenticatedFallbackTimer);
+      authenticatedFallbackTimer = null;
+    }
     adminNotificationSent = false;
     adminNotificationInFlight = false;
     setIsConnecting(false); // 🔓 Desbloquear si se desconecta

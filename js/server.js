@@ -2057,6 +2057,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
   let rawPaymentId = null;
   const whatsappApiStatus = whatsappApiService.getWhatsAppApiStatus();
   const useCloudApi = whatsappApiService.shouldUseWhatsAppApi();
+  const oneShotDispatch = Boolean(esReintento);
 
   try {
     // Validación de parámetros críticos
@@ -2332,6 +2333,40 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     } else {
       const adminNumbers = getAdminNumbers();
       let adminResults = [];
+      let resultCliente = { success: false, error: 'No se intentó enviar' };
+
+      if (oneShotDispatch) {
+        if (telefono && telefono.trim()) {
+          console.log(`[${timestamp}] ⚡ One-shot: priorizando envío al CLIENTE antes de admins`);
+          const clienteNormalizado = normalizePhoneNumber(telefono);
+          console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
+
+          if (clienteNormalizado) {
+            resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
+            console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE (one-shot):`, {
+              success: resultCliente.success,
+              error: resultCliente.error
+            });
+          } else {
+            resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
+          }
+        } else {
+          resultCliente = { success: false, error: 'Teléfono del cliente no disponible' };
+        }
+
+        if (!resultCliente.success) {
+          console.warn(`[${timestamp}] ⚠️ One-shot: se abortan avisos a admins porque falló envío al cliente`);
+          resultado = {
+            success: false,
+            admin_result: [],
+            cliente_result: resultCliente,
+            both_sent: false,
+            transport: 'web_client'
+          };
+          return resultado;
+        }
+      }
+
       for (const adminNum of adminNumbers) {
         const adminNormalizado = normalizePhoneNumber(adminNum);
         console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
@@ -2349,13 +2384,23 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
           console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente (${adminNum})`);
         } else {
           console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador (${adminNum}):`, resultAdmin.error);
+          if (oneShotDispatch) {
+            console.warn(`[${timestamp}] ⚠️ One-shot: se aborta el resto de envíos de admin tras el primer fallo`);
+            adminResults.push({ admin: adminNum, ...resultAdmin });
+            resultado = {
+              success: false,
+              admin_result: adminResults,
+              cliente_result: resultCliente,
+              both_sent: false,
+              transport: 'web_client'
+            };
+            return resultado;
+          }
         }
         adminResults.push({ admin: adminNum, ...resultAdmin });
       }
 
-      let resultCliente = { success: false, error: 'No se intentó enviar' };
-
-      if (telefono && telefono.trim()) {
+      if (!oneShotDispatch && telefono && telefono.trim()) {
         console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
         const clienteNormalizado = normalizePhoneNumber(telefono);
         console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
@@ -2377,12 +2422,12 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
           console.error(`[${timestamp}] ❌ No se pudo normalizar teléfono del cliente: ${telefono}`);
           resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
         }
-      } else {
+      } else if (!oneShotDispatch) {
         console.warn(`[${timestamp}] ⚠️ No hay teléfono del cliente para enviar confirmación`);
       }
-      
+
       resultado = {
-        success: adminResults.every(r => r.success),
+        success: resultCliente.success && adminResults.every(r => r.success),
         admin_result: adminResults,
         cliente_result: resultCliente,
         both_sent: adminResults.every(r => r.success) && resultCliente.success,
