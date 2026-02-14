@@ -1122,8 +1122,14 @@ async function enviarWhatsApp(numero, mensaje, options = {}) {
           }
         }
 
-        console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage (intento ${intento}/${maxAttempts})...`);
-        messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje, { sendSeen: false });
+        console.log(`[${timestamp}] 🚀 Obteniendo chat y enviando mensaje (intento ${intento}/${maxAttempts})...`);
+        try {
+          const chat = await whatsappClient.getChatById(numeroDestino);
+          messageResult = await chat.sendMessage(mensaje);
+        } catch (chatError) {
+          console.warn(`[${timestamp}] ⚠️ Fallback a client.sendMessage por error en getChatById: ${chatError.message}`);
+          messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje);
+        }
         lastSendError = null;
         break;
       } catch (sendError) {
