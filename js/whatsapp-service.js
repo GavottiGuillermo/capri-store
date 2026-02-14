@@ -173,21 +173,6 @@ function isTransientSendError(error) {
   );
 }
 
-async function prepararChatParaEnvio(client, chatId) {
-  const ts = new Date().toISOString();
-  try {
-    await client.getChats();
-  } catch (error) {
-    console.warn(`[${ts}] ⚠️ No se pudieron precargar chats antes del envío: ${error.message}`);
-  }
-
-  try {
-    await ensureChatHydrated(client, chatId);
-  } catch (error) {
-    console.warn(`[${ts}] ⚠️ No se pudo hidratar chat ${chatId}: ${error.message}`);
-  }
-}
-
 function chatHasUnreadState(chat) {
   return Boolean(chat && chat.msgs && typeof chat.msgs.markedUnread !== 'undefined');
 }
@@ -1110,30 +1095,10 @@ async function enviarWhatsApp(numero, mensaje) {
     const numeroLimpio = numero.replace(/@.*$/, '').replace(/\D/g, '') || numero.replace(/@.*$/, '');
     let numeroDestino = numero.includes('@') ? numero : `${numero}@c.us`;
 
-    let shouldWaitBeforeSend = false;
-    try {
-      const numberIdInfo = await whatsappClient.getNumberId(numeroLimpio);
-      if (numberIdInfo && numberIdInfo._serialized) {
-        numeroDestino = numberIdInfo._serialized;
-        console.log(`[${timestamp}] 🆔 Número validado mediante getNumberId: ${numeroDestino}`);
-      } else {
-        console.warn(`[${timestamp}] ⚠️ getNumberId no devolvió datos para ${numero}`);
-      }
-    } catch (numberIdError) {
-      console.warn(`[${timestamp}] ⚠️ Error verificando número con getNumberId (${numero}): ${numberIdError.message}`);
-      if (String(numberIdError?.message || '').toLowerCase().includes('startcomms')) {
-        shouldWaitBeforeSend = true;
-      }
-    }
+    // En modo efímero preferimos envío directo para no perder la ventana corta de sesión.
+    // getNumberId puede fallar con startComms y consumir segundos críticos.
 
     console.log(`[${timestamp}] 📱 Número formateado final: ${numeroDestino}`);
-
-    if (shouldWaitBeforeSend) {
-      console.warn(`[${timestamp}] ⏳ getNumberId indicó startComms no listo. Esperando ${SEND_START_COMMS_SETTLE_MS}ms antes del primer envío...`);
-      await sleep(SEND_START_COMMS_SETTLE_MS);
-    }
-
-    await prepararChatParaEnvio(whatsappClient, numeroDestino);
     
     let messageResult = null;
     let lastSendError = null;
@@ -1152,8 +1117,6 @@ async function enviarWhatsApp(numero, mensaje) {
           } catch (stateRetryError) {
             console.warn(`[${timestamp}] ⚠️ Estado no apto para reintento: ${stateRetryError.message}`);
           }
-
-          await prepararChatParaEnvio(whatsappClient, numeroDestino);
         }
 
         console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage (intento ${intento}/${SEND_RETRY_MAX_ATTEMPTS})...`);
