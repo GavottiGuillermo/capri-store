@@ -107,6 +107,8 @@ const ADMIN_MESSAGE_MAX_RETRIES = 3;
 const ADMIN_MESSAGE_RETRY_DELAY_MS = 10000; // 10 segundos
 const ADMIN_NUMBER_ID_MAX_ATTEMPTS = 5;
 const ADMIN_NUMBER_ID_RETRY_DELAY_MS = 4000;
+const SEND_RETRY_MAX_ATTEMPTS = 3;
+const SEND_RETRY_DELAY_MS = 2500;
 
 // Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
 let onWhatsAppReadyCallback = null;
@@ -147,6 +149,16 @@ function getIsConnecting() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientSendError(error) {
+  const errorText = String(error?.message || error || '').toLowerCase();
+  return (
+    errorText.includes('sendiq called before startcomms') ||
+    errorText.includes('minified invariant #56367') ||
+    errorText.includes('getchattable') ||
+    errorText.includes('getstorage')
+  );
 }
 
 function chatHasUnreadState(chat) {
@@ -1019,8 +1031,46 @@ async function enviarWhatsApp(numero, mensaje) {
 
     console.log(`[${timestamp}] 📱 Número formateado final: ${numeroDestino}`);
     
-    console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage...`);
-    const messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje, { sendSeen: false });
+    let messageResult = null;
+    let lastSendError = null;
+
+    for (let intento = 1; intento <= SEND_RETRY_MAX_ATTEMPTS; intento++) {
+      try {
+        if (intento > 1) {
+          console.warn(`[${timestamp}] 🔁 Reintento de envío WhatsApp ${intento}/${SEND_RETRY_MAX_ATTEMPTS} tras espera de estabilización...`);
+          await sleep(SEND_RETRY_DELAY_MS * intento);
+
+          try {
+            const estadoReintento = await whatsappClient.getState();
+            if (estadoReintento !== 'CONNECTED') {
+              throw new Error(`Cliente no conectado en reintento (${estadoReintento})`);
+            }
+          } catch (stateRetryError) {
+            console.warn(`[${timestamp}] ⚠️ Estado no apto para reintento: ${stateRetryError.message}`);
+          }
+        }
+
+        console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage (intento ${intento}/${SEND_RETRY_MAX_ATTEMPTS})...`);
+        messageResult = await whatsappClient.sendMessage(numeroDestino, mensaje, { sendSeen: false });
+        lastSendError = null;
+        break;
+      } catch (sendError) {
+        lastSendError = sendError;
+        const retryable = isTransientSendError(sendError);
+        console.error(`[${timestamp}] ❌ Error en envío intento ${intento}/${SEND_RETRY_MAX_ATTEMPTS}: ${sendError.message}`);
+
+        if (!retryable || intento === SEND_RETRY_MAX_ATTEMPTS) {
+          throw sendError;
+        }
+
+        console.warn(`[${timestamp}] ⏳ Error transitorio detectado; se reintentará envío...`);
+      }
+    }
+
+    if (!messageResult && lastSendError) {
+      throw lastSendError;
+    }
+
     console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente!`);
     
     // Mejorar el logging del messageId para evitar [object Object]

@@ -563,6 +563,40 @@ function updateCartCounterAnimated(newCount) {
   }
 }
 
+// Obtener el número de WhatsApp principal desde el backend
+async function obtenerNumeroWhatsAppPrincipal() {
+  try {
+    const resp = await fetch(scriptsResolveApiUrl('/contact-info'));
+    const data = await resp.json();
+    // Si hay varios números, tomar solo el primero
+    if (data.whatsapp) {
+      const nums = String(data.whatsapp).split(/[;,]/).map(n => n.trim()).filter(Boolean);
+      return nums.length > 0 ? nums[0] : '';
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+// Configurar el botón de WhatsApp para usar solo el primer número
+document.addEventListener('DOMContentLoaded', function() {
+  const whatsappBtn = document.getElementById('whatsappLink');
+  if (whatsappBtn) {
+    obtenerNumeroWhatsAppPrincipal().then(numero => {
+      if (numero) {
+        whatsappBtn.href = `https://wa.me/${numero}`;
+        whatsappBtn.classList.remove('btn-contacto-disabled');
+        whatsappBtn.classList.add('btn-contacto-enabled');
+      } else {
+        whatsappBtn.href = '#';
+        whatsappBtn.classList.add('btn-contacto-disabled');
+        whatsappBtn.classList.remove('btn-contacto-enabled');
+      }
+    });
+  }
+});
+
 // Smooth scroll mejorado para navegación
 // ...existing code...
 

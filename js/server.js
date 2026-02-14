@@ -1,3 +1,8 @@
+// Obtener solo el primer número de admin para uso público (botón WhatsApp)
+function getPrimaryAdminNumber() {
+  const admins = getAdminNumbers();
+  return admins.length > 0 ? admins[0] : '';
+}
 const express = require('express');
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const { Pool } = require('pg');
@@ -102,6 +107,12 @@ function getAdminNumbers() {
     .split(/[;,]/)
     .map(n => n.trim())
     .filter(Boolean);
+}
+
+// Obtener solo el primer número de admin para uso público (botón WhatsApp)
+function getPrimaryAdminNumber() {
+  const admins = getAdminNumbers();
+  return admins.length > 0 ? admins[0] : '';
 }
 
 const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
