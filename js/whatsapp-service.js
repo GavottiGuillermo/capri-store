@@ -166,9 +166,26 @@ function isTransientSendError(error) {
     errorText.includes('evaluation failed') ||
     errorText.includes('minified invariant #56367') ||
     errorText.includes('executioncontext') ||
+    errorText.includes("reading 'getchat'") ||
+    errorText.includes('cannot read properties of undefined (reading') ||
     errorText.includes('getchattable') ||
     errorText.includes('getstorage')
   );
+}
+
+async function prepararChatParaEnvio(client, chatId) {
+  const ts = new Date().toISOString();
+  try {
+    await client.getChats();
+  } catch (error) {
+    console.warn(`[${ts}] ⚠️ No se pudieron precargar chats antes del envío: ${error.message}`);
+  }
+
+  try {
+    await ensureChatHydrated(client, chatId);
+  } catch (error) {
+    console.warn(`[${ts}] ⚠️ No se pudo hidratar chat ${chatId}: ${error.message}`);
+  }
 }
 
 function chatHasUnreadState(chat) {
@@ -1064,7 +1081,7 @@ async function enviarWhatsApp(numero, mensaje) {
       clientState = 'ERROR_GETTING_STATE';
     }
     
-    const isReady = whatsappReady && clientState === 'CONNECTED';
+    const isReady = whatsappReady && (clientState === 'CONNECTED' || clientState === 'ERROR_GETTING_STATE');
     console.log(`[${timestamp}] - isReady calculado: ${isReady}`);
     
     if (!isReady) {
@@ -1115,6 +1132,8 @@ async function enviarWhatsApp(numero, mensaje) {
       console.warn(`[${timestamp}] ⏳ getNumberId indicó startComms no listo. Esperando ${SEND_START_COMMS_SETTLE_MS}ms antes del primer envío...`);
       await sleep(SEND_START_COMMS_SETTLE_MS);
     }
+
+    await prepararChatParaEnvio(whatsappClient, numeroDestino);
     
     let messageResult = null;
     let lastSendError = null;
@@ -1133,6 +1152,8 @@ async function enviarWhatsApp(numero, mensaje) {
           } catch (stateRetryError) {
             console.warn(`[${timestamp}] ⚠️ Estado no apto para reintento: ${stateRetryError.message}`);
           }
+
+          await prepararChatParaEnvio(whatsappClient, numeroDestino);
         }
 
         console.log(`[${timestamp}] 🚀 Enviando mensaje directamente con client.sendMessage (intento ${intento}/${SEND_RETRY_MAX_ATTEMPTS})...`);

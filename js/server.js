@@ -87,9 +87,7 @@ try {
     } catch (error) {
       console.error(`[${ts}] ❌ Error en procesamiento one-shot:`, error.message);
     } finally {
-      if (whatsappService && typeof whatsappService.cerrarSesionEfimera === 'function') {
-        await whatsappService.cerrarSesionEfimera({ reason: 'ready-oneshot-complete' });
-      }
+      console.log(`[${ts}] ℹ️ One-shot finalizado. Se deja que la sesión cierre sola (sin destroy forzado).`);
     }
   });
   
@@ -155,7 +153,9 @@ process.on('unhandledRejection', (reason, promise) => {
     reason.message.includes('temp-auth') ||
     reason.message.includes('wwebjs') ||
     reason.message.includes('Session closed') ||
-    reason.message.includes('Execution context was destroyed')
+    reason.message.includes('Execution context was destroyed') ||
+    reason.message.includes('Target closed') ||
+    reason.message.includes('Runtime.callFunctionOn')
   )) {
     console.log('⚠️ Error de WhatsApp detectado - servidor continúa funcionando');
     return;
