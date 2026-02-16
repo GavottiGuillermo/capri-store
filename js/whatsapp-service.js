@@ -280,6 +280,29 @@ function registrarEventos(client) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
+    // Esperar a que los chats estén realmente cargados antes de enviar
+    try {
+      console.log('⏳ Verificando carga de chats...');
+      let chatsLoaded = false;
+      for (let i = 0; i < 12; i++) { // hasta ~6s
+        const chats = await client.getChats();
+        if (chats && chats.length > 0) {
+          chatsLoaded = true;
+          console.log(`✅ Chats cargados: ${chats.length}`);
+          break;
+        }
+        await new Promise(res => setTimeout(res, 500));
+      }
+      if (!chatsLoaded) {
+        console.log('⚠️ No se cargaron los chats tras esperar. Se continúa igual.');
+      }
+    } catch (e) {
+      console.log('⚠️ Error verificando carga de chats:', e);
+    }
+
+    // Espera adicional para asegurar que el Store esté hidratado
+    await new Promise(res => setTimeout(res, 800));
+
     // Ejecutar callback para enviar pendientes
     if (onWhatsAppReadyCallback) {
       console.log('🚀 Procesando notificaciones pendientes...');
