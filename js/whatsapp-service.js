@@ -206,9 +206,17 @@ function registrarEventos(client) {
   // Limpiar listeners anteriores por seguridad
   client.removeAllListeners();
 
+  // Guard contra eventos duplicados (whatsapp-web.js puede emitir ready/authenticated varias veces)
+  let readyHandled = false;
+  let authenticatedLogged = false;
+
   // --- QR ---
   client.on('qr', (qr) => {
     qrAttempts++;
+    // Resetear guards al recibir nuevo QR (nuevo ciclo de auth)
+    readyHandled = false;
+    authenticatedLogged = false;
+
     if (qrAttempts > MAX_QR_ATTEMPTS) {
       console.error(`\n❌ LÍMITE DE QRs ALCANZADO (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
       console.error('Ejecutá GET /whatsapp-regenerar-qr para reintentar.\n');
@@ -226,6 +234,11 @@ function registrarEventos(client) {
 
   // --- AUTHENTICATED ---
   client.on('authenticated', () => {
+    if (authenticatedLogged) {
+      console.log('🔐 (authenticated duplicado - ignorado)');
+      return;
+    }
+    authenticatedLogged = true;
     console.log('🔐 WhatsApp autenticado correctamente');
     console.log('⏳ Esperando que WhatsApp termine de cargar (evento ready)...');
   });
@@ -244,8 +257,14 @@ function registrarEventos(client) {
     }
   });
 
-  // --- READY ---
+  // --- READY (solo se procesa la PRIMERA vez) ---
   client.on('ready', async () => {
+    if (readyHandled) {
+      console.log('🎉 (ready duplicado - ignorado)');
+      return;
+    }
+    readyHandled = true;
+
     console.log('\n🎉 ¡WhatsApp CONECTADO y LISTO!');
     whatsappReady = true;
     isConnecting = false;
