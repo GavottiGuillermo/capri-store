@@ -76,19 +76,17 @@ try {
   whatsappAvailable = true;
   console.log('📱 Servicio WhatsApp cargado correctamente');
   
-  // Configurar callback para procesar notificaciones pendientes cuando WhatsApp se conecte
+  // Callback: cuando WhatsApp se conecte vía QR, enviar pendientes
   whatsappService.setOnWhatsAppReadyCallback(async () => {
     const ts = new Date().toISOString();
-    console.log(`[${ts}] 🚀 Modo QR one-shot: procesando pendientes inmediatamente tras ready...`);
-    let resumen = null;
+    console.log(`[${ts}] 🚀 WhatsApp listo - procesando pendientes...`);
     try {
-      resumen = await procesarNotificacionesPendientes(0, { fastTrack: true, source: 'ready-oneshot' });
-      console.log(`[${ts}] 📦 One-shot finalizado:`, resumen || { note: 'sin resumen' });
+      const resumen = await procesarNotificacionesPendientes(0, { fastTrack: true, source: 'ready-oneshot' });
+      console.log(`[${ts}] 📦 Resultado:`, resumen || { note: 'sin pendientes' });
     } catch (error) {
-      console.error(`[${ts}] ❌ Error en procesamiento one-shot:`, error.message);
-    } finally {
-      console.log(`[${ts}] ℹ️ One-shot finalizado. Se deja que la sesión cierre sola (sin destroy forzado).`);
+      console.error(`[${ts}] ❌ Error procesando pendientes:`, error.message);
     }
+    // whatsapp-service.js se encarga de destruir la sesión después de esto
   });
   
 } catch (error) {
@@ -124,7 +122,7 @@ function getPrimaryAdminNumber() {
   return admins.length > 0 ? admins[0] : '';
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, cerrarSesionEfimera, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
+const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, cerrarSesionEfimera, getWhatsAppClient, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
 
 // ===============================
 // MANEJADORES GLOBALES DE ERRORES
@@ -1943,8 +1941,12 @@ async function procesarNotificacionesPendientes(reintentos = 0, options = {}) {
           console.log(`[${timestamp}] ❌ Reintento falló para pedido: ${pedido.id_pedido} - ${resultado.error}`);
         }
         
-        // Delay entre envíos para evitar spam
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Delay entre envíos (reducido en fastTrack para aprovechar la sesión)
+        if (fastTrack) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
         
       } catch (error) {
         console.error(`[${timestamp}] ❌ Error procesando pedido ${pedido.id_pedido}:`, error.message);
@@ -2085,38 +2087,26 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     if (useCloudApi) {
       console.log(`[${timestamp}] ☁️ Se utilizará la API oficial de WhatsApp para esta notificación`);
     } else {
-      // Log de estado de WhatsApp (cliente web)
-      console.log(`[${timestamp}] 📱 Estado WhatsApp:`);
-      console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-      console.log(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
-      console.log(`[${timestamp}] - ADMIN_WHATSAPP: ${ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO'}`);
+      // Verificación simple para WhatsApp web client
+      console.log(`[${timestamp}] 📱 Estado WhatsApp: available=${whatsappAvailable}, ready=${getWhatsAppReady()}`);
       
       if (!whatsappAvailable) {
-        console.error(`[${timestamp}] ❌ WhatsApp service no está disponible (no se pudo cargar el módulo)`);
+        console.error(`[${timestamp}] ❌ WhatsApp service no disponible`);
         return { success: false, error: 'WhatsApp service no disponible' };
       }
-  
-      // VERIFICACIÓN MEJORADA: Usar sistema de flags inteligente
-      const estadoWhatsApp = await verificarEstadoWhatsApp();
-      
-      console.log(`[${timestamp}] 🔍 Verificación mejorada en enviarNotificacionCompra:`);
-      console.log(`[${timestamp}] - Disponible: ${estadoWhatsApp.disponible}`);
-      console.log(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
-      console.log(`[${timestamp}] - whatsappAvailable: ${estadoWhatsApp.whatsappAvailable}`);
-      console.log(`[${timestamp}] - whatsappReady: ${estadoWhatsApp.whatsappReady}`);
-      console.log(`[${timestamp}] - Tiempo desde última conexión: ${estadoWhatsApp.tiempoDesdeUltimaConexion}s`);
-  
-      if (!estadoWhatsApp.disponible) {
-        console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible según chequeo previo (${estadoWhatsApp.razon}) - intentando inicialización bajo demanda...`);
+
+      // En modo one-shot (esReintento), WhatsApp ya está listo - no hacer verificaciones pesadas
+      if (!oneShotDispatch && !getWhatsAppReady()) {
+        console.warn(`[${timestamp}] ⚠️ WhatsApp no listo - inicializando bajo demanda...`);
         try {
           await inicializarWhatsApp({ reason: 'purchase-notification' });
         } catch (initError) {
-          console.warn(`[${timestamp}] ⚠️ Inicialización on-demand falló: ${initError.message}`);
+          console.warn(`[${timestamp}] ⚠️ Inicialización falló: ${initError.message}`);
         }
       }
   
       if (!ADMIN_WHATSAPP) {
-        console.error(`[${timestamp}] ❌ ADMIN_WHATSAPP no está configurado en variables de entorno`);
+        console.error(`[${timestamp}] ❌ ADMIN_WHATSAPP no configurado`);
         return { success: false, error: 'Número de administrador no configurado' };
       }
     }
@@ -2343,7 +2333,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
           console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
 
           if (clienteNormalizado) {
-            resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente, { maxAttempts: 1 });
+            resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
             console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE (one-shot):`, {
               success: resultCliente.success,
               error: resultCliente.error
@@ -2373,8 +2363,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
         console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
         const resultAdmin = await enviarWhatsApp(
           adminNormalizado,
-          mensajeAdmin,
-          oneShotDispatch ? { maxAttempts: 1 } : undefined
+          mensajeAdmin
         );
         const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
           ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
