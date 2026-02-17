@@ -363,6 +363,7 @@ async function inicializarWhatsApp(options = {}) {
   try {
     isConnecting = true;
     qrAttempts = 0;
+    readyEventCount = 0; // Reset contador de ready events
 
     // Si hay un cliente anterior, destruirlo primero
     if (whatsappClient) {
@@ -371,6 +372,18 @@ async function inicializarWhatsApp(options = {}) {
         await whatsappClient.destroy();
       } catch (_) { /* ignorar errores de destroy */ }
       whatsappClient = null;
+    }
+
+    // 🧹 CRÍTICO: Limpiar sesión guardada para evitar sesiones corruptas
+    const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+    if (fs.existsSync(authPath)) {
+      console.log('🧹 Limpiando sesión anterior para evitar conflictos...');
+      try {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log('✅ Sesión anterior eliminada correctamente');
+      } catch (cleanError) {
+        console.warn('⚠️ Error limpiando sesión (continuando):', cleanError.message);
+      }
     }
 
     // Crear nuevo cliente limpio
