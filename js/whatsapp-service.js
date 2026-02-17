@@ -1,14 +1,14 @@
 ﻿/**
  * WhatsApp Service - Conexión efímera via QR
  * ============================================
- * Código restaurado de la versión de octubre 2025 que funcionaba correctamente.
+ * Basado en la versión de octubre 2025 que funcionaba correctamente.
  * 
  * Características clave:
  * - LocalAuth con clientId específico ('capri-store-session')
- * - Directorio de autenticación: .wwebjs_auth
- * - Delay corto (250ms) después de ready antes de procesar pendientes
+ * - Directorio de autenticación: .wwebjs_auth (limpiado en cada inicio)
+ * - Delay de 15s después de ready para estabilización
+ * - Lock de promesa para evitar inicializaciones concurrentes
  * - Contador de eventos ready para evitar duplicados
- * - Sin espera de sincronización de chats
  */
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
@@ -16,27 +16,48 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 
+// 🧹 LIMPIAR SESIONES AL CARGAR EL MÓDULO (lo primero de todo)
+const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+if (fs.existsSync(authPath)) {
+  console.log('🧹 Limpiando sesiones antiguas al cargar módulo...');
+  try {
+    fs.rmSync(authPath, { recursive: true, force: true });
+    console.log('✅ Sesiones WhatsApp eliminadas - inicializaciones serán frescas');
+  } catch (cleanError) {
+    console.warn('⚠️ Error limpiando sesiones:', cleanError.message);
+  }
+} else {
+  console.log('ℹ️ No hay sesiones WhatsApp antiguas para limpiar');
+}
+
 // ===============================
 // DETECCIÓN DE CHROMIUM
 // ===============================
 let chromiumPath = null;
 
 function findChromiumExecutable() {
+  console.log('🔍 Buscando ejecutable de Chrome/Chromium...');
+  
   // 1. Desde puppeteer
   try {
     const puppeteer = require('puppeteer');
     const execPath = puppeteer.executablePath();
+    console.log(`  - Puppeteer path: ${execPath}`);
     if (execPath && fs.existsSync(execPath)) {
       console.log(`✅ Chromium encontrado (puppeteer): ${execPath}`);
       return execPath;
     }
-  } catch (_) { /* no-op */ }
+  } catch (err) {
+    console.log(`  - Puppeteer no disponible: ${err.message}`);
+  }
 
   // 2. Cache manual de puppeteer
   const cacheDir = path.join(__dirname, '..', '.cache', 'puppeteer', 'chrome');
+  console.log(`  - Verificando cache: ${cacheDir}`);
   if (fs.existsSync(cacheDir)) {
     try {
       const versions = fs.readdirSync(cacheDir).sort().reverse();
+      console.log(`  - Versiones encontradas en cache: ${versions.join(', ')}`);
       for (const ver of versions) {
         const chromePath = path.join(cacheDir, ver, 'chrome-linux64', 'chrome');
         if (fs.existsSync(chromePath)) {
@@ -44,11 +65,14 @@ function findChromiumExecutable() {
           return chromePath;
         }
       }
-    } catch (_) { /* no-op */ }
+    } catch (err) {
+      console.log(`  - Error leyendo cache: ${err.message}`);
+    }
   }
 
   // 3. Paths del sistema (Linux / Render)
   const os = require('os');
+  console.log(`  - Plataforma: ${os.platform()}`);
   if (os.platform() === 'linux') {
     const systemPaths = [
       process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -57,15 +81,20 @@ function findChromiumExecutable() {
       '/usr/bin/chromium-browser',
       '/usr/bin/chromium'
     ];
+    console.log(`  - Verificando paths del sistema: ${systemPaths.filter(p => p).join(', ')}`);
     for (const p of systemPaths) {
-      if (p && fs.existsSync(p)) {
-        console.log(`✅ Chromium encontrado (sistema): ${p}`);
-        return p;
+      if (p) {
+        const exists = fs.existsSync(p);
+        console.log(`    ${p}: ${exists ? '✅ EXISTE' : '❌ no existe'}`);
+        if (exists) {
+          console.log(`✅ Chromium encontrado (sistema): ${p}`);
+          return p;
+        }
       }
     }
   }
 
-  console.error('❌ No se encontró ningún ejecutable de Chrome/Chromium');
+  console.error('❌ No se encontró ningún ejecutable de Chrome/Chromium en ninguna ubicación');
   return null;
 }
 
@@ -73,19 +102,10 @@ chromiumPath = findChromiumExecutable();
 
 if (!chromiumPath) {
   console.error('🚨 ERROR CRÍTICO: No se puede inicializar WhatsApp sin Chrome');
-  console.error('Solución: Asegurar que el Build Command incluya "npx puppeteer browsers install chrome"');
-}
-
-// 🧹 LIMPIAR SESIONES AL CARGAR EL MÓDULO (para sesiones 100% frescas)
-const authPath = path.join(__dirname, '..', '.wwebjs_auth');
-if (fs.existsSync(authPath)) {
-  console.log('🧹 Limpiando sesiones antiguas al cargar módulo...');
-  try {
-    fs.rmSync(authPath, { recursive: true, force: true });
-    console.log('✅ Sesiones antiguas eliminadas - inicializaciones serán frescas');
-  } catch (cleanError) {
-    console.warn('⚠️ Error limpiando sesiones al inicio:', cleanError.message);
-  }
+  console.error('💡 Soluciones posibles:');
+  console.error('   1. Verificar que render.yaml tenga: apt-get install -y google-chrome-stable');
+  console.error('   2. O agregar al Build Command: npx puppeteer browsers install chrome');
+  console.error('   3. Revisar los logs del build en Render para errores de instalación');
 }
 
 // ===============================
@@ -687,6 +707,6 @@ module.exports = {
   BUSINESS_NAME
 };
 
-console.log('📱 WhatsApp Service cargado [v5 - NoAuth efímero]');
+console.log('📱 WhatsApp Service cargado [v6 - LocalAuth con limpieza de sesiones]');
 
 
