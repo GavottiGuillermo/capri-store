@@ -288,14 +288,10 @@ function registrarEventos(client) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
-    // Espera extra para asegurar que el Store esté cargado
-    const extraWaitMs = 5000;
-    console.log(`⏳ Esperando ${extraWaitMs}ms para hidratar Store interno...`);
-    await new Promise(res => setTimeout(res, extraWaitMs));
-
-    // Ejecutar callback para enviar pendientes
+    // Ejecutar callback para enviar pendientes INMEDIATAMENTE
+    // El loop de reintentos en enviarWhatsApp manejará la espera del Store
     if (onWhatsAppReadyCallback) {
-      console.log('🚀 Procesando notificaciones pendientes...');
+      console.log('🚀 Procesando notificaciones pendientes INMEDIATAMENTE...');
       try {
         await onWhatsAppReadyCallback();
       } catch (error) {
@@ -304,7 +300,7 @@ function registrarEventos(client) {
 
       // Espera prolongada tras el envío para maximizar entrega
       const postSendWaitMs = 60000;
-      console.log(`⏳ Esperando ${postSendWaitMs / 1000}s tras envío antes de cerrar sesión...`);
+      console.log(`⏳ Esperando ${postSendWaitMs / 1000}s tras envío para mantener sesión abierta...`);
       await new Promise(res => setTimeout(res, postSendWaitMs));
 
       // NO destruir automáticamente - la sesión debe cerrarse manualmente o por timeout externo
