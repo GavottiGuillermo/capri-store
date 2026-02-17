@@ -2,17 +2,18 @@
  * WhatsApp Service - Conexión efímera via QR
  * ============================================
  * Flujo simple basado en la guía oficial de wwebjs.dev:
- *   1. Se inicializa el cliente (NoAuth = sin persistencia de sesión)
+ *   1. Se inicializa el cliente (LocalAuth temporal = evita logout inmediato)
  *   2. Se genera un QR, el usuario lo escanea
  *   3. Se dispara `authenticated` y luego `ready`
  *   4. En `ready` se ejecuta el callback para enviar pendientes
- *   5. Después de enviar, la sesión se destruye automáticamente
+ *   5. Después de enviar, la sesión permanece abierta hasta timeout/cierre manual
  *
- * Usa NoAuth para evitar problemas de sesión corrupta / Store no hidratado.
- * Cada conexión es limpia y de un solo uso.
+ * Usa LocalAuth con directorio temporal (.wwebjs_auth_temp) que se limpia
+ * en cada deploy de Render, manteniendo el comportamiento efímero pero
+ * evitando el logout anti-spam de WhatsApp al usar NoAuth.
  */
 
-const { Client, NoAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
@@ -171,13 +172,16 @@ function formatearNumeroParaEnvio(numero) {
 }
 
 // ===============================
-// CREAR CLIENTE NUEVO (NoAuth)
+// CREAR CLIENTE NUEVO (LocalAuth temporal)
 // ===============================
 function crearClienteWhatsApp() {
-  console.log('📱 Creando nuevo cliente WhatsApp (NoAuth - sesión efímera)...');
+  console.log('📱 Creando nuevo cliente WhatsApp (LocalAuth temporal - sesión efímera)...');
 
+  // Directorio temporal que Render limpia en cada deploy
+  const authDir = path.join(__dirname, '..', '.wwebjs_auth_temp');
+  
   const client = new Client({
-    authStrategy: new NoAuth(),
+    authStrategy: new LocalAuth({ dataPath: authDir }),
     puppeteer: {
       headless: true,
       args: puppeteerArgs,
