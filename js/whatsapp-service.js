@@ -277,15 +277,19 @@ function registrarEventos(client) {
     // Mostrar info de conexión (opcional)
     try {
       const state = await client.getState();
+      const info = client.info;
       console.log(`✅ Estado: ${state}`);
       console.log(`📱 Negocio: ${BUSINESS_NAME}`);
       console.log(`📞 Admin: ${ADMIN_WHATSAPP || 'No configurado'}`);
+      if (info) {
+        console.log(`ℹ️ Client info: ${JSON.stringify(info)}`);
+      }
     } catch (_) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
     // Espera extra para asegurar que el Store esté cargado
-    const extraWaitMs = 3500;
+    const extraWaitMs = 5000;
     console.log(`⏳ Esperando ${extraWaitMs}ms para hidratar Store interno...`);
     await new Promise(res => setTimeout(res, extraWaitMs));
 
@@ -298,14 +302,13 @@ function registrarEventos(client) {
         console.error('❌ Error procesando pendientes:', error.message);
       }
 
-      // Espera adicional tras enviar para evitar cierre prematuro
-      const postSendWaitMs = 4000;
-      console.log(`⏳ Esperando ${postSendWaitMs}ms tras envío antes de cerrar sesión...`);
+      // Espera prolongada tras el envío para maximizar entrega
+      const postSendWaitMs = 60000;
+      console.log(`⏳ Esperando ${postSendWaitMs / 1000}s tras envío antes de cerrar sesión...`);
       await new Promise(res => setTimeout(res, postSendWaitMs));
 
-      // Una vez enviados los pendientes y cumplida la espera, destruir la sesión
-      console.log('📴 Pendientes procesados. Cerrando sesión WhatsApp...');
-      await destruirCliente('pendientes-enviados');
+      // NO destruir automáticamente - la sesión debe cerrarse manualmente o por timeout externo
+      console.log('ℹ️ Sesión WhatsApp efímera lista. Cierre manual o por timeout externo.');
     } else {
       console.log('ℹ️ No hay callback de pendientes configurado.');
     }
@@ -364,8 +367,8 @@ async function inicializarWhatsApp(options = {}) {
     return { success: false, skipped: true, reason: 'connecting' };
   }
 
-  if (whatsappReady && !force) {
-    console.log('✅ WhatsApp ya está listo');
+  if (whatsappClient && whatsappReady && !force) {
+    console.log('✅ WhatsApp ya está listo y cliente activo - omitiendo reconexión');
     return { success: true, skipped: true, reason: 'already_ready' };
   }
 
@@ -413,8 +416,8 @@ async function inicializarWhatsApp(options = {}) {
  */
 async function enviarWhatsApp(numero, mensaje, options = {}) {
   const ts = new Date().toISOString();
-  const maxAttempts = options.maxAttempts || 15;
-  const retryDelay = options.retryDelay || 400;
+  const maxAttempts = options.maxAttempts || 30;
+  const retryDelay = options.retryDelay || 1200;
 
   console.log(`[${ts}] 📤 Enviando WhatsApp a ${numero}`);
   console.log(`[${ts}] 📝 Mensaje: ${mensaje.substring(0, 80)}...`);
@@ -437,6 +440,18 @@ async function enviarWhatsApp(numero, mensaje, options = {}) {
   // Loop de reintentos - le da tiempo al Store interno a cargarse
   for (let intento = 1; intento <= maxAttempts; intento++) {
     try {
+      // Log de estado antes de cada intento
+      try {
+        const state = await whatsappClient.getState();
+        const info = whatsappClient.info;
+        console.log(`[${ts}] ℹ️ Estado antes de enviar: ${state}`);
+        if (info) {
+          console.log(`[${ts}] ℹ️ Info antes de enviar: ${JSON.stringify(info)}`);
+        }
+      } catch (e) {
+        console.log(`[${ts}] ⚠️ No se pudo obtener estado/info: ${e.message}`);
+      }
+
       console.log(`[${ts}] 🚀 Intento ${intento}/${maxAttempts}...`);
 
       // Intentar envío directo con client.sendMessage (más robusto)
