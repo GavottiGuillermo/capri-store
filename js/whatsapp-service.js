@@ -121,6 +121,7 @@ const puppeteerArgs = [
 let whatsappClient = null;   // Instancia actual del Client
 let whatsappReady = false;   // true cuando el evento `ready` se disparó
 let isConnecting = false;    // true mientras se está inicializando/esperando QR
+let initializationPromise = null; // 🔒 Promesa de inicialización para evitar llamadas concurrentes
 let qrAttempts = 0;
 const MAX_QR_ATTEMPTS = 5;
 let readyEventCount = 0;     // 🔍 Contador para detectar eventos ready duplicados
@@ -350,6 +351,12 @@ async function inicializarWhatsApp(options = {}) {
   const { force = false, reason = 'manual' } = options;
   console.log(`🔵 inicializarWhatsApp() - motivo: ${reason}`);
 
+  // 🔒 Si ya hay una inicialización en progreso, esperar a que termine
+  if (initializationPromise && !force) {
+    console.log('🔒 Inicialización ya en progreso - esperando...');
+    return initializationPromise;
+  }
+
   if (isConnecting && !force) {
     console.log('🔒 Ya se está conectando - omitiendo');
     return { success: false, skipped: true, reason: 'connecting' };
@@ -360,48 +367,55 @@ async function inicializarWhatsApp(options = {}) {
     return { success: true, skipped: true, reason: 'already_ready' };
   }
 
-  try {
-    isConnecting = true;
-    qrAttempts = 0;
-    readyEventCount = 0; // Reset contador de ready events
+  // 🔒 Crear promesa de inicialización para evitar llamadas concurrentes
+  initializationPromise = (async () => {
+    try {
+      isConnecting = true;
+      qrAttempts = 0;
+      readyEventCount = 0; // Reset contador de ready events
 
-    // Si hay un cliente anterior, destruirlo primero
-    if (whatsappClient) {
-      console.log('🧹 Destruyendo cliente anterior...');
-      try {
-        await whatsappClient.destroy();
-      } catch (_) { /* ignorar errores de destroy */ }
-      whatsappClient = null;
-    }
-
-    // 🧹 CRÍTICO: Limpiar sesión guardada para evitar sesiones corruptas
-    const authPath = path.join(__dirname, '..', '.wwebjs_auth');
-    if (fs.existsSync(authPath)) {
-      console.log('🧹 Limpiando sesión anterior para evitar conflictos...');
-      try {
-        fs.rmSync(authPath, { recursive: true, force: true });
-        console.log('✅ Sesión anterior eliminada correctamente');
-      } catch (cleanError) {
-        console.warn('⚠️ Error limpiando sesión (continuando):', cleanError.message);
+      // Si hay un cliente anterior, destruirlo primero
+      if (whatsappClient) {
+        console.log('🧹 Destruyendo cliente anterior...');
+        try {
+          await whatsappClient.destroy();
+        } catch (_) { /* ignorar errores de destroy */ }
+        whatsappClient = null;
       }
+
+      // 🧹 CRÍTICO: Limpiar sesión guardada para evitar sesiones corruptas
+      const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+      if (fs.existsSync(authPath)) {
+        console.log('🧹 Limpiando sesión anterior para evitar conflictos...');
+        try {
+          fs.rmSync(authPath, { recursive: true, force: true });
+          console.log('✅ Sesión anterior eliminada correctamente');
+        } catch (cleanError) {
+          console.warn('⚠️ Error limpiando sesión (continuando):', cleanError.message);
+        }
+      }
+
+      // Crear nuevo cliente limpio
+      whatsappClient = crearClienteWhatsApp();
+      registrarEventos(whatsappClient);
+
+      // Inicializar = lanza Puppeteer y genera QR
+      console.log('🚀 Inicializando cliente WhatsApp...');
+      await whatsappClient.initialize();
+      console.log('✅ Cliente inicializado - esperando escaneo de QR...');
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error inicializando WhatsApp:', error.message);
+      isConnecting = false;
+      whatsappClient = null;
+      return { success: false, error: error.message };
+    } finally {
+      initializationPromise = null; // Limpiar promesa al finalizar
     }
+  })();
 
-    // Crear nuevo cliente limpio
-    whatsappClient = crearClienteWhatsApp();
-    registrarEventos(whatsappClient);
-
-    // Inicializar = lanza Puppeteer y genera QR
-    console.log('🚀 Inicializando cliente WhatsApp...');
-    await whatsappClient.initialize();
-    console.log('✅ Cliente inicializado - esperando escaneo de QR...');
-
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Error inicializando WhatsApp:', error.message);
-    isConnecting = false;
-    whatsappClient = null;
-    return { success: false, error: error.message };
-  }
+  return initializationPromise;
 }
 
 // ===============================
