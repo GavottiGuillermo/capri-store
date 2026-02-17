@@ -180,6 +180,12 @@ function crearClienteWhatsApp() {
   // Directorio temporal que Render limpia en cada deploy
   const authDir = path.join(__dirname, '..', '.wwebjs_auth_temp');
   
+  // Asegurar que el directorio existe
+  if (!fs.existsSync(authDir)) {
+    fs.mkdirSync(authDir, { recursive: true });
+    console.log(`📁 Directorio de autenticación creado: ${authDir}`);
+  }
+  
   const client = new Client({
     authStrategy: new LocalAuth({ dataPath: authDir }),
     puppeteer: {
@@ -292,10 +298,14 @@ function registrarEventos(client) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
-    // Ejecutar callback para enviar pendientes INMEDIATAMENTE
-    // El loop de reintentos en enviarWhatsApp manejará la espera del Store
+    // Esperar 15 segundos después del ready para que WhatsApp se estabilice completamente
+    const readyWaitMs = 15000;
+    console.log(`⏳ Esperando ${readyWaitMs / 1000}s para que WhatsApp se estabilice antes de enviar...`);
+    await new Promise(res => setTimeout(res, readyWaitMs));
+    
+    // Ejecutar callback para enviar pendientes
     if (onWhatsAppReadyCallback) {
-      console.log('🚀 Procesando notificaciones pendientes INMEDIATAMENTE...');
+      console.log('🚀 WhatsApp estabilizado - procesando notificaciones pendientes...');
       try {
         await onWhatsAppReadyCallback();
       } catch (error) {
