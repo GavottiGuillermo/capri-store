@@ -206,14 +206,15 @@ function registrarEventos(client) {
   // Limpiar listeners anteriores por seguridad
   client.removeAllListeners();
 
-  // Guard contra eventos duplicados (whatsapp-web.js puede emitir ready/authenticated varias veces)
+  // Guard contra eventos duplicados
   let readyHandled = false;
   let authenticatedLogged = false;
+  let authenticated = false;
 
   // --- QR ---
   client.on('qr', (qr) => {
+    if (authenticated) return; // No mostrar QR si ya está autenticado
     qrAttempts++;
-    // Resetear guards al recibir nuevo QR (nuevo ciclo de auth)
     readyHandled = false;
     authenticatedLogged = false;
 
@@ -239,6 +240,7 @@ function registrarEventos(client) {
       return;
     }
     authenticatedLogged = true;
+    authenticated = true;
     console.log('🔐 WhatsApp autenticado correctamente');
     console.log('⏳ Esperando que WhatsApp termine de cargar (evento ready)...');
   });
@@ -248,6 +250,7 @@ function registrarEventos(client) {
     console.error('❌ Error de autenticación:', msg);
     whatsappReady = false;
     isConnecting = false;
+    authenticated = false;
   });
 
   // --- LOADING SCREEN ---
@@ -257,20 +260,21 @@ function registrarEventos(client) {
     }
   });
 
-  // --- READY (solo se procesa la PRIMERA vez) ---
+  // --- READY (flujo clásico, mínimo indispensable) ---
   client.on('ready', async () => {
     if (readyHandled) {
       console.log('🎉 (ready duplicado - ignorado)');
       return;
     }
     readyHandled = true;
+    authenticated = true;
 
     console.log('\n🎉 ¡WhatsApp CONECTADO y LISTO!');
     whatsappReady = true;
     isConnecting = false;
     qrAttempts = 0;
 
-    // Mostrar info de conexión
+    // Mostrar info de conexión (opcional)
     try {
       const state = await client.getState();
       console.log(`✅ Estado: ${state}`);
@@ -279,29 +283,6 @@ function registrarEventos(client) {
     } catch (_) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
-
-    // Esperar a que los chats estén realmente cargados antes de enviar
-    try {
-      console.log('⏳ Verificando carga de chats...');
-      let chatsLoaded = false;
-      for (let i = 0; i < 12; i++) { // hasta ~6s
-        const chats = await client.getChats();
-        if (chats && chats.length > 0) {
-          chatsLoaded = true;
-          console.log(`✅ Chats cargados: ${chats.length}`);
-          break;
-        }
-        await new Promise(res => setTimeout(res, 500));
-      }
-      if (!chatsLoaded) {
-        console.log('⚠️ No se cargaron los chats tras esperar. Se continúa igual.');
-      }
-    } catch (e) {
-      console.log('⚠️ Error verificando carga de chats:', e);
-    }
-
-    // Espera adicional para asegurar que el Store esté hidratado
-    await new Promise(res => setTimeout(res, 800));
 
     // Ejecutar callback para enviar pendientes
     if (onWhatsAppReadyCallback) {
@@ -325,6 +306,7 @@ function registrarEventos(client) {
     console.log(`⚠️ WhatsApp desconectado: ${reason}`);
     whatsappReady = false;
     isConnecting = false;
+    authenticated = false;
 
     console.log('\n========================================');
     console.log('⚠️  WHATSAPP DESCONECTADO');
