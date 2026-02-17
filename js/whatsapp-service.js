@@ -63,14 +63,26 @@ function findChromiumExecutable() {
       for (const ver of versions) {
         const chromePath = path.join(cacheDir, ver, 'chrome-linux64', 'chrome');
         console.log(`    Verificando: ${chromePath}`);
-        if (fs.existsSync(chromePath)) {
+        const exists = fs.existsSync(chromePath);
+        console.log(`    Existe: ${exists ? '✅ SÍ' : '❌ NO'}`);
+        if (exists) {
           console.log(`✅ Chromium encontrado (cache): ${chromePath}`);
           return chromePath;
+        }
+        // Listar contenido del directorio de la versión para debugging
+        try {
+          const versionDir = path.join(cacheDir, ver);
+          const contents = fs.readdirSync(versionDir);
+          console.log(`    Contenido de ${ver}: ${contents.join(', ')}`);
+        } catch (listErr) {
+          console.log(`    Error listando contenido: ${listErr.message}`);
         }
       }
     } catch (err) {
       console.log(`  - Error leyendo cache: ${err.message}`);
     }
+  } else {
+    console.log(`  - Cache directory no existe: ${cacheDir}`);
   }
 
   // 3. Paths del sistema (Linux / Render)
