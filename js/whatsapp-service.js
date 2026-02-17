@@ -38,7 +38,7 @@ let chromiumPath = null;
 function findChromiumExecutable() {
   console.log('🔍 Buscando ejecutable de Chrome/Chromium...');
   
-  // 1. Desde puppeteer
+  // 1. Desde puppeteer executablePath() - MÉTODO PREFERIDO
   try {
     const puppeteer = require('puppeteer');
     const execPath = puppeteer.executablePath();
@@ -46,6 +46,8 @@ function findChromiumExecutable() {
     if (execPath && fs.existsSync(execPath)) {
       console.log(`✅ Chromium encontrado (puppeteer): ${execPath}`);
       return execPath;
+    } else if (execPath) {
+      console.warn(`  ⚠️ Puppeteer retornó path pero no existe en disco`);
     }
   } catch (err) {
     console.log(`  - Puppeteer no disponible: ${err.message}`);
@@ -60,6 +62,7 @@ function findChromiumExecutable() {
       console.log(`  - Versiones encontradas en cache: ${versions.join(', ')}`);
       for (const ver of versions) {
         const chromePath = path.join(cacheDir, ver, 'chrome-linux64', 'chrome');
+        console.log(`    Verificando: ${chromePath}`);
         if (fs.existsSync(chromePath)) {
           console.log(`✅ Chromium encontrado (cache): ${chromePath}`);
           return chromePath;
