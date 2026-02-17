@@ -76,6 +76,18 @@ if (!chromiumPath) {
   console.error('Solución: Asegurar que el Build Command incluya "npx puppeteer browsers install chrome"');
 }
 
+// 🧹 LIMPIAR SESIONES AL CARGAR EL MÓDULO (para sesiones 100% frescas)
+const authPath = path.join(__dirname, '..', '.wwebjs_auth');
+if (fs.existsSync(authPath)) {
+  console.log('🧹 Limpiando sesiones antiguas al cargar módulo...');
+  try {
+    fs.rmSync(authPath, { recursive: true, force: true });
+    console.log('✅ Sesiones antiguas eliminadas - inicializaciones serán frescas');
+  } catch (cleanError) {
+    console.warn('⚠️ Error limpiando sesiones al inicio:', cleanError.message);
+  }
+}
+
 // ===============================
 // CONFIGURACIÓN
 // ===============================
@@ -383,19 +395,7 @@ async function inicializarWhatsApp(options = {}) {
         whatsappClient = null;
       }
 
-      // 🧹 CRÍTICO: Limpiar sesión guardada para evitar sesiones corruptas
-      const authPath = path.join(__dirname, '..', '.wwebjs_auth');
-      if (fs.existsSync(authPath)) {
-        console.log('🧹 Limpiando sesión anterior para evitar conflictos...');
-        try {
-          fs.rmSync(authPath, { recursive: true, force: true });
-          console.log('✅ Sesión anterior eliminada correctamente');
-        } catch (cleanError) {
-          console.warn('⚠️ Error limpiando sesión (continuando):', cleanError.message);
-        }
-      }
-
-      // Crear nuevo cliente limpio
+      // Crear nuevo cliente limpio (sesión ya fue limpiada al cargar el módulo)
       whatsappClient = crearClienteWhatsApp();
       registrarEventos(whatsappClient);
 
