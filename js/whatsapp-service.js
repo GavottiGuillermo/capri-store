@@ -260,7 +260,7 @@ function registrarEventos(client) {
     }
   });
 
-  // --- READY (flujo clásico, mínimo indispensable) ---
+  // --- READY (espera extra, cierre tardío) ---
   client.on('ready', async () => {
     if (readyHandled) {
       console.log('🎉 (ready duplicado - ignorado)');
@@ -284,6 +284,11 @@ function registrarEventos(client) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
+    // Espera extra para asegurar que el Store esté cargado
+    const extraWaitMs = 3500;
+    console.log(`⏳ Esperando ${extraWaitMs}ms para hidratar Store interno...`);
+    await new Promise(res => setTimeout(res, extraWaitMs));
+
     // Ejecutar callback para enviar pendientes
     if (onWhatsAppReadyCallback) {
       console.log('🚀 Procesando notificaciones pendientes...');
@@ -293,7 +298,12 @@ function registrarEventos(client) {
         console.error('❌ Error procesando pendientes:', error.message);
       }
 
-      // Una vez enviados los pendientes, destruir la sesión
+      // Espera adicional tras enviar para evitar cierre prematuro
+      const postSendWaitMs = 4000;
+      console.log(`⏳ Esperando ${postSendWaitMs}ms tras envío antes de cerrar sesión...`);
+      await new Promise(res => setTimeout(res, postSendWaitMs));
+
+      // Una vez enviados los pendientes y cumplida la espera, destruir la sesión
       console.log('📴 Pendientes procesados. Cerrando sesión WhatsApp...');
       await destruirCliente('pendientes-enviados');
     } else {
