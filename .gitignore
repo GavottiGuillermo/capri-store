@@ -7,7 +7,6 @@ node_modules/
 
 # WhatsApp Authentication (contains sensitive session data)
 .wwebjs_auth/
-.wwebjs_auth_temp/
 .wwebjs_cache/
 
 # Puppeteer cache

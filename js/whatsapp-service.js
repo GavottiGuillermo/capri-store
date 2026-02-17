@@ -1,16 +1,14 @@
 ﻿/**
  * WhatsApp Service - Conexión efímera via QR
  * ============================================
- * Flujo simple basado en la guía oficial de wwebjs.dev:
- *   1. Se inicializa el cliente (LocalAuth temporal = evita logout inmediato)
- *   2. Se genera un QR, el usuario lo escanea
- *   3. Se dispara `authenticated` y luego `ready`
- *   4. En `ready` se ejecuta el callback para enviar pendientes
- *   5. Después de enviar, la sesión permanece abierta hasta timeout/cierre manual
- *
- * Usa LocalAuth con directorio temporal (.wwebjs_auth_temp) que se limpia
- * en cada deploy de Render, manteniendo el comportamiento efímero pero
- * evitando el logout anti-spam de WhatsApp al usar NoAuth.
+ * Código restaurado de la versión de octubre 2025 que funcionaba correctamente.
+ * 
+ * Características clave:
+ * - LocalAuth con clientId específico ('capri-store-session')
+ * - Directorio de autenticación: .wwebjs_auth
+ * - Delay corto (250ms) después de ready antes de procesar pendientes
+ * - Contador de eventos ready para evitar duplicados
+ * - Sin espera de sincronización de chats
  */
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
@@ -125,9 +123,11 @@ let whatsappReady = false;   // true cuando el evento `ready` se disparó
 let isConnecting = false;    // true mientras se está inicializando/esperando QR
 let qrAttempts = 0;
 const MAX_QR_ATTEMPTS = 5;
+let readyEventCount = 0;     // 🔍 Contador para detectar eventos ready duplicados
 
 // Callback que server.js configura para procesar pendientes on ready
 let onWhatsAppReadyCallback = null;
+const PENDING_AFTER_READY_DELAY_MS = 250; // Delay corto como en octubre 2025
 
 function setOnWhatsAppReadyCallback(callback) {
   onWhatsAppReadyCallback = callback;
@@ -175,19 +175,16 @@ function formatearNumeroParaEnvio(numero) {
 // CREAR CLIENTE NUEVO (LocalAuth temporal)
 // ===============================
 function crearClienteWhatsApp() {
-  console.log('📱 Creando nuevo cliente WhatsApp (LocalAuth temporal - sesión efímera)...');
+  console.log('📱 Creando nuevo cliente WhatsApp (LocalAuth con clientId específico)...');
 
-  // Directorio temporal que Render limpia en cada deploy
-  const authDir = path.join(__dirname, '..', '.wwebjs_auth_temp');
-  
-  // Asegurar que el directorio existe
-  if (!fs.existsSync(authDir)) {
-    fs.mkdirSync(authDir, { recursive: true });
-    console.log(`📁 Directorio de autenticación creado: ${authDir}`);
-  }
+  // Directorio estándar de autenticación (como en octubre 2025)
+  const authPath = path.join(__dirname, '..', '.wwebjs_auth');
   
   const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: authDir }),
+    authStrategy: new LocalAuth({
+      clientId: 'capri-store-session',
+      dataPath: authPath
+    }),
     puppeteer: {
       headless: true,
       args: puppeteerArgs,
@@ -216,17 +213,9 @@ function registrarEventos(client) {
   // Limpiar listeners anteriores por seguridad
   client.removeAllListeners();
 
-  // Guard contra eventos duplicados
-  let readyHandled = false;
-  let authenticatedLogged = false;
-  let authenticated = false;
-
   // --- QR ---
   client.on('qr', (qr) => {
-    if (authenticated) return; // No mostrar QR si ya está autenticado
     qrAttempts++;
-    readyHandled = false;
-    authenticatedLogged = false;
 
     if (qrAttempts > MAX_QR_ATTEMPTS) {
       console.error(`\n❌ LÍMITE DE QRs ALCANZADO (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
@@ -245,12 +234,6 @@ function registrarEventos(client) {
 
   // --- AUTHENTICATED ---
   client.on('authenticated', () => {
-    if (authenticatedLogged) {
-      console.log('🔐 (authenticated duplicado - ignorado)');
-      return;
-    }
-    authenticatedLogged = true;
-    authenticated = true;
     console.log('🔐 WhatsApp autenticado correctamente');
     console.log('⏳ Esperando que WhatsApp termine de cargar (evento ready)...');
   });
@@ -260,7 +243,6 @@ function registrarEventos(client) {
     console.error('❌ Error de autenticación:', msg);
     whatsappReady = false;
     isConnecting = false;
-    authenticated = false;
   });
 
   // --- LOADING SCREEN ---
@@ -272,19 +254,25 @@ function registrarEventos(client) {
 
   // --- READY (espera extra, cierre tardío) ---
   client.on('ready', async () => {
-    if (readyHandled) {
-      console.log('🎉 (ready duplicado - ignorado)');
-      return;
-    }
-    readyHandled = true;
-    authenticated = true;
+    readyEventCount++; // Incrementar contador
+    const timestamp = new Date().toISOString();
 
-    console.log('\n🎉 ¡WhatsApp CONECTADO y LISTO!');
+    if (readyEventCount > 1) {
+      console.warn(`⚠️ EVENTO READY DUPLICADO #${readyEventCount} - IGNORANDO`);
+      return; // Ignorar eventos ready duplicados
+    }
+
+    console.log(`[${timestamp}] 🎉 EVENTO READY DISPARADO - WhatsApp completamente listo`);
+    console.log('ℹ️ Se omite la espera de sincronización de chats para evitar bloqueos');
+    
     whatsappReady = true;
     isConnecting = false;
+    
+    // RESETEAR CONTADOR DE QR cuando se conecta exitosamente
     qrAttempts = 0;
+    console.log('✅ Contador de QR reseteado - conexión exitosa');
 
-    // Mostrar info de conexión (opcional)
+    // Mostrar info de conexión
     try {
       const state = await client.getState();
       const info = client.info;
@@ -298,27 +286,16 @@ function registrarEventos(client) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
-    // Esperar 15 segundos después del ready para que WhatsApp se estabilice completamente
-    const readyWaitMs = 15000;
-    console.log(`⏳ Esperando ${readyWaitMs / 1000}s para que WhatsApp se estabilice antes de enviar...`);
-    await new Promise(res => setTimeout(res, readyWaitMs));
-    
-    // Ejecutar callback para enviar pendientes
+    // Procesar notificaciones pendientes con delay corto (250ms como en octubre 2025)
     if (onWhatsAppReadyCallback) {
-      console.log('🚀 WhatsApp estabilizado - procesando notificaciones pendientes...');
-      try {
-        await onWhatsAppReadyCallback();
-      } catch (error) {
-        console.error('❌ Error procesando pendientes:', error.message);
-      }
-
-      // Espera prolongada tras el envío para maximizar entrega
-      const postSendWaitMs = 60000;
-      console.log(`⏳ Esperando ${postSendWaitMs / 1000}s tras envío para mantener sesión abierta...`);
-      await new Promise(res => setTimeout(res, postSendWaitMs));
-
-      // NO destruir automáticamente - la sesión debe cerrarse manualmente o por timeout externo
-      console.log('ℹ️ Sesión WhatsApp efímera lista. Cierre manual o por timeout externo.');
+      console.log(`🔄 Programando callback de notificaciones pendientes en ${PENDING_AFTER_READY_DELAY_MS / 1000}s...`);
+      setTimeout(async () => {
+        try {
+          await onWhatsAppReadyCallback();
+        } catch (error) {
+          console.error(`[${timestamp}] ❌ Error en callback de notificaciones pendientes:`, error);
+        }
+      }, PENDING_AFTER_READY_DELAY_MS);
     } else {
       console.log('ℹ️ No hay callback de pendientes configurado.');
     }
@@ -329,7 +306,7 @@ function registrarEventos(client) {
     console.log(`⚠️ WhatsApp desconectado: ${reason}`);
     whatsappReady = false;
     isConnecting = false;
-    authenticated = false;
+    readyEventCount = 0; // Reset contador de ready events
 
     console.log('\n========================================');
     console.log('⚠️  WHATSAPP DESCONECTADO');
