@@ -127,7 +127,7 @@ let readyEventCount = 0;     // 🔍 Contador para detectar eventos ready duplic
 
 // Callback que server.js configura para procesar pendientes on ready
 let onWhatsAppReadyCallback = null;
-const PENDING_AFTER_READY_DELAY_MS = 250; // Delay corto como en octubre 2025
+const PENDING_AFTER_READY_DELAY_MS = 15000; // 15 segundos para que WhatsApp se estabilice completamente
 
 function setOnWhatsAppReadyCallback(callback) {
   onWhatsAppReadyCallback = callback;
@@ -286,10 +286,11 @@ function registrarEventos(client) {
       console.log('✅ Conectado (no se pudo leer estado detallado)');
     }
 
-    // Procesar notificaciones pendientes con delay corto (250ms como en octubre 2025)
+    // Procesar notificaciones pendientes DESPUÉS de dar tiempo a WhatsApp para estabilizarse
     if (onWhatsAppReadyCallback) {
-      console.log(`🔄 Programando callback de notificaciones pendientes en ${PENDING_AFTER_READY_DELAY_MS / 1000}s...`);
+      console.log(`🔄 WhatsApp ready - esperando ${PENDING_AFTER_READY_DELAY_MS / 1000}s para estabilización antes de procesar pendientes...`);
       setTimeout(async () => {
+        console.log('🚀 Tiempo de estabilización completado - procesando notificaciones pendientes...');
         try {
           await onWhatsAppReadyCallback();
         } catch (error) {
