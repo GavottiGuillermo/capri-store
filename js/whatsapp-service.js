@@ -1,22 +1,77 @@
-﻿/**
- * WhatsApp Service - LocalAuth simple (Oct 2025)
- * ===============================================
- * Configuración simple que funcionaba correctamente:
- * - LocalAuth con clientId específico
- * - Detección automática de Chrome via Puppeteer
- * - Sin limpieza manual de sesiones
- */
-
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const PostgresAuthStrategy = require('./postgres-auth-strategy');
 
-// ===============================
-// CONFIGURACIÓN
-// ===============================
+// Configuración del negocio
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP;
 
-// Args de Puppeteer optimizados para Render Free (Oct 2025)
+let whatsappReady = false;
+let qrGenerated = false;
+let qrAttempts = 0;
+const MAX_QR_ATTEMPTS = 5;
+let ultimaConexionExitosa = null;
+
+// Callback para procesar notificaciones pendientes cuando WhatsApp se conecta
+let onWhatsAppReadyCallback = null;
+let lastCallbackExecution = 0;
+const CALLBACK_DEBOUNCE_MS = 30000;
+
+// Función para configurar el callback
+function setOnWhatsAppReadyCallback(callback) {
+  onWhatsAppReadyCallback = callback;
+}
+
+// Función para marcar conexión exitosa
+function marcarConexionExitosa() {
+  ultimaConexionExitosa = new Date();
+  whatsappReady = true;
+  console.log(`🎯 MARCA CONEXIÓN EXITOSA: ${ultimaConexionExitosa.toISOString()}`);
+}
+
+console.log('📱 Configurando WhatsApp Business... [v4 - PostgresAuth]');
+
+// Verificar si tenemos conexión a PostgreSQL
+const usePostgresAuth = !!(process.env.DATABASE_URL);
+console.log(`🗄️ Estrategia: ${usePostgresAuth ? 'PostgreSQL (Persistente)' : 'Local (Temporal)'}`);
+
+// Configurar estrategia de autenticación
+let authStrategy;
+try {
+  if (usePostgresAuth) {
+    console.log('🔐 Configurando autenticación PostgreSQL...');
+    authStrategy = new PostgresAuthStrategy({
+      clientId: 'capri-store-main',
+      dataPath: './temp-auth/'
+    });
+    console.log('✅ PostgresAuthStrategy creado');
+    qrAttempts = 0;
+  } else {
+    console.log('⚠️ No se encontró DATABASE_URL, usando LocalAuth');
+    const { LocalAuth } = require('whatsapp-web.js');
+    const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
+    
+    authStrategy = new LocalAuth({
+      clientId: 'capri-store-session',
+      dataPath: authPath
+    });
+    console.log('✅ LocalAuth creado');
+  }
+} catch (authError) {
+  console.error('❌ ERROR creando AuthStrategy:', authError.message);
+  const { LocalAuth } = require('whatsapp-web.js');
+  const authPath = process.env.RENDER ? '/tmp/.wwebjs_auth' : './.wwebjs_auth/';
+  
+  authStrategy = new LocalAuth({
+    clientId: 'capri-store-fallback',
+    dataPath: authPath
+  });
+  console.log('✅ Fallback LocalAuth creado');
+}
+
+console.log('🔧 Creando cliente WhatsApp...');
+
+// Argumentos de Puppeteer
 const puppeteerArgs = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
@@ -25,31 +80,248 @@ const puppeteerArgs = [
   '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ];
 
-// ===============================
-// ESTADO
-// ===============================
-let whatsappClient = null;   // Instancia actual del Client
-let whatsappReady = false;   // true cuando el evento `ready` se disparó
-let isConnecting = false;    // true mientras se está inicializando/esperando QR
-let initializationPromise = null; // 🔒 Promesa de inicialización para evitar llamadas concurrentes
-let qrAttempts = 0;
-const MAX_QR_ATTEMPTS = 5;
-let readyEventCount = 0;     // 🔍 Contador para detectar eventos ready duplicados
+// ============================================
+// CLIENTE ÚNICO - CREADO UNA SOLA VEZ
+// ============================================
+const whatsappClient = new Client({
+  authStrategy: authStrategy,
+  puppeteer: {
+    headless: true,
+    args: puppeteerArgs,
+    timeout: 60000,
+    executablePath: undefined,
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false
+  },
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  },
+  qrMaxRetries: 3,
+  authTimeoutMs: 60000,
+  takeoverOnConflict: true,
+  takeoverTimeoutMs: 60000
+});
 
-// Callback que server.js configura para procesar pendientes on ready
-let onWhatsAppReadyCallback = null;
-const PENDING_AFTER_READY_DELAY_MS = 15000; // 15 segundos para que WhatsApp se estabilice completamente
+console.log('✅ Cliente WhatsApp creado exitosamente');
 
-function setOnWhatsAppReadyCallback(callback) {
-  onWhatsAppReadyCallback = callback;
+// ============================================
+// EVENTOS - REGISTRADOS UNA SOLA VEZ
+// ============================================
+whatsappClient.on('qr', (qr) => {
+  qrAttempts++;
+  
+  if (qrAttempts > MAX_QR_ATTEMPTS) {
+    console.error(`\n❌ LÍMITE DE QRs ALCANZADO (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
+    console.error('💡 Usa /whatsapp-regenerar-qr para reintentar\n');
+    return;
+  }
+  
+  if (qrGenerated) {
+    console.log(`\n⚠️ QR expiró, generando nuevo (${qrAttempts}/${MAX_QR_ATTEMPTS})...\n`);
+  }
+  
+  console.log('\n============================================================');
+  console.log(`📱 CÓDIGO QR PARA WHATSAPP (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
+  console.log('============================================================\n');
+  
+  qrcode.generate(qr, { small: true });
+  
+  console.log('\n📲 Escaneá el QR desde WhatsApp > Dispositivos vinculados > Vincular');
+  console.log('⏰ Tenés 60 segundos. Se regenera automáticamente.\n');
+  
+  qrGenerated = true;
+});
+
+// Eventos PostgreSQL
+if (usePostgresAuth) {
+  whatsappClient.on('remote_session_saved', () => {
+    console.log('💾 ✅ Sesión guardada en PostgreSQL');
+    if (global.gc) global.gc();
+  });
+  
+  whatsappClient.on('remote_session_loaded', () => {
+    console.log('📥 ✅ Sesión cargada desde PostgreSQL');
+    if (global.gc) global.gc();
+  });
+  
+  whatsappClient.on('auth_failure', (msg) => {
+    console.error('❌ Fallo de autenticación:', msg);
+  });
+  
+  // Auto-inicialización si hay sesión
+  (async function autoInit() {
+    try {
+      const sessionExists = await authStrategy.store.sessionExists();
+      console.log('📊 Sesión existente:', sessionExists ? '✅ SÍ' : '❌ NO');
+      
+      if (sessionExists) {
+        const sessionData = await authStrategy.store.extract();
+        if (sessionData) {
+          const size = JSON.stringify(sessionData).length;
+          if (size > 5000) {
+            console.log('✅ Sesión válida - Inicializando WhatsApp...');
+            await whatsappClient.initialize();
+          } else {
+            console.warn('⚠️ Sesión pequeña - puede estar corrupta');
+          }
+        }
+      } else {
+        console.log('💡 Usa /whatsapp-regenerar-qr para generar QR');
+      }
+    } catch (error) {
+      console.error('❌ Error en auto-init:', error.message);
+    }
+  })();
 }
 
-// ===============================
-// HELPERS
-// ===============================
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+whatsappClient.on('ready', async () => {
+  console.log('🎉 EVENTO READY DISPARADO - WhatsApp completamente listo');
+  whatsappReady = true;
+  marcarConexionExitosa();
+  
+  // Resetear contador QR
+  qrAttempts = 0;
+  console.log('✅ Contador de QR reseteado - conexión exitosa');
+  
+  // Procesar notificaciones pendientes
+  if (onWhatsAppReadyCallback) {
+    const now = Date.now();
+    if (now - lastCallbackExecution > CALLBACK_DEBOUNCE_MS) {
+      lastCallbackExecution = now;
+      setImmediate(() => {
+        try {
+          onWhatsAppReadyCallback();
+        } catch (error) {
+          console.error('❌ Error en callback:', error);
+        }
+      });
+    }
+  }
+  
+  // Info del cliente
+  try {
+    const state = await whatsappClient.getState();
+    console.log('✅ Estado:', state);
+    console.log('📱 Negocio:', BUSINESS_NAME);
+    console.log('📞 Admin:', ADMIN_WHATSAPP);
+    
+    const info = whatsappClient.info;
+    if (info) {
+      console.log('ℹ️ Client info:', JSON.stringify(info));
+    }
+  } catch (err) {
+    console.log('⚠️ No se pudo obtener info del cliente:', err.message);
+  }
+});
+
+whatsappClient.on('authenticated', () => {
+  console.log('🔐 WhatsApp autenticado correctamente');
+});
+
+whatsappClient.on('auth_failure', (msg) => {
+  console.error('❌ Error de autenticación:', msg);
+  whatsappReady = false;
+});
+
+whatsappClient.on('loading_screen', (percent, message) => {
+  if (!whatsappReady) {
+    console.log(`📱 Cargando WhatsApp: ${percent}% - ${message}`);
+  }
+});
+
+whatsappClient.on('disconnected', (reason) => {
+  console.log('⚠️ WhatsApp desconectado:', reason);
+  whatsappReady = false;
+  console.log('========================================');
+  console.log('⚠️  WHATSAPP DESCONECTADO');
+  console.log('========================================');
+  console.log('Para reconectar: GET /whatsapp-regenerar-qr');
+  console.log('========================================');
+});
+
+whatsappClient.on('change_state', state => {
+  console.log('📊 Cambio de estado WhatsApp:', state);
+});
+
+// ============================================
+// FUNCIONES PRINCIPALES
+// ============================================
+
+async function inicializarWhatsApp() {
+  console.log('🔵 inicializarWhatsApp() llamado...');
+  
+  try {
+    const state = await whatsappClient.getState();
+    console.log('📊 Estado actual del cliente:', state);
+    
+    if (state === 'CONNECTED') {
+      console.log('✅ Cliente ya conectado - no se requiere inicialización');
+      return { success: true, already_connected: true };
+    }
+  } catch (err) {
+    console.log('⚠️ No se pudo obtener estado (esperado si no está inicializado):', err.message);
+  }
+  
+  console.log('🚀 Inicializando WhatsApp...');
+  await whatsappClient.initialize();
+  
+  return { success: true };
 }
+
+async function enviarWhatsApp(numero, mensaje, info = {}) {
+  const timestamp = new Date().toISOString();
+  
+  if (!whatsappReady) {
+    console.log(`[${timestamp}] ❌ WhatsApp no está listo`);
+    return { success: false, error: 'WhatsApp no está listo' };
+  }
+  
+  const numeroFormateado = String(numero || '').replace(/\D/g, '');
+  if (!numeroFormateado || numeroFormateado.length < 10) {
+    return { success: false, error: 'Número inválido' };
+  }
+  
+  const chatId = `${numeroFormateado}@c.us`;
+  
+  console.log(`[${timestamp}] 📤 Enviando WhatsApp a ${numero}`);
+  
+  try {
+    await whatsappClient.sendMessage(chatId, mensaje);
+    console.log(`[${timestamp}] ✅ Mensaje enviado exitosamente`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Error enviando mensaje:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+async function getWhatsAppStatus() {
+  try {
+    const state = await whatsappClient.getState();
+    return {
+      whatsapp_ready: whatsappReady,
+      state: state,
+      ultima_conexion: ultimaConexionExitosa
+    };
+  } catch (error) {
+    return {
+      whatsapp_ready: false,
+      state: 'ERROR',
+      error: error.message
+    };
+  }
+}
+
+async function resetearContadorQR() {
+  qrAttempts = 0;
+  console.log('✅ Contador QR reseteado a 0');
+  return { success: true };
+}
+
+// Funciones adapter para server.js
+let isConnecting = false;
 
 function getWhatsAppReady() {
   return whatsappReady;
@@ -57,7 +329,6 @@ function getWhatsAppReady() {
 
 function setWhatsAppReady(value) {
   whatsappReady = value;
-  return whatsappReady;
 }
 
 function getIsConnecting() {
@@ -72,515 +343,99 @@ function getWhatsAppClient() {
   return whatsappClient;
 }
 
-// ===============================
-// NORMALIZACIÓN DE TELÉFONO
-// ===============================
-function formatearNumeroParaEnvio(numero) {
-  // Limpiar todo lo que no sea dígito
-  const limpio = String(numero || '').replace(/\D/g, '');
-  if (!limpio) return null;
-  return `${limpio}@c.us`;
+function verificarConexionCompleta() {
+  return whatsappReady && whatsappClient;
 }
 
-// ===============================
-// CREAR CLIENTE NUEVO (LocalAuth temporal)
-// ===============================
-function crearClienteWhatsApp() {
-  console.log('📱 Creando nuevo cliente WhatsApp (LocalAuth simple - Oct 2025)...');
-
-  const client = new Client({
-    authStrategy: new LocalAuth({
-      clientId: 'capri-store-session'
-    }),
-    puppeteer: {
-      headless: true,
-      args: puppeteerArgs,
-      timeout: 120000,
-      executablePath: undefined,  // ✅ Detección automática como en octubre 2025
-      handleSIGINT: false,
-      handleSIGTERM: false,
-      handleSIGHUP: false
-    },
-    webVersionCache: {
-      type: 'remote',
-      remotePath: 'https://raw.githubusercontent.com/ArmandoIMD/ArmandoIMD/refs/heads/main/ArmandoIMD/2.3000.1017484782-alpha.html'
-    },
-    qrMaxRetries: 3,
-    authTimeoutMs: 120000,
-    takeoverOnConflict: false
-  });
-
-  return client;
-}
-
-// ===============================
-// REGISTRAR EVENTOS
-// ===============================
-function registrarEventos(client) {
-  // Limpiar listeners anteriores por seguridad
-  client.removeAllListeners();
-
-  // --- QR ---
-  client.on('qr', (qr) => {
-    qrAttempts++;
-
-    if (qrAttempts > MAX_QR_ATTEMPTS) {
-      console.error(`\n❌ LÍMITE DE QRs ALCANZADO (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
-      console.error('Ejecutá GET /whatsapp-regenerar-qr para reintentar.\n');
-      isConnecting = false;
-      return;
-    }
-
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`📱 CÓDIGO QR PARA WHATSAPP (${qrAttempts}/${MAX_QR_ATTEMPTS})`);
-    console.log(`${'='.repeat(60)}\n`);
-    qrcode.generate(qr, { small: true });
-    console.log('\n📲 Escaneá el QR desde WhatsApp > Dispositivos vinculados > Vincular');
-    console.log(`⏰ Tenés 60 segundos. Se regenera automáticamente.\n`);
-  });
-
-  // --- AUTHENTICATED ---
-  client.on('authenticated', () => {
-    console.log('🔐 WhatsApp autenticado correctamente');
-    console.log('⏳ Esperando que WhatsApp termine de cargar (evento ready)...');
-  });
-
-  // --- AUTH FAILURE ---
-  client.on('auth_failure', (msg) => {
-    console.error('❌ Error de autenticación:', msg);
-    whatsappReady = false;
-    isConnecting = false;
-  });
-
-  // --- LOADING SCREEN ---
-  client.on('loading_screen', (percent, message) => {
-    if (!whatsappReady) {
-      console.log(`📱 Cargando WhatsApp: ${percent}% - ${message}`);
-    }
-  });
-
-  // --- READY (espera extra, cierre tardío) ---
-  client.on('ready', async () => {
-    readyEventCount++; // Incrementar contador
-    const timestamp = new Date().toISOString();
-
-    if (readyEventCount > 1) {
-      console.warn(`⚠️ EVENTO READY DUPLICADO #${readyEventCount} - IGNORANDO`);
-      return; // Ignorar eventos ready duplicados
-    }
-
-    console.log(`[${timestamp}] 🎉 EVENTO READY DISPARADO - WhatsApp completamente listo`);
-    console.log('ℹ️ Se omite la espera de sincronización de chats para evitar bloqueos');
-    
-    whatsappReady = true;
-    isConnecting = false;
-    
-    // RESETEAR CONTADOR DE QR cuando se conecta exitosamente
-    qrAttempts = 0;
-    console.log('✅ Contador de QR reseteado - conexión exitosa');
-
-    // Mostrar info de conexión
-    try {
-      const state = await client.getState();
-      const info = client.info;
-      console.log(`✅ Estado: ${state}`);
-      console.log(`📱 Negocio: ${BUSINESS_NAME}`);
-      console.log(`📞 Admin: ${ADMIN_WHATSAPP || 'No configurado'}`);
-      if (info) {
-        console.log(`ℹ️ Client info: ${JSON.stringify(info)}`);
-      }
-    } catch (_) {
-      console.log('✅ Conectado (no se pudo leer estado detallado)');
-    }
-
-    // Procesar notificaciones pendientes DESPUÉS de dar tiempo a WhatsApp para estabilizarse
-    if (onWhatsAppReadyCallback) {
-      console.log(`🔄 WhatsApp ready - esperando ${PENDING_AFTER_READY_DELAY_MS / 1000}s para estabilización antes de procesar pendientes...`);
-      setTimeout(async () => {
-        console.log('🚀 Tiempo de estabilización completado - procesando notificaciones pendientes...');
-        try {
-          await onWhatsAppReadyCallback();
-        } catch (error) {
-          console.error(`[${timestamp}] ❌ Error en callback de notificaciones pendientes:`, error);
-        }
-      }, PENDING_AFTER_READY_DELAY_MS);
-    } else {
-      console.log('ℹ️ No hay callback de pendientes configurado.');
-    }
-  });
-
-  // --- DISCONNECTED ---
-  client.on('disconnected', (reason) => {
-    console.log(`⚠️ WhatsApp desconectado: ${reason}`);
-    whatsappReady = false;
-    isConnecting = false;
-    readyEventCount = 0; // Reset contador de ready events
-
-    console.log('\n========================================');
-    console.log('⚠️  WHATSAPP DESCONECTADO');
-    console.log('========================================');
-    console.log('Para reconectar: GET /whatsapp-regenerar-qr');
-    console.log('========================================\n');
-  });
-}
-
-// ===============================
-// DESTRUIR CLIENTE (limpieza post-envío)
-// ===============================
-async function destruirCliente(reason = 'manual') {
-  const ts = new Date().toISOString();
-  console.log(`[${ts}] 📴 Destruyendo cliente WhatsApp (${reason})...`);
-  whatsappReady = false;
-  isConnecting = false;
-
-  if (!whatsappClient) {
-    console.log(`[${ts}] ℹ️ No hay cliente activo para destruir`);
-    return { success: true, skipped: true };
-  }
-
-  try {
-    await whatsappClient.destroy();
-    console.log(`[${ts}] ✅ Cliente destruido correctamente`);
-  } catch (error) {
-    // Errores de "Target closed" son esperables al destruir
-    console.log(`[${ts}] ⚠️ Error al destruir (esperable): ${error.message}`);
-  }
-
-  whatsappClient = null;
+async function cerrarSesionEfimera() {
+  console.log('ℹ️ cerrarSesionEfimera - no-op (sesión persistente)');
   return { success: true };
 }
 
-// ===============================
-// INICIALIZAR WHATSAPP (genera QR)
-// ===============================
-async function inicializarWhatsApp(options = {}) {
-  const { force = false, reason = 'manual' } = options;
-  console.log(`🔵 inicializarWhatsApp() - motivo: ${reason}`);
-
-  // 🔒 Si ya hay una inicialización en progreso, esperar a que termine
-  if (initializationPromise && !force) {
-    console.log('🔒 Inicialización ya en progreso - esperando...');
-    return initializationPromise;
-  }
-
-  if (isConnecting && !force) {
-    console.log('🔒 Ya se está conectando - omitiendo');
-    return { success: false, skipped: true, reason: 'connecting' };
-  }
-
-  if (whatsappClient && whatsappReady && !force) {
-    console.log('✅ WhatsApp ya está listo y cliente activo - omitiendo reconexión');
-    return { success: true, skipped: true, reason: 'already_ready' };
-  }
-
-  // 🔒 Crear promesa de inicialización para evitar llamadas concurrentes
-  initializationPromise = (async () => {
-    try {
-      isConnecting = true;
-      qrAttempts = 0;
-      readyEventCount = 0; // Reset contador de ready events
-
-      // Si hay un cliente anterior, destruirlo primero
-      if (whatsappClient) {
-        console.log('🧹 Destruyendo cliente anterior...');
-        try {
-          await whatsappClient.destroy();
-        } catch (_) { /* ignorar errores de destroy */ }
-        whatsappClient = null;
-      }
-
-      // Crear nuevo cliente limpio (sesión ya fue limpiada al cargar el módulo)
-      whatsappClient = crearClienteWhatsApp();
-      registrarEventos(whatsappClient);
-
-      // Inicializar = lanza Puppeteer y genera QR
-      console.log('🚀 Inicializando cliente WhatsApp...');
-      await whatsappClient.initialize();
-      console.log('✅ Cliente inicializado - esperando escaneo de QR...');
-
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Error inicializando WhatsApp:', error.message);
-      isConnecting = false;
-      whatsappClient = null;
-      return { success: false, error: error.message };
-    } finally {
-      initializationPromise = null; // Limpiar promesa al finalizar
-    }
-  })();
-
-  return initializationPromise;
+function forzarReconexion() {
+  console.log('⚠️ forzarReconexion no implementado en versión PostgreSQL');
+  return { success: false };
 }
 
-// ===============================
-// ENVIAR MENSAJE DE WHATSAPP
-// ===============================
-/**
- * Envía un mensaje por WhatsApp con reintentos inteligentes.
- *
- * El problema clave en Render Free es que cuando `ready` se dispara,
- * el Store interno de WhatsApp Web todavía no está 100% cargado.
- * Por eso usamos un loop de reintentos con espera corta (300ms)
- * que le da tiempo al Store a hidratarse antes de LOGOUT (~5-10s).
- */
-async function enviarWhatsApp(numero, mensaje, options = {}) {
-  const ts = new Date().toISOString();
-  const maxAttempts = options.maxAttempts || 30;
-  const retryDelay = options.retryDelay || 1200;
-
-  console.log(`[${ts}] 📤 Enviando WhatsApp a ${numero}`);
-  console.log(`[${ts}] 📝 Mensaje: ${mensaje.substring(0, 80)}...`);
-
-  if (!whatsappClient) {
-    return { success: false, error: 'No hay cliente WhatsApp activo' };
-  }
-
-  if (!whatsappReady) {
-    return { success: false, error: 'WhatsApp no está listo (ready=false)' };
-  }
-
-  const destino = formatearNumeroParaEnvio(numero);
-  if (!destino) {
-    return { success: false, error: `Número inválido: ${numero}` };
-  }
-
-  console.log(`[${ts}] 📱 Destino formateado: ${destino}`);
-
-  // Loop de reintentos - le da tiempo al Store interno a cargarse
-  for (let intento = 1; intento <= maxAttempts; intento++) {
-    try {
-      // Log de estado antes de cada intento
-      try {
-        const state = await whatsappClient.getState();
-        const info = whatsappClient.info;
-        console.log(`[${ts}] ℹ️ Estado antes de enviar: ${state}`);
-        if (info) {
-          console.log(`[${ts}] ℹ️ Info antes de enviar: ${JSON.stringify(info)}`);
-        }
-      } catch (e) {
-        console.log(`[${ts}] ⚠️ No se pudo obtener estado/info: ${e.message}`);
-      }
-
-      console.log(`[${ts}] 🚀 Intento ${intento}/${maxAttempts}...`);
-
-      // Intentar envío directo con client.sendMessage (más robusto)
-      const result = await whatsappClient.sendMessage(destino, mensaje);
-
-      // Éxito
-      let messageIdStr = 'N/A';
-      if (result && result.id) {
-        messageIdStr = typeof result.id === 'string'
-          ? result.id
-          : (result.id._serialized || JSON.stringify(result.id));
-      }
-      console.log(`[${ts}] ✅ Mensaje enviado exitosamente! (intento ${intento}/${maxAttempts})`);
-      console.log(`[${ts}] 📨 Message ID: ${messageIdStr}`);
-
-      return {
-        success: true,
-        message: 'Mensaje enviado correctamente',
-        messageId: result?.id,
-        timestamp: ts,
-        intentos: intento
-      };
-
-    } catch (error) {
-      const errorMsg = String(error?.message || error || '').toLowerCase();
-      const isStoreNotReady =
-        errorMsg.includes('evaluation failed') ||
-        errorMsg.includes('getchat') ||
-        errorMsg.includes('getstorage') ||
-        errorMsg.includes('executioncontext') ||
-        errorMsg.includes('target closed') ||
-        errorMsg.includes('sendiq') ||
-        errorMsg.includes('startcomms') ||
-        errorMsg.includes('cannot read properties');
-
-      if (isStoreNotReady && intento < maxAttempts) {
-        console.log(`[${ts}] ⏳ Store aún cargando (intento ${intento}/${maxAttempts}), reintentando en ${retryDelay}ms...`);
-        await sleep(retryDelay);
-        continue;
-      }
-
-      // Error final o no transitorio
-      console.error(`[${ts}] ❌ Error enviando (intento ${intento}/${maxAttempts}): ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-        timestamp: ts,
-        intentos: intento
-      };
-    }
-  }
-
-  return { success: false, error: 'Reintentos agotados', timestamp: ts, intentos: maxAttempts };
-}
-
-// ===============================
-// OBTENER ESTADO
-// ===============================
-async function getWhatsAppStatus() {
-  if (!whatsappClient) {
-    return {
-      whatsapp_ready: false,
-      client_state: 'NOT_INITIALIZED',
-      isReady: false,
-      hasStateError: false,
-      business_name: BUSINESS_NAME,
-      admin_whatsapp: ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO',
-      timestamp: new Date().toISOString()
-    };
-  }
-
-  let clientState = null;
-  let stateError = null;
-  let clientInfo = null;
-
-  try {
-    clientState = await whatsappClient.getState();
-  } catch (error) {
-    stateError = error.message;
-  }
-
-  try {
-    clientInfo = whatsappClient.info;
-  } catch (_) { /* no-op */ }
-
-  const isReady = whatsappReady && clientState === 'CONNECTED';
-
-  return {
-    whatsapp_ready: isReady,
-    client_state: clientState,
-    flag_ready: whatsappReady,
-    business_name: BUSINESS_NAME,
-    admin_whatsapp: ADMIN_WHATSAPP ? `${ADMIN_WHATSAPP.substring(0, 4)}****` : 'NO CONFIGURADO',
-    client_info: clientInfo ? {
-      platform: clientInfo.platform,
-      phone: clientInfo.wid ? clientInfo.wid.user : 'unknown'
-    } : null,
-    diagnostics: {
-      state_error: stateError,
-      suggested_action: !isReady ? 'SCAN_QR' : 'NONE'
-    },
-    timestamp: new Date().toISOString()
-  };
-}
-
-// ===============================
-// FUNCIONES DE RECONEXIÓN / LIMPIEZA
-// ===============================
-async function forzarReconexion() {
-  console.log('🔄 Forzando reconexión...');
-  return inicializarWhatsApp({ force: true, reason: 'force-reconnect' });
+function sincronizarEstadoWhatsApp() {
+  return { success: true, state: whatsappReady ? 'ready' : 'not_ready' };
 }
 
 async function limpiarSesionCorrupta() {
-  console.log('🧹 Limpieza de sesión (NoAuth = no hay sesión persistente)');
-  return inicializarWhatsApp({ force: true, reason: 'clean-session' });
+  console.log('⚠️ limpiarSesionCorrupta no implementado');
+  return { success: false };
 }
 
-function resetearContadorQR() {
-  const anterior = qrAttempts;
-  qrAttempts = 0;
-  console.log(`🔄 Contador QR reseteado: ${anterior} → 0`);
-  return { success: true, anterior, actual: 0 };
-}
-
-async function sincronizarEstadoWhatsApp() {
-  if (!whatsappClient) {
-    return { success: false, error: 'No hay cliente' };
+async function limpiarSesionPostgreSQL() {
+  if (!usePostgresAuth) {
+    return { success: false, error: 'No usando PostgreSQL' };
   }
+  
   try {
-    const state = await whatsappClient.getState();
-    const wasReady = whatsappReady;
-    whatsappReady = state === 'CONNECTED';
-    return { success: true, previous: wasReady, current: whatsappReady, state };
+    await authStrategy.store.delete();
+    console.log('✅ Sesión PostgreSQL eliminada');
+    return { success: true };
   } catch (error) {
+    console.error('❌ Error eliminando sesión:', error.message);
     return { success: false, error: error.message };
   }
 }
 
-async function verificarConexionCompleta() {
-  const status = await getWhatsAppStatus();
-  return {
-    conectado: status.whatsapp_ready === true,
-    detalles: status,
-    timestamp: new Date().toISOString()
-  };
+async function limpiarSesionesCompleto() {
+  console.log('🧹 Limpieza completa de sesiones...');
+  return await limpiarSesionPostgreSQL();
 }
 
-function marcarConexionExitosa() {
-  whatsappReady = true;
-  console.log('🎯 Conexión marcada como exitosa');
+async function forzarGuardadoSesion() {
+  console.log('ℹ️ Guardado automático manejado por PostgresAuthStrategy');
+  return { success: true };
 }
 
 function limpiarMemoriaProactiva() {
-  const usedMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
   if (global.gc) {
     global.gc();
-    const afterMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-    console.log(`🧹 Memoria: ${usedMB}MB → ${afterMB}MB`);
+    console.log('🧹 Memoria liberada');
   }
 }
 
-// Limpieza periódica de memoria en Render
-if (process.env.RENDER) {
-  setInterval(limpiarMemoriaProactiva, 10 * 60 * 1000);
-}
-
-// ===============================
-// CLEANUP AL CERRAR PROCESO
-// ===============================
 async function cleanup() {
-  whatsappReady = false;
-  if (whatsappClient) {
-    try {
+  try {
+    if (whatsappClient) {
       await whatsappClient.destroy();
-    } catch (_) { /* no-op */ }
+    }
+  } catch (err) {
+    console.log('⚠️ Error en cleanup:', err.message);
   }
-  console.log('✅ WhatsApp cleanup completado');
 }
 
-process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM recibido');
-  await cleanup();
-  process.exit(0);
-});
+console.log('📱 WhatsApp Service cargado [v4 - PostgresAuth con cliente único]');
 
-process.on('SIGINT', async () => {
-  console.log('🛑 SIGINT recibido');
-  await cleanup();
-  process.exit(0);
-});
-
-// ===============================
-// EXPORTS
-// ===============================
 module.exports = {
-  whatsappClient: null, // se accede via getWhatsAppClient()
+  whatsappClient,
   inicializarWhatsApp,
   enviarWhatsApp,
   getWhatsAppStatus,
-  verificarConexionCompleta,
   forzarReconexion,
   limpiarSesionCorrupta,
+  limpiarSesionPostgreSQL,
+  limpiarSesionesCompleto,
   resetearContadorQR,
   sincronizarEstadoWhatsApp,
+  forzarGuardadoSesion,
   marcarConexionExitosa,
-  setWhatsAppReady,
+  setOnWhatsAppReadyCallback,
+  limpiarMemoriaProactiva,
+  ultimaConexionExitosa,
+  whatsappReady,
+  ADMIN_WHATSAPP,
+  BUSINESS_NAME,
+  cleanup,
+  // Funciones adapter
   getWhatsAppReady,
-  getWhatsAppClient,
+  setWhatsAppReady,
   getIsConnecting,
   setIsConnecting,
-  setOnWhatsAppReadyCallback,
-  cerrarSesionEfimera: destruirCliente,
-  limpiarMemoriaProactiva,
-  ultimaConexionExitosa: null,
-  sessionIsOld: false,
-  ADMIN_WHATSAPP,
-  BUSINESS_NAME
+  getWhatsAppClient,
+  verificarConexionCompleta,
+  cerrarSesionEfimera
 };
-
-console.log('📱 WhatsApp Service cargado [v6 - LocalAuth con limpieza de sesiones]');
-
-
