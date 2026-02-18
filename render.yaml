@@ -3,20 +3,7 @@ services:
     name: capri-store-backend
     env: node
     plan: free
-    buildCommand: |
-      echo "🔧 Instalando dependencias del sistema..."
-      apt-get update
-      apt-get install -y wget gnupg ca-certificates
-      wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-      sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-      apt-get update
-      apt-get install -y google-chrome-stable fonts-liberation libnss3 libxss1 libasound2 libatk-bridge2.0-0 libgtk-3-0 libgbm1 --no-install-recommends
-      echo "✅ Google Chrome instalado en /usr/bin/google-chrome-stable"
-      which google-chrome-stable
-      google-chrome-stable --version
-      echo "🔧 Instalando dependencias de Node.js..."
-      npm install
-      echo "✅ Build completado exitosamente"
+    buildCommand: bash build.sh
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: false  # ✅ DESACTIVADO - Solo deploy manual para evitar reinicios no deseados
