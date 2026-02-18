@@ -38,7 +38,31 @@ let chromiumPath = null;
 function findChromiumExecutable() {
   console.log('🔍 Buscando ejecutable de Chrome/Chromium...');
   
-  // 1. Desde puppeteer executablePath() - MÉTODO PREFERIDO
+  // 1. Paths del sistema PRIMERO (Render instala aquí via apt-get)
+  const os = require('os');
+  console.log(`  - Plataforma: ${os.platform()}`);
+  if (os.platform() === 'linux') {
+    const systemPaths = [
+      '/usr/bin/google-chrome-stable',  // Instalado via apt-get en Render
+      '/usr/bin/google-chrome',
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium'
+    ];
+    console.log(`  - Verificando paths del sistema (PRIORIDAD 1):`);
+    for (const p of systemPaths) {
+      if (p) {
+        const exists = fs.existsSync(p);
+        console.log(`    ${p}: ${exists ? '✅ EXISTE' : '❌ no existe'}`);
+        if (exists) {
+          console.log(`✅ Chrome encontrado (sistema): ${p}`);
+          return p;
+        }
+      }
+    }
+  }
+  
+  // 2. Desde puppeteer executablePath() - MÉTODO ALTERNATIVO
   try {
     const puppeteer = require('puppeteer');
     const execPath = puppeteer.executablePath();
@@ -47,13 +71,13 @@ function findChromiumExecutable() {
       console.log(`✅ Chromium encontrado (puppeteer): ${execPath}`);
       return execPath;
     } else if (execPath) {
-      console.warn(`  ⚠️ Puppeteer retornó path pero no existe en disco`);
+      console.warn(`  ⚠️ Puppeteer retornó path pero no existe en disco (cache limpiado por Render)`);
     }
   } catch (err) {
     console.log(`  - Puppeteer no disponible: ${err.message}`);
   }
 
-  // 2. Cache manual de puppeteer
+  // 3. Cache manual de puppeteer (rara vez funciona en Render)
   const cacheDir = path.join(__dirname, '..', '.cache', 'puppeteer', 'chrome');
   console.log(`  - Verificando cache: ${cacheDir}`);
   if (fs.existsSync(cacheDir)) {
@@ -82,31 +106,7 @@ function findChromiumExecutable() {
       console.log(`  - Error leyendo cache: ${err.message}`);
     }
   } else {
-    console.log(`  - Cache directory no existe: ${cacheDir}`);
-  }
-
-  // 3. Paths del sistema (Linux / Render)
-  const os = require('os');
-  console.log(`  - Plataforma: ${os.platform()}`);
-  if (os.platform() === 'linux') {
-    const systemPaths = [
-      process.env.PUPPETEER_EXECUTABLE_PATH,
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/google-chrome',
-      '/usr/bin/chromium-browser',
-      '/usr/bin/chromium'
-    ];
-    console.log(`  - Verificando paths del sistema: ${systemPaths.filter(p => p).join(', ')}`);
-    for (const p of systemPaths) {
-      if (p) {
-        const exists = fs.existsSync(p);
-        console.log(`    ${p}: ${exists ? '✅ EXISTE' : '❌ no existe'}`);
-        if (exists) {
-          console.log(`✅ Chromium encontrado (sistema): ${p}`);
-          return p;
-        }
-      }
-    }
+    console.log(`  - Cache directory no existe (esperado en Render): ${cacheDir}`);
   }
 
   console.error('❌ No se encontró ningún ejecutable de Chrome/Chromium en ninguna ubicación');
