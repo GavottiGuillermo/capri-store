@@ -1,127 +1,14 @@
 ﻿/**
- * WhatsApp Service - Conexión efímera via QR
- * ============================================
- * Basado en la versión de octubre 2025 que funcionaba correctamente.
- * 
- * Características clave:
- * - LocalAuth con clientId específico ('capri-store-session')
- * - Directorio de autenticación: .wwebjs_auth (limpiado en cada inicio)
- * - Delay de 15s después de ready para estabilización
- * - Lock de promesa para evitar inicializaciones concurrentes
- * - Contador de eventos ready para evitar duplicados
+ * WhatsApp Service - LocalAuth simple (Oct 2025)
+ * ===============================================
+ * Configuración simple que funcionaba correctamente:
+ * - LocalAuth con clientId específico
+ * - Detección automática de Chrome via Puppeteer
+ * - Sin limpieza manual de sesiones
  */
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const fs = require('fs');
-const path = require('path');
-
-// 🧹 LIMPIAR SESIONES AL CARGAR EL MÓDULO (lo primero de todo)
-const authPath = path.join(__dirname, '..', '.wwebjs_auth');
-if (fs.existsSync(authPath)) {
-  console.log('🧹 Limpiando sesiones antiguas al cargar módulo...');
-  try {
-    fs.rmSync(authPath, { recursive: true, force: true });
-    console.log('✅ Sesiones WhatsApp eliminadas - inicializaciones serán frescas');
-  } catch (cleanError) {
-    console.warn('⚠️ Error limpiando sesiones:', cleanError.message);
-  }
-} else {
-  console.log('ℹ️ No hay sesiones WhatsApp antiguas para limpiar');
-}
-
-// ===============================
-// DETECCIÓN DE CHROMIUM
-// ===============================
-let chromiumPath = null;
-
-function findChromiumExecutable() {
-  console.log('🔍 Buscando ejecutable de Chrome/Chromium...');
-  
-  // 1. Buscar en .local-browsers (instalado por @puppeteer/browsers en build.sh)
-  const localBrowsersDir = path.join(__dirname, '..', '.local-browsers', 'chrome');
-  console.log(`  - Verificando .local-browsers: ${localBrowsersDir}`);
-  if (fs.existsSync(localBrowsersDir)) {
-    try {
-      // Buscar recursivamente el ejecutable chrome
-      const findChromeRecursive = (dir) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            const found = findChromeRecursive(fullPath);
-            if (found) return found;
-          } else if (entry.name === 'chrome' && fs.statSync(fullPath).mode & fs.constants.S_IXUSR) {
-            return fullPath;
-          }
-        }
-        return null;
-      };
-      
-      const chromePath = findChromeRecursive(localBrowsersDir);
-      if (chromePath) {
-        console.log(`✅ Chrome encontrado (.local-browsers): ${chromePath}`);
-        return chromePath;
-      }
-    } catch (err) {
-      console.log(`  - Error buscando en .local-browsers: ${err.message}`);
-    }
-  } else {
-    console.log(`  - .local-browsers no existe`);
-  }
-  
-  // 2. Paths del sistema
-  const os = require('os');
-  console.log(`  - Plataforma: ${os.platform()}`);
-  if (os.platform() === 'linux') {
-    const systemPaths = [
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/google-chrome',
-      process.env.PUPPETEER_EXECUTABLE_PATH,
-      '/usr/bin/chromium-browser',
-      '/usr/bin/chromium'
-    ];
-    console.log(`  - Verificando paths del sistema:`);
-    for (const p of systemPaths) {
-      if (p) {
-        const exists = fs.existsSync(p);
-        console.log(`    ${p}: ${exists ? '✅ EXISTE' : '❌ no existe'}`);
-        if (exists) {
-          console.log(`✅ Chrome encontrado (sistema): ${p}`);
-          return p;
-        }
-      }
-    }
-  }
-  
-  // 3. Desde puppeteer executablePath()
-  try {
-    const puppeteer = require('puppeteer');
-    const execPath = puppeteer.executablePath();
-    console.log(`  - Puppeteer path: ${execPath}`);
-    if (execPath && fs.existsSync(execPath)) {
-      console.log(`✅ Chromium encontrado (puppeteer): ${execPath}`);
-      return execPath;
-    } else if (execPath) {
-      console.warn(`  ⚠️ Puppeteer retornó path pero no existe en disco`);
-    }
-  } catch (err) {
-    console.log(`  - Puppeteer no disponible: ${err.message}`);
-  }
-
-  console.error('❌ No se encontró ningún ejecutable de Chrome/Chromium en ninguna ubicación');
-  return null;
-}
-
-chromiumPath = findChromiumExecutable();
-
-if (!chromiumPath) {
-  console.error('🚨 ERROR CRÍTICO: No se puede inicializar WhatsApp sin Chrome');
-  console.error('💡 Soluciones posibles:');
-  console.error('   1. Verificar que render.yaml tenga: apt-get install -y google-chrome-stable');
-  console.error('   2. O agregar al Build Command: npx puppeteer browsers install chrome');
-  console.error('   3. Revisar los logs del build en Render para errores de instalación');
-}
 
 // ===============================
 // CONFIGURACIÓN
@@ -129,36 +16,12 @@ if (!chromiumPath) {
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP;
 
-// Args de Puppeteer optimizados para Render Free (poca RAM)
+// Args de Puppeteer optimizados para Render Free (Oct 2025)
 const puppeteerArgs = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',
-  '--disable-accelerated-2d-canvas',
-  '--no-first-run',
-  '--no-zygote',
-  '--single-process',
-  '--disable-gpu',
-  '--disable-extensions',
-  '--disable-plugins',
-  '--disable-default-apps',
-  '--disable-sync',
-  '--disable-translate',
-  '--disable-background-networking',
-  '--disable-background-timer-throttling',
-  '--disable-backgrounding-occluded-windows',
-  '--disable-renderer-backgrounding',
-  '--disable-features=VizDisplayCompositor,IsolateOrigins,site-per-process,TranslateUI,AudioServiceOutOfProcess',
-  '--disable-site-isolation-trials',
-  '--disable-hang-monitor',
-  '--disable-breakpad',
-  '--disable-client-side-phishing-detection',
-  '--disable-component-update',
-  '--disable-domain-reliability',
   '--renderer-process-limit=1',
-  '--memory-pressure-off',
-  '--js-flags=--max-old-space-size=200',
-  '--aggressive-cache-discard',
+  '--max-unused-resource-memory-usage-percentage=25',
   '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ];
 
@@ -223,21 +86,17 @@ function formatearNumeroParaEnvio(numero) {
 // CREAR CLIENTE NUEVO (LocalAuth temporal)
 // ===============================
 function crearClienteWhatsApp() {
-  console.log('📱 Creando nuevo cliente WhatsApp (LocalAuth con clientId específico)...');
+  console.log('📱 Creando nuevo cliente WhatsApp (LocalAuth simple - Oct 2025)...');
 
-  // Directorio estándar de autenticación (como en octubre 2025)
-  const authPath = path.join(__dirname, '..', '.wwebjs_auth');
-  
   const client = new Client({
     authStrategy: new LocalAuth({
-      clientId: 'capri-store-session',
-      dataPath: authPath
+      clientId: 'capri-store-session'
     }),
     puppeteer: {
       headless: true,
       args: puppeteerArgs,
       timeout: 120000,
-      executablePath: chromiumPath,
+      executablePath: undefined,  // ✅ Detección automática como en octubre 2025
       handleSIGINT: false,
       handleSIGTERM: false,
       handleSIGHUP: false

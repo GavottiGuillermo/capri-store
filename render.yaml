@@ -3,7 +3,7 @@ services:
     name: capri-store-backend
     env: node
     plan: free
-    buildCommand: bash build.sh
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: false  # ✅ DESACTIVADO - Solo deploy manual para evitar reinicios no deseados
