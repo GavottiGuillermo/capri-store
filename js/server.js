@@ -67,44 +67,11 @@ function qualifyTable(tableName) {
 
 // SYSTEM SIMPLIFIED: PostgreSQL session persistence working perfectly - v4.0
 
-// === IMPORTAR WHATSAPP CON MANEJO DE ERRORES ===
-let whatsappService = null;
-let whatsappAvailable = false;
+// === CONFIGURACIÓN WHATSAPP API ÚNICAMENTE ===
+console.log('📱 Usando WhatsApp Cloud API como único medio de comunicación');
 
-try {
-  whatsappService = require('./whatsapp-service');
-  whatsappAvailable = true;
-  console.log('📱 Servicio WhatsApp cargado correctamente');
-  
-  // Callback: cuando WhatsApp se conecte vía QR, enviar pendientes
-  whatsappService.setOnWhatsAppReadyCallback(async () => {
-    const ts = new Date().toISOString();
-    console.log(`[${ts}] 🚀 WhatsApp listo - procesando pendientes...`);
-    try {
-      const resumen = await procesarNotificacionesPendientes(0, { fastTrack: true, source: 'ready-oneshot' });
-      console.log(`[${ts}] 📦 Resultado:`, resumen || { note: 'sin pendientes' });
-    } catch (error) {
-      console.error(`[${ts}] ❌ Error procesando pendientes:`, error.message);
-    }
-    // whatsapp-service.js se encarga de destruir la sesión después de esto
-  });
-  
-} catch (error) {
-  console.error('⚠️ WhatsApp service no disponible:', error.message);
-  console.log('� Modo básico: WhatsApp no estará disponible para notificaciones');
-  whatsappAvailable = false;
-  
-  // Crear funciones dummy para evitar errores
-  whatsappService = {
-    enviarWhatsApp: () => Promise.resolve({ success: false, error: 'WhatsApp no disponible' }),
-    inicializarWhatsApp: () => console.log('WhatsApp no disponible'),
-    getWhatsAppStatus: () => ({ whatsapp_ready: false, error: 'No disponible' }),
-    whatsappReady: false,
-    ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP,
-    BUSINESS_NAME: 'Capri Store'
-  };
-}
-
+const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP;
+const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
 
 // Permitir múltiples administradores: separar por coma o punto y coma
 function getAdminNumbers() {
@@ -122,8 +89,6 @@ function getPrimaryAdminNumber() {
   return admins.length > 0 ? admins[0] : '';
 }
 
-const { enviarWhatsApp, inicializarWhatsApp, getWhatsAppStatus, verificarConexionCompleta, forzarReconexion, resetearContadorQR, sincronizarEstadoWhatsApp, getWhatsAppReady, getIsConnecting, setIsConnecting, setWhatsAppReady, cerrarSesionEfimera, getWhatsAppClient, ADMIN_WHATSAPP, BUSINESS_NAME } = whatsappService;
-
 // ===============================
 // MANEJADORES GLOBALES DE ERRORES
 // ===============================
@@ -131,10 +96,9 @@ process.on('uncaughtException', (error) => {
   console.error('❌ UNCAUGHT EXCEPTION:', error.message);
   console.error('Stack:', error.stack);
   
-  // Si es error de ENOENT en temp-auth, no crashear el servidor
-  if (error.code === 'ENOENT' && error.path && error.path.includes('temp-auth')) {
-    console.log('⚠️ Error de sesión temporal detectado - servidor continúa funcionando');
-    console.log('💡 WhatsApp puede necesitar regenerar QR: /whatsapp-regenerar-qr');
+  // Si es error de ENOENT, registrar pero no crashear
+  if (error.code === 'ENOENT') {
+    console.log('⚠️ Error de archivo no encontrado - servidor continúa funcionando');
     return;
   }
   
@@ -571,19 +535,13 @@ let lastReconnectAttempt = 0;
 const RECONNECT_INTERVAL = 10 * 60 * 1000; // 10 minutos entre intentos
 
 app.get('/health', async (req, res) => {
-  // ⚠️ ENDPOINT SILENCIOSO - Sin logs para evitar spam
-  // Usado por Render para health checks automáticos cada 5 min
-  // Para WhatsApp keep-alive con mensaje al admin, usar /whatsapp-keep-alive
-  
-  // NOTA: Render llama a este endpoint cada 5 minutos desde su configuración
-  // No se puede cambiar la frecuencia desde código, solo desde el dashboard de Render
+  const apiStatus = whatsappApiService.getWhatsAppApiStatus();
   
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    whatsapp_available: whatsappAvailable,
-    whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false,
+    whatsapp_api: apiStatus.configured ? 'configured' : 'not_configured',
     business_name: BUSINESS_NAME,
     env_vars: {
       admin_whatsapp: !!process.env.ADMIN_WHATSAPP,
@@ -606,12 +564,12 @@ app.get('/health', async (req, res) => {
 
 // === ENDPOINT DE SALUD SILENCIOSO (para keep-alive) ===
 app.get('/ping', async (req, res) => {
-  // Health check silencioso sin logs para sistemas automáticos
+  const apiStatus = whatsappApiService.getWhatsAppApiStatus();
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
-    whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false
+    whatsapp_api_ready: apiStatus.configured
   });
 });
 
@@ -620,162 +578,50 @@ app.get('/ping', async (req, res) => {
 // ===============================
 app.get('/whatsapp-keep-alive', async (req, res) => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] 💚 Keep-Alive WhatsApp ejecutándose...`);
-  
-  let mensajeEnviado = false;
-  let whatsappStatus = 'desconectado';
-  let accionRealizada = 'ninguna';
+  console.log(`[${timestamp}] 💚 Keep-Alive ejecutándose (solo API)...`);
   
   try {
-    // 🔒 PROTECCIÓN: No hacer nada si está en proceso de conexión
-    if (whatsappAvailable && getIsConnecting()) {
-      console.log(`[${timestamp}] 🔒 WhatsApp en proceso de conexión - Keep-alive esperando...`);
-      return res.json({
-        success: true,
-        mensaje: 'WhatsApp conectando - esperando finalización',
-        timestamp: new Date().toISOString(),
-        whatsapp_status: 'conectando',
-        accion: 'esperando'
-      });
-    }
+    // Verificar estado de WhatsApp API
+    const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+    console.log(`[${timestamp}] 📊 Estado WhatsApp API:`, apiStatus);
     
-    // Paso 1: Verificar si WhatsApp está completamente conectado
-    console.log(`[${timestamp}] 🔍 Paso 1: Verificando estado completo de WhatsApp...`);
-    
-    // Verificar todas las variables de estado
-    let todasLasVariablesOK = false;
-    let estadoDetallado = {};
-    
-    if (whatsappAvailable) {
-      try {
-        const whatsappStatusObj = await getWhatsAppStatus();
-        estadoDetallado = whatsappStatusObj;
-        
-        // CORRECCIÓN AUTOMÁTICA: Si cliente está CONNECTED pero whatsappReady es false, corregir
-        if (whatsappStatusObj.client_state === 'CONNECTED' && !whatsappStatusObj.whatsapp_ready) {
-          console.log(`[${timestamp}] 🔧 CORRECCIÓN: Cliente CONNECTED pero whatsappReady=false - Forzando corrección...`);
-          try {
-            // Importar y usar setWhatsAppReady
-            const { setWhatsAppReady, marcarConexionExitosa } = require('./whatsapp-service');
-            setWhatsAppReady(true);
-            await marcarConexionExitosa();
-            console.log(`[${timestamp}] ✅ whatsappReady forzado a true`);
-            
-            // Re-obtener estado actualizado
-            const whatsappStatusActualizado = await getWhatsAppStatus();
-            estadoDetallado = whatsappStatusActualizado;
-            console.log(`[${timestamp}] 📊 Estado actualizado:`, whatsappStatusActualizado);
-          } catch (correccionError) {
-            console.error(`[${timestamp}] ❌ Error corrigiendo whatsappReady:`, correccionError.message);
-          }
-        }
-        
-        // Considerar conectado si whatsapp_ready está en true Y el estado del cliente es CONNECTED
-        // client_ready es opcional (puede ser undefined en algunas implementaciones)
-        todasLasVariablesOK = 
-          whatsappStatusObj.whatsapp_ready === true &&
-          (whatsappStatusObj.client_state === 'CONNECTED' || whatsappStatusObj.state === 'CONNECTED');
-        
-        console.log(`[${timestamp}] 📊 Estado WhatsApp:`, {
-          whatsapp_ready: whatsappStatusObj.whatsapp_ready,
-          client_ready: whatsappStatusObj.client_ready,
-          client_state: whatsappStatusObj.client_state,
-          todasLasVariablesOK
-        });
-        
-      } catch (statusError) {
-        console.error(`[${timestamp}] ❌ Error obteniendo estado:`, statusError.message);
-        todasLasVariablesOK = false;
-      }
-    }
-    
-    // FLUJO: SI ESTÁ HABILITADO (todas las variables OK)
-    if (todasLasVariablesOK) {
-      whatsappStatus = 'conectado';
-      console.log(`[${timestamp}] ✅ WhatsApp CONECTADO - Todas las variables OK`);
-      
-      let pendientesProcesados = false;
-      let sessionMantenida = false;
-      
-      // 1. Mantener sesión activa SIN enviar mensaje (silencioso)
-      console.log(`[${timestamp}] 🔄 Manteniendo sesión activa (getChats en background)...`);
-      try {
-        const { getWhatsAppClient } = require('./whatsapp-service');
-        const client = getWhatsAppClient();
-        
-        if (client) {
-          console.log(`[${timestamp}] 📱 Cliente WhatsApp disponible - Estado antes de getChats():`);
-          const estadoAntes = await getWhatsAppStatus();
-          console.log(`[${timestamp}]    - whatsapp_ready: ${estadoAntes.whatsapp_ready}`);
-          console.log(`[${timestamp}]    - client_state: ${estadoAntes.client_state}`);
-          console.log(`[${timestamp}]    - isConnecting: ${estadoAntes.isConnecting}`);
-          
-          // Obtener chats en background - mantiene sesión sin notificación visible
-          await client.getChats();
-          console.log(`[${timestamp}] ✅ getChats() completado exitosamente`);
-          
-          // Verificar estado después
-          const estadoDespues = await getWhatsAppStatus();
-          console.log(`[${timestamp}] 📊 Estado después de getChats():`);
-          console.log(`[${timestamp}]    - whatsapp_ready: ${estadoDespues.whatsapp_ready}`);
-          console.log(`[${timestamp}]    - client_state: ${estadoDespues.client_state}`);
-          
-          mensajeEnviado = true;
-          sessionMantenida = true;
-        } else {
-          console.log(`[${timestamp}] ⚠️ Cliente WhatsApp no disponible para keep-alive`);
-          console.log(`[${timestamp}]    - whatsappAvailable: ${whatsappAvailable}`);
-          console.log(`[${timestamp}]    - client es null/undefined`);
-        }
-      } catch (error) {
-        console.error(`[${timestamp}] ❌ Error en keep-alive silencioso:`, error.message);
-        console.error(`[${timestamp}]    - Stack:`, error.stack);
-      }
-      
-      // 2. Procesar notificaciones pendientes (si hay)
-      console.log(`[${timestamp}] 📤 Verificando notificaciones pendientes...`);
+    // Procesar notificaciones pendientes
+    let pendientesProcessed = false;
+    if (apiStatus.configured) {
+      console.log(`[${timestamp}] 📦 Procesando notificaciones pendientes...`);
       try {
         await procesarNotificacionesPendientes();
-        pendientesProcesados = true;
+        pendientesProcessed = true;
         console.log(`[${timestamp}] ✅ Notificaciones pendientes procesadas`);
-      } catch (procesarError) {
-        console.error(`[${timestamp}] ⚠️ Error procesando pendientes:`, procesarError.message);
+      } catch (pendientesErr) {
+        console.error(`[${timestamp}] ❌ Error procesando pendientes:`, pendientesErr.message);
       }
-      
-      // Resumen de acciones realizadas
-      if (sessionMantenida && pendientesProcesados) {
-        accionRealizada = 'keep_alive_silencioso_y_pendientes_procesados';
-      } else if (sessionMantenida) {
-        accionRealizada = 'keep_alive_silencioso_ok';
-      } else if (pendientesProcesados) {
-        accionRealizada = 'solo_pendientes_procesados';
-      } else {
-        accionRealizada = 'sin_acciones';
-      }
-      
     } else {
-      // FLUJO: SI NO ESTÁ HABILITADO
-      console.log(`[${timestamp}] ⚠️ WhatsApp NO CONECTADO - Verificando opciones...`);
-      
-      // Verificar si hay sesión guardada en PostgreSQL
-
+      console.log(`[${timestamp}] ⏭️ Saltando procesamiento de pendientes (API no configurada)`);
     }
     
+    // Garbage collection
+    if (global.gc) {
+      console.log(`[${timestamp}] 🧹 Ejecutando garbage collection...`);
+      global.gc();
+    }
+    
+    res.json({
+      success: true,
+      timestamp,
+      whatsapp_api: apiStatus.configured ? 'configured' : 'not_configured',
+      api_status: apiStatus,
+      pendientes_processed: pendientesProcessed,
+      gc_available: Boolean(global.gc)
+    });
   } catch (error) {
     console.error(`[${timestamp}] ❌ Error en keep-alive:`, error.message);
-    whatsappStatus = 'error';
-    accionRealizada = 'error: ' + error.message;
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp
+    });
   }
-  
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
-    whatsapp_ready: whatsappStatus === 'conectado' || whatsappStatus === 'enviando',
-    whatsapp_status: whatsappStatus,
-    mensaje_enviado: mensajeEnviado,
-    accion_realizada: accionRealizada
-  });
 });
 
 // ===============================
@@ -819,51 +665,21 @@ app.post('/limpiar-sesiones-whatsapp', async (req, res) => {
 
 // === ESTADO WHATSAPP ===
 app.get('/whatsapp-status', async (req, res) => {
-  try {
-    console.log('📱 Estado WhatsApp solicitado desde API...');
-    
-    if (!whatsappAvailable) {
-      return res.json({
-        whatsapp_ready: false,
-        error: 'WhatsApp service no disponible',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const status = await getWhatsAppStatus();
-    
-    // Detectar si está en modo lazy loading
-    const isLazyLoading = status.state === 'NOT_INITIALIZED';
-    const isConnecting = getIsConnecting(); // 🔒 Estado de conexión
-    
-    res.json({
-      whatsapp_ready: getWhatsAppReady(),
-      client_ready: status.whatsapp_ready || false,
-      state: status.state || 'UNKNOWN',
-      is_connecting: isConnecting, // 🔒 Indica si está en proceso de conexión
-      lazy_loading: isLazyLoading,
-      qr_generated: status.qr_code ? true : false,
-      auth_folder: {
-        exists: status.auth_folder_exists || false
-      },
-      last_connection: status.last_connection || null,
-      error: status.error || null,
-      instructions: isLazyLoading ? [
-        '💾 WhatsApp está en modo ahorro de memoria',
-        '🚀 Usa /whatsapp-regenerar-qr para inicializar',
-        '📱 Esto generará el código QR para escanear'
-      ] : null,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error obteniendo estado WhatsApp:', error);
-    res.status(500).json({
-      whatsapp_ready: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+  const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+  res.json({
+    mode: 'api_only',
+    whatsapp_api: apiStatus,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/whatsapp-status', requireMobileApiKey, async (req, res) => {
+  const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+  res.json({
+    mode: 'api_only',
+    whatsapp_api: apiStatus,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // === PRUEBA DE PLANTILLA WHATSAPP CLOUD API ===
@@ -969,96 +785,19 @@ app.post('/whatsapp-test-template', async (req, res) => {
   }
 });
 
-// === REGENERAR QR DE WHATSAPP ===
+// === ENDPOINT DEPRECADO - YA NO SE USA QR ===
 app.get('/whatsapp-regenerar-qr', async (req, res) => {
-  console.log('🔄 Solicitud de regeneración de QR desde:', req.ip);
-  
-  // Parámetro opcional para forzar regeneración
-  const force = req.query.force === 'true';
-  
-  try {
-    // 🔒 PROTECCIÓN: No permitir regenerar QR si está en proceso de conexión (a menos que force=true)
-    if (whatsappAvailable && getIsConnecting() && !force) {
-      console.log('🔒 WhatsApp en proceso de conexión - No se puede regenerar QR');
-      const whatsappStatus = await getWhatsAppStatus();
-      return res.status(409).json({
-        success: false,
-        error: 'WhatsApp conectando',
-        message: 'El sistema está en proceso de conexión. Espera 30-60 segundos o usa force=true',
-        estado: 'conectando',
-        client_state: whatsappStatus.client_state || 'UNKNOWN',
-        solucion: {
-          opcion1: 'Espera 30-60 segundos y reintenta',
-          opcion2: 'Usa: GET /whatsapp-regenerar-qr?force=true para forzar',
-          curl: 'curl "https://capri-store.onrender.com/whatsapp-regenerar-qr?force=true"',
-          powershell: 'Invoke-RestMethod -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr?force=true" -Method GET'
-        }
-      });
-    }
-    
-    if (force && getIsConnecting()) {
-      console.log('⚠️ FORCE MODE: Forzando regeneración a pesar de isConnecting=true');
-      // Forzar reset del flag
-      setIsConnecting(false);
-      console.log('🔓 isConnecting forzado a false');
-    }
-    
-    if (!whatsappAvailable) {
-      return res.status(503).json({
-        success: false,
-        error: 'WhatsApp service no disponible',
-        message: 'El módulo WhatsApp no está cargado',
-        available: false
-      });
-    }
-
-    // Nueva lógica: resetear flags y dejar que inicializarWhatsApp maneje todo
-    console.log('🧹 Iniciando proceso de regeneración QR (stateless)...');
-    
-    // RESETEAR CONTADOR DE QR antes de inicializar
-    console.log('🔄 Reseteando contador de QR a 0...');
-    await resetearContadorQR();
-    console.log('✅ Contador reseteado - intento limpio');
-    
-    // Resetear flags
-    setWhatsAppReady(false);
-    setIsConnecting(false);
-    
-    // NO destruir el cliente aquí - inicializarWhatsApp lo manejará
-    console.log('🔄 Delegando recreación a inicializarWhatsApp...');
-    
-    // Re-inicializar WhatsApp (esto generará un nuevo QR en los logs)
-    if (whatsappService && whatsappService.inicializarWhatsApp) {
-      await whatsappService.inicializarWhatsApp();
-      res.json({
-        success: true,
-        message: 'Cliente WhatsApp reiniciado. Busca el nuevo QR en los logs del servidor.',
-        instructions: [
-          '📱 Busca el código QR en los logs del servidor',
-          '🔍 Verifica /whatsapp-status en unos segundos para ver el nuevo QR',
-          '📲 Escanéalo con WhatsApp > Dispositivos Vinculados > Vincular'
-        ],
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: 'No se pudo reiniciar el cliente WhatsApp',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Error crítico en regeneración de QR:', error.message);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: error.stack,
-      message: 'Error crítico al regenerar QR',
-      timestamp: new Date().toISOString()
-    });
-  }
+  res.status(410).json({
+    success: false,
+    error: 'Endpoint deprecado',
+    message: 'Este sistema ahora usa WhatsApp Cloud API exclusivamente. No se requiere conexión QR.',
+    api_status: whatsappApiService.getWhatsAppApiStatus(),
+    instructions: [
+      '☁️ Este sistema ahora usa WhatsApp Cloud API',
+      '📊 Verifica /whatsapp-status para ver el estado de la API',
+      '⚙️ Configura las variables: WHATSAPP_API_PHONE_NUMBER_ID, WHATSAPP_API_TOKEN, USE_WHATSAPP_API=true'
+    ]
+  });
 });
 
 // === MONITOR DE MEMORIA ===
@@ -1168,9 +907,7 @@ app.get('/debug', (req, res) => {
       rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB'
     },
     services: {
-      whatsapp_available: whatsappAvailable,
-      whatsapp_ready: whatsappAvailable ? getWhatsAppReady() : false,
-
+      whatsapp_api: whatsappApiService.getWhatsAppApiStatus().configured ? 'configured' : 'not_configured',
       mercadopago_configured: !!process.env.MERCADOPAGO_ACCESS_TOKEN
     },
     env_status: {
@@ -1262,8 +999,8 @@ app.get('/debug', (req, res) => {
       '/whatsapp-clean-expired (POST) - Limpiar sesiones expiradas automáticamente'
     ],
     whatsapp_info: {
-      service_available: whatsappAvailable,
-      client_ready: whatsappAvailable ? getWhatsAppReady() : false,
+      mode: 'api_only',
+      api_configured: whatsappApiService.getWhatsAppApiStatus().configured,
       admin_configured: !!process.env.ADMIN_WHATSAPP
     }
   });
@@ -1662,73 +1399,15 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
 let intentosReconexion = 0;
 
 // Función mejorada para verificar si WhatsApp está realmente disponible
-async function verificarEstadoWhatsApp() {
-  const ahora = new Date();
-  
-  // Obtener estado dinámico del whatsapp-service (funciones en lugar de variables)
-  let serviceReady = false;
-  let ultimaConexion = null;
-  let whatsappStatus = null; // Declarar aquí para usarla después
-  
-  try {
-    // Obtener estado real del cliente WhatsApp
-    whatsappStatus = await whatsappService.getWhatsAppStatus();
-    serviceReady = whatsappStatus.whatsapp_ready || false;
-    
-    // Usar la variable del servicio si está disponible
-    ultimaConexion = whatsappService.ultimaConexionExitosa || null;
-    
-    console.log(`🔍 DEBUG DETALLADO:`, {
-      whatsappAvailable,
-      serviceReady,
-      clientState: whatsappStatus.client_state,
-      isReady: whatsappStatus.isReady,
-      ultimaConexionFromService: ultimaConexion ? ultimaConexion.toISOString() : 'null'
-    });
-    
-  } catch (error) {
-    console.log(`⚠️ Error obteniendo estado dinámico:`, error.message);
-    // Fallback a variables originales
-    serviceReady = getWhatsAppReady() || false;
-    ultimaConexion = whatsappService.ultimaConexionExitosa || null;
-  }
-  
-  const tiempoDesdeUltimaConexion = ultimaConexion ? (ahora - ultimaConexion) / 1000 : Infinity;
-  
-  // Criterios para considerar WhatsApp disponible:
-  // 1. Módulo cargado (whatsappAvailable = true)
-  // 2. Flag listo (whatsappReady = true) O conexión exitosa reciente (< 5 minutos)
-  // 3. NO está en estado NOT_INITIALIZED (lazy loading)
-  
-  const clientState = whatsappStatus?.client_state || whatsappStatus?.state;
-  const isNotInitialized = clientState === 'NOT_INITIALIZED';
-  
-  // OPENING es un estado válido - significa que está autenticado y cargando la interfaz
-  const isConnectedOrOpening = clientState === 'CONNECTED' || clientState === 'OPENING';
-  
-  const disponible = whatsappAvailable && 
-                    !isNotInitialized && 
-                    isConnectedOrOpening &&
-                    (serviceReady || tiempoDesdeUltimaConexion < 300);
-  
-  // Comprobación de sesión en base de datos eliminada (stateless/local only)
-  // No permitimos auto-reconexión basada en sesiones guardadas en Postgres
-  const permitirAutoReconexion = false;
-  
+// ===============================
+// FUNCIÓN AUXILIAR: VERIFICAR ESTADO WHATSAPP API
+// ===============================
+async function verificarEstadoWhatsAppApi() {
+  const apiStatus = whatsappApiService.getWhatsAppApiStatus();
   return {
-    disponible,
-    razon: disponible ? 'Disponible' : 
-           !whatsappAvailable ? 'Módulo no cargado' :
-           isNotInitialized ? 'WhatsApp no inicializado (usa /whatsapp-regenerar-qr)' :
-           !isConnectedOrOpening ? `Estado no válido: ${clientState}` :
-           !serviceReady && tiempoDesdeUltimaConexion >= 300 ? 'No autenticado y sin conexión reciente' :
-           'Estado desconocido',
-    tiempoDesdeUltimaConexion,
-    whatsappAvailable,
-    whatsappReady: getWhatsAppReady(),
-    permitirAutoReconexion,
-    tieneSesionEnBBDD: false,
-    sesionEdadDias: null
+    disponible: apiStatus.configured,
+    razon: apiStatus.configured ? 'WhatsApp API configurada' : `Faltan variables: ${apiStatus.missing.join(', ')}`,
+    whatsappApi: apiStatus
   };
 }
 
@@ -1748,48 +1427,16 @@ async function procesarNotificacionesPendientes(reintentos = 0, options = {}) {
   pendingNotificationsProcessing = true;
   
   try {
-    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}, reintentos: ${reintentos}`);
+    console.log(`[${timestamp}] 🔍 DEBUG procesarNotificacionesPendientes - reintentos: ${reintentos}, source: ${source}`);
     
-    // Conexión bajo demanda: si el servicio está disponible pero no listo, intentar inicializar
-    if (!whatsappAvailable) {
-      console.log(`[${timestamp}] ⏭️ WhatsApp service no disponible para pendientes`);
-      return;
-    }
-
-    if (!getWhatsAppReady()) {
-      try {
-        console.log(`[${timestamp}] ⏳ WhatsApp no listo - iniciando conexión bajo demanda para pendientes...`);
-        await inicializarWhatsApp({ reason: 'pending-notifications' });
-      } catch (initError) {
-        console.warn(`[${timestamp}] ⚠️ Error inicializando WhatsApp para pendientes: ${initError.message}`);
-      }
-
-      if (!getWhatsAppReady()) {
-        if (reintentos === 0) {
-          console.log(`[${timestamp}] ⏳ WhatsApp aún no listo tras init - reintentando en 10 segundos...`);
-          setTimeout(() => {
-            procesarNotificacionesPendientes(1);
-          }, 10000);
-          return;
-        }
-        console.log(`[${timestamp}] ⏭️ WhatsApp no disponible después de reintento - whatsappAvailable: ${whatsappAvailable}, whatsappReady: ${getWhatsAppReady()}`);
-        return;
-      }
+    // Verificar que WhatsApp API esté configurada
+    const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+    if (!apiStatus.configured) {
+      console.log(`[${timestamp}] ❌ WhatsApp API no configurada - missing: ${apiStatus.missing.join(', ')}`);
+      return { success: false, error: 'WhatsApp API no configurada', reintentos, source };
     }
     
-    if (!fastTrack) {
-      console.log(`[${timestamp}] ✅ WhatsApp disponible - verificando estado completo...`);
-      const estadoWhatsApp = await verificarEstadoWhatsApp();
-      console.log(`[${timestamp}] 🔍 Estado WhatsApp:`, estadoWhatsApp);
-      if (!estadoWhatsApp.disponible) {
-        console.log(`[${timestamp}] ⏭️ WhatsApp conectado pero no operativo: ${estadoWhatsApp.razon}`);
-        return { skipped: true, reason: estadoWhatsApp.razon, source };
-      }
-    } else {
-      console.log(`[${timestamp}] ⚡ FastTrack (${source}): omitiendo verificación pesada de estado`);
-    }
-    
-    console.log(`[${timestamp}] ✅ WhatsApp operativo - buscando notificaciones pendientes...`);
+    console.log(`[${timestamp}] ✅ WhatsApp API operativa - buscando notificaciones pendientes...`);
     
     // Buscar productos con notificación pendiente (TODAS, sin límite de fecha)
     if (!pool) {
@@ -2080,36 +1727,17 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     }
 
     console.log(`[${timestamp}] ☁️ WhatsApp API - flagEnabled: ${whatsappApiStatus.flagEnabled}, configurada: ${whatsappApiStatus.configured}, en uso: ${useCloudApi}`);
-    if (whatsappApiStatus.flagEnabled && !whatsappApiStatus.configured) {
-      console.warn(`[${timestamp}] ⚠️ WhatsApp API habilitada pero faltan variables: ${whatsappApiStatus.missing.join(', ')}`);
+    
+    // SOLO WhatsApp Cloud API - NO MÁS QR
+    if (!useCloudApi) {
+      console.error(`[${timestamp}] ❌ WhatsApp API no configurada o no habilitada`);
+      if (whatsappApiStatus.flagEnabled && !whatsappApiStatus.configured) {
+        console.error(`[${timestamp}] ⚠️ Faltan variables: ${whatsappApiStatus.missing.join(', ')}`);
+      }
+      return { success: false, error: 'WhatsApp API no configurada' };
     }
     
-    if (useCloudApi) {
-      console.log(`[${timestamp}] ☁️ Se utilizará la API oficial de WhatsApp para esta notificación`);
-    } else {
-      // Verificación simple para WhatsApp web client
-      console.log(`[${timestamp}] 📱 Estado WhatsApp: available=${whatsappAvailable}, ready=${getWhatsAppReady()}`);
-      
-      if (!whatsappAvailable) {
-        console.error(`[${timestamp}] ❌ WhatsApp service no disponible`);
-        return { success: false, error: 'WhatsApp service no disponible' };
-      }
-
-      // En modo one-shot (esReintento), WhatsApp ya está listo - no hacer verificaciones pesadas
-      if (!oneShotDispatch && !getWhatsAppReady()) {
-        console.warn(`[${timestamp}] ⚠️ WhatsApp no listo - inicializando bajo demanda...`);
-        try {
-          await inicializarWhatsApp({ reason: 'purchase-notification' });
-        } catch (initError) {
-          console.warn(`[${timestamp}] ⚠️ Inicialización falló: ${initError.message}`);
-        }
-      }
-  
-      if (!ADMIN_WHATSAPP) {
-        console.error(`[${timestamp}] ❌ ADMIN_WHATSAPP no configurado`);
-        return { success: false, error: 'Número de administrador no configurado' };
-      }
-    }
+    console.log(`[${timestamp}] ☁️ Usando WhatsApp Cloud API para notificación`);
 
     console.log(`[${timestamp}] 📋 Datos de la compra:`);
     
@@ -2321,112 +1949,6 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
         both_sent: resultCliente.success,
         transport: 'whatsapp_api'
       };
-    } else {
-      const adminNumbers = getAdminNumbers();
-      let adminResults = [];
-      let resultCliente = { success: false, error: 'No se intentó enviar' };
-
-      if (oneShotDispatch) {
-        if (telefono && telefono.trim()) {
-          console.log(`[${timestamp}] ⚡ One-shot: priorizando envío al CLIENTE antes de admins`);
-          const clienteNormalizado = normalizePhoneNumber(telefono);
-          console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
-
-          if (clienteNormalizado) {
-            resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
-            console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE (one-shot):`, {
-              success: resultCliente.success,
-              error: resultCliente.error
-            });
-          } else {
-            resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
-          }
-        } else {
-          resultCliente = { success: false, error: 'Teléfono del cliente no disponible' };
-        }
-
-        if (!resultCliente.success) {
-          console.warn(`[${timestamp}] ⚠️ One-shot: se abortan avisos a admins porque falló envío al cliente`);
-          resultado = {
-            success: false,
-            admin_result: [],
-            cliente_result: resultCliente,
-            both_sent: false,
-            transport: 'web_client'
-          };
-          return resultado;
-        }
-      }
-
-      for (const adminNum of adminNumbers) {
-        const adminNormalizado = normalizePhoneNumber(adminNum);
-        console.log(`[${timestamp}] 📱 Admin normalizado: ${adminNormalizado}`);
-        const resultAdmin = await enviarWhatsApp(
-          adminNormalizado,
-          mensajeAdmin
-        );
-        const safeMessageId = resultAdmin.messageId && typeof resultAdmin.messageId === 'object' 
-          ? (resultAdmin.messageId._serialized || JSON.stringify(resultAdmin.messageId))
-          : resultAdmin.messageId;
-        console.log(`[${timestamp}] 📡 Resultado del envío al ADMIN:`, {
-          admin: adminNum,
-          success: resultAdmin.success,
-          error: resultAdmin.error,
-          messageId: safeMessageId
-        });
-        if (resultAdmin.success) {
-          console.log(`[${timestamp}] ✅ Notificación al ADMINISTRADOR enviada exitosamente (${adminNum})`);
-        } else {
-          console.error(`[${timestamp}] ❌ FALLO enviando notificación al administrador (${adminNum}):`, resultAdmin.error);
-          if (oneShotDispatch) {
-            console.warn(`[${timestamp}] ⚠️ One-shot: se aborta el resto de envíos de admin tras el primer fallo`);
-            adminResults.push({ admin: adminNum, ...resultAdmin });
-            resultado = {
-              success: false,
-              admin_result: adminResults,
-              cliente_result: resultCliente,
-              both_sent: false,
-              transport: 'web_client'
-            };
-            return resultado;
-          }
-        }
-        adminResults.push({ admin: adminNum, ...resultAdmin });
-      }
-
-      if (!oneShotDispatch && telefono && telefono.trim()) {
-        console.log(`[${timestamp}] 📱 Enviando confirmación al cliente: ${telefono}`);
-        const clienteNormalizado = normalizePhoneNumber(telefono);
-        console.log(`[${timestamp}] 📱 Cliente normalizado: ${clienteNormalizado}`);
-        
-        if (clienteNormalizado) {
-          resultCliente = await enviarWhatsApp(clienteNormalizado, mensajeCliente);
-          
-          console.log(`[${timestamp}] 📡 Resultado del envío al CLIENTE:`, {
-            success: resultCliente.success,
-            error: resultCliente.error
-          });
-          
-          if (resultCliente.success) {
-            console.log(`[${timestamp}] ✅ Confirmación al CLIENTE enviada exitosamente`);
-          } else {
-            console.error(`[${timestamp}] ❌ FALLO enviando confirmación al cliente:`, resultCliente.error);
-          }
-        } else {
-          console.error(`[${timestamp}] ❌ No se pudo normalizar teléfono del cliente: ${telefono}`);
-          resultCliente = { success: false, error: 'Teléfono del cliente inválido' };
-        }
-      } else if (!oneShotDispatch) {
-        console.warn(`[${timestamp}] ⚠️ No hay teléfono del cliente para enviar confirmación`);
-      }
-
-      resultado = {
-        success: resultCliente.success && adminResults.every(r => r.success),
-        admin_result: adminResults,
-        cliente_result: resultCliente,
-        both_sent: adminResults.every(r => r.success) && resultCliente.success,
-        transport: 'web_client'
-      };
     }
     
     if (normalizedPaymentId) {
@@ -2435,11 +1957,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       }
     }
     
-    if (resultado.success && resultado.transport === 'web_client' && !esReintento) {
-      if (whatsappService && typeof whatsappService.marcarConexionExitosa === 'function') {
-        whatsappService.marcarConexionExitosa();
-      }
-      
+    // Procesar notificaciones pendientes si el envío fue exitoso
+    if (resultado.success && !esReintento) {
       setImmediate(async () => {
         try {
           await procesarNotificacionesPendientes();
@@ -2541,32 +2060,6 @@ app.post('/webhook', async (req, res) => {
       paymentInfo.normalized_payment_id = paymentKey;
 
       if (paymentInfo.status === 'approved') {
-        // NUEVO: Verificar y reconectar WhatsApp si es necesario
-        console.log(`[${timestamp}] 🔄 Verificando estado de WhatsApp para nueva venta...`);
-        try {
-          const estadoWhatsApp = await verificarEstadoWhatsApp();
-          console.log(`[${timestamp}] - WhatsApp disponible: ${estadoWhatsApp.disponible}`);
-          console.log(`[${timestamp}] - Razón: ${estadoWhatsApp.razon}`);
-          
-          if (!estadoWhatsApp.disponible && estadoWhatsApp.permitirAutoReconexion) {
-            console.log(`[${timestamp}] 🔌 WhatsApp desconectado pero hay sesión válida - Reconectando...`);
-            try {
-              await inicializarWhatsApp();
-              console.log(`[${timestamp}] ✅ WhatsApp reconectado exitosamente`);
-              // Esperar 3 segundos para que se estabilice
-              await new Promise(resolve => setTimeout(resolve, 3000));
-            } catch (reconnectError) {
-              console.error(`[${timestamp}] ❌ Error reconectando WhatsApp:`, reconnectError.message);
-              console.log(`[${timestamp}] ⚠️ Notificación quedará pendiente para reintento`);
-            }
-          } else if (!estadoWhatsApp.disponible) {
-            console.log(`[${timestamp}] ⚠️ WhatsApp no disponible y sin sesión válida para auto-reconectar`);
-            console.log(`[${timestamp}] 💡 Notificación quedará como pendiente para cuando WhatsApp se conecte`);
-          }
-        } catch (estadoError) {
-          console.error(`[${timestamp}] ⚠️ Error verificando estado WhatsApp:`, estadoError.message);
-        }
-        
         // Extraer datos del comprador desde metadata o payer
         let customerData = {};
         try {
@@ -2615,8 +2108,9 @@ app.post('/webhook', async (req, res) => {
 
         if (faltantes.length > 0) {
           console.log(`[${timestamp}] ⚠️ Productos sin stock: ${faltantes.join(', ')}`);
-          // Enviar notificación de productos no disponibles
-          if (whatsappAvailable && getWhatsAppReady() && ADMIN_WHATSAPP) {
+          // Notificación de productos no disponibles (solo por API si está configurada)
+          const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+          if (apiStatus.configured && ADMIN_WHATSAPP) {
             try {
               const mensaje = `⚠️ *PROBLEMA CON COMPRA*\n\n` +
                 `💳 Pago ID: ${paymentKey}\n` +
@@ -2626,9 +2120,9 @@ app.post('/webhook', async (req, res) => {
                 ` Tel: ${customerData.telefono}\n\n` +
                 `⚠️ No se creó el pedido automáticamente. Revisar y contactar al cliente.`;
               
-              await enviarWhatsApp(ADMIN_WHATSAPP, mensaje);
+              await whatsappApiService.sendWhatsAppApiMessage(ADMIN_WHATSAPP, mensaje, { type: 'stock_alert' });
             } catch (whatsappError) {
-              console.error(`[${timestamp}] ❌ Error enviando WhatsApp:`, whatsappError.message);
+              console.error(`[${timestamp}] ❌ Error enviando WhatsApp API:`, whatsappError.message);
             }
           }
         } else {
@@ -2669,36 +2163,13 @@ app.post('/webhook', async (req, res) => {
               console.log(`[${timestamp}] ✅ Pedido creado exitosamente: ${idPedidoCompleto} (Display: ${numeroDisplay})`);
               await actualizarEstadoWhatsApp(paymentKey, false);
 
-              // Enviar notificación de compra por WhatsApp
-              console.log(`[${timestamp}] 📱 Intentando enviar notificación WhatsApp...`);
-              console.log(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-              console.log(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
+              // Enviar notificación de compra por WhatsApp API
+              console.log(`[${timestamp}] 📱 Intentando enviar notificación vía WhatsApp API...`);
+              const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+              console.log(`[${timestamp}] - WhatsApp API configurada: ${apiStatus.configured}`);
               
-              // MEJORA: Esperar un poco si WhatsApp se está inicializando
-              if (whatsappAvailable && !getWhatsAppReady()) {
-                console.log(`[${timestamp}] ⏳ WhatsApp disponible pero no listo, esperando 3 segundos...`);
-                await new Promise(resolve => setTimeout(resolve, 3000));
-              }
-              
-              // NUEVO: Verificar estado real del cliente, no solo el flag
-              let realClientState = null;
-              let canSendWhatsApp = false;
-              
-              if (whatsappAvailable) {
-                // ESTRATEGIA SIMPLIFICADA: Si WhatsApp está disponible, intentar envío directamente
-                // Evitar verificaciones que pueden interrumpir conexiones activas
-                console.log(`[${timestamp}] � WhatsApp disponible, asumiendo conexión activa`);
-                canSendWhatsApp = true;
-                realClientState = 'ASSUMED_CONNECTED';
-                
-                console.log(`[${timestamp}] 🔍 Verificación estado real:`);
-                console.log(`[${timestamp}] - Flag whatsappReady: ${getWhatsAppReady()}`);
-                console.log(`[${timestamp}] - Estado asumido: ${realClientState}`);
-                console.log(`[${timestamp}] - Puede enviar: ${canSendWhatsApp}`);
-              }
-              
-              if (whatsappAvailable && canSendWhatsApp) {
-                console.log(`[${timestamp}] ✅ WhatsApp disponible, enviando notificación...`);
+              if (apiStatus.configured) {
+                console.log(`[${timestamp}] ✅ WhatsApp API disponible, enviando notificación...`);
                 try {
                   const notificationResult = await enviarNotificacionCompra(
                     customerData,
@@ -2715,41 +2186,17 @@ app.post('/webhook', async (req, res) => {
                   await actualizarEstadoWhatsApp(paymentKey, Boolean(notificationResult?.cliente_result?.success));
                   
                 } catch (whatsappError) {
-                  console.error(`[${timestamp}] ❌ EXCEPCIÓN enviando notificación WhatsApp:`, whatsappError.message);
+                  console.error(`[${timestamp}] ❌ EXCEPCIÓN enviando notificación WhatsApp API:`, whatsappError.message);
                   console.error(`[${timestamp}] Stack trace:`, whatsappError.stack);
                   
                   // Marcar como fallido en base de datos
                   await actualizarEstadoWhatsApp(paymentKey, false);
                 }
               } else {
-                console.warn(`[${timestamp}] ⚠️ WhatsApp no disponible para notificación:`);
-                console.warn(`[${timestamp}] - whatsappAvailable: ${whatsappAvailable}`);
-                console.warn(`[${timestamp}] - whatsappReady flag: ${getWhatsAppReady()}`);
-                console.warn(`[${timestamp}] - Estado real cliente: ${realClientState}`);
-                console.warn(`[${timestamp}] - Puede enviar calculado: ${canSendWhatsApp}`);
+                console.warn(`[${timestamp}] ⚠️ WhatsApp API no configurada - missing: ${apiStatus.missing.join(', ')}`);
                 
                 // Marcar como no enviado
                 await actualizarEstadoWhatsApp(paymentKey, false);
-                
-                // Intentar envío forzado si el cliente está CONNECTED pero el flag es false
-                if (whatsappAvailable && realClientState === 'CONNECTED' && !getWhatsAppReady()) {
-                  console.log(`[${timestamp}] 🔄 INTENTO FORZADO: Cliente CONNECTED pero flag false`);
-                  try {
-                    const forceResult = await enviarNotificacionCompra(
-                      customerData,
-                      { numeroDisplay, idPedidoCompleto, fechaPago: fechaPedido },
-                      paymentInfo
-                    );
-                    console.log(`[${timestamp}] 🚀 Resultado envío forzado:`, forceResult);
-                    
-                    // Actualizar estado según resultado del envío forzado
-                    await actualizarEstadoWhatsApp(paymentKey, Boolean(forceResult?.cliente_result?.success));
-                    
-                  } catch (forceError) {
-                    console.error(`[${timestamp}] ❌ Error en envío forzado:`, forceError.message);
-                    // El estado ya se marcó como false arriba
-                  }
-                }
               }
             } else {
               console.error(`[${timestamp}] ⚠️ Pedido no encontrado después de crearlo`);
@@ -2894,14 +2341,14 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
   }
   
   try {
-    // Verificar estado de WhatsApp
-    const estadoWhatsApp = await verificarEstadoWhatsApp();
-    console.log(`[${timestamp}] 📊 Estado WhatsApp: ${JSON.stringify(estadoWhatsApp, null, 2)}`);
+    // Verificar estado de WhatsApp API
+    const estadoWhatsApp = await verificarEstadoWhatsAppApi();
+    console.log(`[${timestamp}] 📊 Estado WhatsApp API: ${JSON.stringify(estadoWhatsApp, null, 2)}`);
     
     if (!estadoWhatsApp.disponible) {
       return res.json({
         success: false,
-        error: `WhatsApp no disponible: ${estadoWhatsApp.razon}`,
+        error: `WhatsApp API no disponible: ${estadoWhatsApp.razon}`,
         estado_whatsapp: estadoWhatsApp
       });
     }
@@ -3005,54 +2452,26 @@ app.get('/reintento-whatsapp/:paymentId', async (req, res) => {
 });
 
 // ===============================
-// ENDPOINT TEMPORAL: Forzar reinicialización completa de WhatsApp
+// ENDPOINT DEPRECADO: /whatsapp-force-restart (YA NO USADO - API CLOUD)
 // ===============================
 app.post('/whatsapp-force-restart', async (req, res) => {
   const timestamp = new Date().toISOString();
   
-  console.log(`[${timestamp}] 🔥 === FORZAR REINICIO COMPLETO WHATSAPP ===`);
+  console.log(`[${timestamp}] ⚠️ Endpoint deprecado: /whatsapp-force-restart llamado`);
   
-  try {
-    // 1. Limpiar sesión PostgreSQL
-    console.log(`[${timestamp}] 🧹 Paso 1: Limpiando sesión PostgreSQL...`);
-    await limpiarSesionPostgreSQL();
-    
-    // 2. Resetear contador QR
-    console.log(`[${timestamp}] 🔄 Paso 2: Reseteando contador QR...`);
-    await resetearContadorQR();
-    
-    // 3. Forzar reconexión
-    console.log(`[${timestamp}] 🔌 Paso 3: Forzando reconexión...`);
-    const reconexionResult = await forzarReconexion();
-    
-    // 4. Reinicializar WhatsApp
-    console.log(`[${timestamp}] 🚀 Paso 4: Reinicializando WhatsApp...`);
-    await inicializarWhatsApp();
-    
-    console.log(`[${timestamp}] ✅ Reinicio completo solicitado - Monitorear logs para QR`);
-    
-    res.json({
-      success: true,
-      message: 'Reinicio completo de WhatsApp iniciado',
-      pasos_ejecutados: [
-        'Limpieza sesión PostgreSQL',
-        'Reset contador QR', 
-        'Forzar reconexión',
-        'Reinicialización WhatsApp'
-      ],
-      instrucciones: 'Monitorear logs del servidor para ver el nuevo código QR',
-      timestamp: timestamp
-    });
-    
-  } catch (error) {
-    console.error(`[${timestamp}] ❌ Error en reinicio completo:`, error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Error en reinicio completo',
-      message: error.message,
-      timestamp: timestamp
-    });
-  }
+  res.status(410).json({
+    success: false,
+    error: 'Endpoint deprecado',
+    message: 'La conexión vía QR ha sido eliminada. Ahora se usa WhatsApp Cloud API.',
+    migration_info: {
+      old_system: 'whatsapp-web.js con código QR',
+      new_system: 'WhatsApp Cloud API (graph.facebook.com)',
+      no_action_needed: 'La API no requiere escaneo de QR ni reinicializaciones'
+    },
+    endpoint_removed: 'POST /whatsapp-force-restart',
+    check_status: 'GET /whatsapp-status para ver estado de la API',
+    timestamp: timestamp
+  });
 });
 
 
@@ -3124,24 +2543,16 @@ async function startServer() {
       console.log('🔄 Continuando sin base de datos (solo modo estático)');
     }
     
-    // Inicializar WhatsApp si está disponible
-    if (whatsappAvailable) {
-      console.log('📱 WhatsApp disponible en modo BAJO DEMANDA');
-      console.log('💾 Optimización: WhatsApp NO se inicia automáticamente para ahorrar memoria');
-      console.log('📡 WhatsApp se inicializará solo cuando:');
-      console.log('   - Llegue una compra (webhook de MercadoPago)');
-      console.log('   - O ejecutes manualmente el endpoint de regenerar QR');
-      console.log('');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📱 PARA CONECTAR WHATSAPP AHORA, ejecuta:');
-      console.log('');
-      console.log('  Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET');
-      console.log('');
-      console.log('Luego escanea el QR que aparecerá en los logs');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('');
+    // Mostrar estado de WhatsApp API
+    const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+    if (apiStatus.configured) {
+      console.log('📱 WhatsApp: Cloud API configurada y lista ✅');
+      console.log(`   - Phone Number ID: ${process.env.WA_PHONE_ID?.substring(0, 10)}...`);
+      console.log(`   - Business Account: ${process.env.WA_BUSINESS_ACCOUNT_ID?.substring(0, 10)}...`);
     } else {
-      console.log('⚠️ WhatsApp no disponible');
+      console.log('📱 WhatsApp: Cloud API no configurada ⚠️');
+      console.log(`   - Faltan variables: ${apiStatus.missing.join(', ')}`);
+      console.log('   - Las notificaciones no se enviarán hasta configurar la API');
     }
     
     // Configurar optimización de memoria
@@ -3155,35 +2566,28 @@ async function startServer() {
       console.log(`🌐 Host: ${HOST}:${PORT}`);
       console.log(`🌐 URL: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
       
-      // Estado de WhatsApp más preciso
-      if (whatsappAvailable) {
-        console.log(`📱 WhatsApp: Inicializando (esperando autenticación)`);
+      // Estado de WhatsApp API
+      const apiStatus = whatsappApiService.getWhatsAppApiStatus();
+      if (apiStatus.configured) {
+        console.log(`📱 WhatsApp: API configurada y lista`);
       } else {
-        console.log(`📱 WhatsApp: No disponible`);
+        console.log(`📱 WhatsApp: API no configurada - missing: ${apiStatus.missing.join(', ')}`);
       }
       
       console.log(`🗄️ Base de datos: ${typeof pool === 'undefined' ? 'No disponible' : (pool ? 'Conectada' : 'No disponible')}`);
-      console.log(`⚙️ Sistema: Simplificado - stateless (LocalAuth) - Postgres session persistence removed`);
+      console.log(`⚙️ Sistema: WhatsApp Cloud API - Sin conexión QR necesaria`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
-      // ℹ️ Sistema de notificaciones:
-      // - Notificaciones pendientes: Se procesan automáticamente al conectar WhatsApp (evento ready)
-      // - Keep-alive: Manejado por GitHub Actions (cada 5 min) llamando a /whatsapp-keep-alive
-      console.log('📊 Sistema de tracking WhatsApp v2.3 - Bajo demanda para optimizar memoria');
-      console.log('ℹ️ WhatsApp: Se conecta automáticamente al recibir compras');
-      console.log('ℹ️ Keep-alive: GitHub Actions cada 5 min (reconecta si es necesario)');
+      console.log('📊 Sistema de notificaciones v3.0 - Solo WhatsApp Cloud API');
+      console.log('ℹ️ WhatsApp: Usa API oficial - Sin QR, sin sesiones locales');
+      console.log('ℹ️ Keep-alive: GitHub Actions cada 5 min (procesa pendientes)');
       
-      if (whatsappAvailable) {
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📱 WhatsApp en modo BAJO DEMANDA - Ahorra ${Math.round(150)}MB de RAM`);
-        console.log(`💡 Para conectar manualmente:`);
-        console.log(`   Invoke-WebRequest -Uri "https://capri-store.onrender.com/whatsapp-regenerar-qr" -Method GET`);
-      }
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      
-      if (whatsappAvailable) {
-        console.log(`📲 Usa WhatsApp > Dispositivos Vinculados > Vincular`);
-      }
+      console.log(`📱 WhatsApp Cloud API - Configuración en variables de entorno`);
+      console.log(`💡 Variables requeridas:`);
+      console.log(`   - WHATSAPP_API_PHONE_NUMBER_ID`);
+      console.log(`   - WHATSAPP_API_TOKEN`);
+      console.log(`   - USE_WHATSAPP_API=true`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     });
     
