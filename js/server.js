@@ -71,6 +71,10 @@ function qualifyTable(tableName) {
 console.log('📱 Usando WhatsApp Cloud API como único medio de comunicación');
 
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP;
+// Número para consultas desde la web (DEBE ser diferente al número de la API)
+// IMPORTANTE: ADMIN_WHATSAPP es el número de la API Cloud (no accesible para chatear)
+// CONSULTAS_WHATSAPP debe apuntar a un número real al que el cliente pueda escribir
+const CONSULTAS_WHATSAPP = process.env.CONSULTAS_WHATSAPP; // NO fallback a ADMIN_WHATSAPP
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'Capri Store';
 
 // Permitir múltiples administradores: separar por coma o punto y coma
@@ -130,6 +134,7 @@ console.log('🔧 Variables de entorno cargadas:');
 console.log('- NODE_ENV:', process.env.NODE_ENV);
 console.log('- PORT:', process.env.PORT);
 console.log('- ADMIN_WHATSAPP:', process.env.ADMIN_WHATSAPP ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
+console.log('- CONSULTAS_WHATSAPP:', process.env.CONSULTAS_WHATSAPP ? '✅ CONFIGURADO (número propio)' : `⚠️ NO CONFIGURADO (usando ADMIN_WHATSAPP como fallback)`);
 console.log('- ADMIN_INSTAGRAM:', process.env.ADMIN_INSTAGRAM ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO');
 
 // ===============================
@@ -1010,7 +1015,7 @@ app.get('/debug', (req, res) => {
 app.get('/contact-info', (req, res) => {
   try {
     const contactInfo = {
-      whatsapp: process.env.ADMIN_WHATSAPP,
+      whatsapp: process.env.CONSULTAS_WHATSAPP || null, // Solo número de consultas, NUNCA el de API
       instagram: process.env.ADMIN_INSTAGRAM,
       business_name: BUSINESS_NAME,
       location: 'Zárate, Buenos Aires, Argentina'
@@ -1869,6 +1874,9 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `✅ *${esReintento ? 'Notificación reenviada al cliente automáticamente' : '¡Pago confirmado! Proceder con el envío'}*`;
     
+    const consultasNumero = (CONSULTAS_WHATSAPP || '').replace(/\D/g, '');
+    const consultasLink = consultasNumero ? `https://wa.me/${consultasNumero}` : null;
+
     const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
       `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
       `📋 *Detalles de tu pedido:*\n` +
@@ -1878,6 +1886,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
       `🛍️ *Productos:*\n${productosTexto}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `📞 *Te contactaremos pronto para coordinar la entrega*\n\n` +
+      (consultasLink ? `💬 *Para comunicarte con nosotros podés usar el siguiente enlace:*\n👇 ${consultasLink}\n\n` : '') +
       `¡Gracias por elegirnos! 💜`;
     
     let resultado = null;
@@ -1906,7 +1915,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
               numeroTemplate,
               fechaTemplate,
               totalTexto,
-              productosTemplate
+              productosTemplate,
+              consultasLink || ''  // {{6}} - link de consultas (agregar al template en Meta)
             ];
 
             resultCliente = await whatsappApiService.sendWhatsAppApiTemplateMessage(
