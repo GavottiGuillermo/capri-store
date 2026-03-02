@@ -279,7 +279,28 @@ app.use((req, res, next) => {
 });
 
 // Servir archivos estáticos desde la carpeta raíz
-app.use(express.static(path.join(__dirname, '..')));
+// HTML: sin caché (fuerza revalidación en cada visita)
+// JS/CSS: caché corta con ETag para evitar descargas innecesarias
+app.use(express.static(path.join(__dirname, '..'), {
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (/\.(js|css)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+  }
+}));
+
+// Middleware: evitar que los navegadores cacheen las respuestas dinámicas (API/JSON)
+// Se aplica después de express.static, por lo que solo afecta a rutas no estáticas
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 // Endpoint básico de prueba
 app.get('/', (req, res) => {

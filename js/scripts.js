@@ -586,13 +586,8 @@ document.addEventListener('DOMContentLoaded', function() {
     obtenerNumeroWhatsAppPrincipal().then(numero => {
       if (numero) {
         whatsappBtn.href = `https://wa.me/${numero}`;
-        whatsappBtn.classList.remove('btn-contacto-disabled');
-        whatsappBtn.classList.add('btn-contacto-enabled');
-      } else {
-        whatsappBtn.href = '#';
-        whatsappBtn.classList.add('btn-contacto-disabled');
-        whatsappBtn.classList.remove('btn-contacto-enabled');
       }
+      // No se modifican las clases: el botón mantiene siempre su color verde (btn-success)
     });
   }
 });
