@@ -2168,7 +2168,7 @@ app.post('/webhook', async (req, res) => {
               [
                 productIds,
                 paymentInfo.transaction_amount,
-                paymentInfo.payer?.first_name || 'Cliente Web',
+                [customerData.nombre, customerData.apellido].filter(Boolean).join(' ') || paymentInfo.payer?.first_name || 'Cliente Web',
                 emailCliente,
                 customerData.telefono || paymentInfo.payer?.phone?.number || '',
                 'MercadoPago',
