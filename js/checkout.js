@@ -365,38 +365,44 @@ async function iniciarProcesoPago() {
 }
 
 // === SINCRONIZACIÓN DE PRECIOS EN CHECKOUT ===
-// Descarga productos.json fresco y actualiza los precios del carrito en localStorage.
-// Retorna true si algún precio cambió.
-const GCS_PRODUCTOS_URL = 'https://storage.googleapis.com/imagenes-web-capri/productos.json';
+// Lee el precio actual de cada item del carrito directamente desde su .txt en GCS.
+// Los precios SIEMPRE viven en los .txt — productos.json no los tiene.
+async function fetchPrecioDesdetxtCheckout(txtUrl) {
+  try {
+    const resp = await fetch(`${txtUrl}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!resp.ok) return null;
+    const buffer = await resp.arrayBuffer();
+    const txt = new TextDecoder('utf-8').decode(buffer);
+    const matches = txt.match(/\{([^}]*)\}/g);
+    if (!matches || matches.length < 3) return null;
+    const precioStr = matches[2].replace(/[{}]/g, '').trim();
+    const precio = Number(precioStr);
+    return (!isNaN(precio) && precio > 0) ? precio : null;
+  } catch {
+    return null;
+  }
+}
 
 async function actualizarPreciosCarritoDesdeProductos() {
   try {
-    const url = `${GCS_PRODUCTOS_URL}?t=${Date.now()}`;
-    const resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) return false;
-    const productos = await resp.json();
-    if (!Array.isArray(productos)) return false;
-
     const cartRaw = localStorage.getItem('carrito');
     if (!cartRaw) return false;
     const cart = JSON.parse(cartRaw);
     if (!Array.isArray(cart) || cart.length === 0) return false;
 
-    const mapaPrecios = new Map();
-    productos.forEach(p => {
-      if (p.id_articulo != null) mapaPrecios.set(Number(p.id_articulo), Number(p.precio));
-    });
-
     let algoCambio = false;
-    cart.forEach(item => {
-      if (!item.id_articulo) return;
-      const precioActual = mapaPrecios.get(Number(item.id_articulo));
-      if (precioActual !== undefined && precioActual !== Number(item.precio)) {
+
+    await Promise.all(cart.map(async item => {
+      const txtUrl = item.txt || (item.img ? item.img.replace(/\.jpg(\?.*)?$/i, '.txt') : null);
+      if (!txtUrl) return;
+
+      const precioActual = await fetchPrecioDesdetxtCheckout(txtUrl);
+      if (precioActual !== null && precioActual !== Number(item.precio)) {
         console.warn(`💲 [checkout] Precio actualizado: "${item.nombre}" $${item.precio} → $${precioActual}`);
         item.precio = precioActual;
         algoCambio = true;
       }
-    });
+    }));
 
     if (algoCambio) {
       localStorage.setItem('carrito', JSON.stringify(cart));

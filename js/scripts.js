@@ -180,12 +180,15 @@ function agregarAlCarrito(nombre, precio, img, cantidad = 1, producto = null) {
   if (idx !== -1) {
     cartItems[idx].cantidad += cantidad;
   } else {
+    // Derivar URL del .txt desde la imagen para poder refrescar el precio luego
+    const txtUrl = (producto && producto.txt) || (img ? img.replace(/\.jpg(\?.*)?$/i, '.txt') : null);
     cartItems.push({ 
       nombre, 
       precio, 
       img, 
       cantidad,
-      id_articulo
+      id_articulo,
+      txt: txtUrl
     });
   }
   guardarCarrito();

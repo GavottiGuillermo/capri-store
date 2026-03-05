@@ -160,35 +160,50 @@ function ordenarPorCategoria(productos) {
 }
 
 // === SINCRONIZAR PRECIOS DEL CARRITO CON EL CATÁLOGO FRESCO ===
-// Se llama cada vez que se carga productos.json para asegurarse de que
-// el carrito en localStorage nunca tenga precios desactualizados.
-function sincronizarPreciosCarrito(productos) {
+// Obtiene el precio actual desde un .txt de GCS y lo devuelve como número.
+// Retorna null si falla o no puede parsear.
+async function fetchPrecioDesdetxt(txtUrl) {
+  try {
+    const resp = await fetch(`${txtUrl}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!resp.ok) return null;
+    const buffer = await resp.arrayBuffer();
+    const txt = new TextDecoder('utf-8').decode(buffer);
+    const matches = txt.match(/\{([^}]*)\}/g);
+    if (!matches || matches.length < 3) return null;
+    const precioStr = matches[2].replace(/[{}]/g, '').trim();
+    const precio = Number(precioStr);
+    return (!isNaN(precio) && precio > 0) ? precio : null;
+  } catch {
+    return null;
+  }
+}
+
+// Sincroniza precios del carrito leyendo los .txt de GCS directamente.
+// Los precios SIEMPRE viven en los .txt — productos.json no los tiene.
+async function sincronizarPreciosCarrito() {
   try {
     const cartRaw = localStorage.getItem('carrito');
     if (!cartRaw) return false;
     const cart = JSON.parse(cartRaw);
     if (!Array.isArray(cart) || cart.length === 0) return false;
 
-    // Construir mapa id_articulo → precio actual
-    const mapaPrecios = new Map();
-    productos.forEach(p => {
-      if (p.id_articulo != null) mapaPrecios.set(Number(p.id_articulo), Number(p.precio));
-    });
-
     let algoCambio = false;
-    cart.forEach(item => {
-      if (!item.id_articulo) return;
-      const precioActual = mapaPrecios.get(Number(item.id_articulo));
-      if (precioActual !== undefined && precioActual !== Number(item.precio)) {
+
+    await Promise.all(cart.map(async item => {
+      // Preferir txt guardado; si no hay, derivarlo del .jpg
+      const txtUrl = item.txt || (item.img ? item.img.replace(/\.jpg(\?.*)?$/i, '.txt') : null);
+      if (!txtUrl) return;
+
+      const precioActual = await fetchPrecioDesdetxt(txtUrl);
+      if (precioActual !== null && precioActual !== Number(item.precio)) {
         console.warn(`💲 Precio actualizado en carrito: "${item.nombre}" $${item.precio} → $${precioActual}`);
         item.precio = precioActual;
         algoCambio = true;
       }
-    });
+    }));
 
     if (algoCambio) {
       localStorage.setItem('carrito', JSON.stringify(cart));
-      // Refrescar el sidebar si está cargado
       if (typeof actualizarCartSidenav === 'function') actualizarCartSidenav();
     }
     return algoCambio;
@@ -264,8 +279,8 @@ async function cargarProductosCapri() {
   // Ordenar productos por categoría alfabéticamente
   todosLosProductos = ordenarPorCategoria(todosLosProductos);
 
-  // Sincronizar precios del carrito con los datos frescos recién descargados
-  sincronizarPreciosCarrito([...todasLasNovedades, ...todosLosProductos]);
+  // Sincronizar precios del carrito leyendo los .txt frescos (sin await para no bloquear render)
+  sincronizarPreciosCarrito();
 
   productosAgrupados = agruparProductosPorCategoria(todosLosProductos);
   const categoriasOrdenadas = obtenerCategoriasOrdenadas(productosAgrupados);
