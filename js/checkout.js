@@ -287,6 +287,10 @@ async function iniciarProcesoPago() {
     items: cartItems,
     costoEnvio: costoEnvio
   };
+  // Re-sincronizar precios justo antes de crear la preferencia (doble protección)
+  await actualizarPreciosCarritoDesdeProductos();
+  cartItems = JSON.parse(localStorage.getItem('carrito') || '[]');
+
   // Preparar items para Mercado Pago con IDs correctos
   let items = prepararItemsParaMP(cartItems);
   if (costoEnvio > 0) {
@@ -360,13 +364,71 @@ async function iniciarProcesoPago() {
   }
 }
 
+// === SINCRONIZACIÓN DE PRECIOS EN CHECKOUT ===
+// Descarga productos.json fresco y actualiza los precios del carrito en localStorage.
+// Retorna true si algún precio cambió.
+const GCS_PRODUCTOS_URL = 'https://storage.googleapis.com/imagenes-web-capri/productos.json';
+
+async function actualizarPreciosCarritoDesdeProductos() {
+  try {
+    const url = `${GCS_PRODUCTOS_URL}?t=${Date.now()}`;
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) return false;
+    const productos = await resp.json();
+    if (!Array.isArray(productos)) return false;
+
+    const cartRaw = localStorage.getItem('carrito');
+    if (!cartRaw) return false;
+    const cart = JSON.parse(cartRaw);
+    if (!Array.isArray(cart) || cart.length === 0) return false;
+
+    const mapaPrecios = new Map();
+    productos.forEach(p => {
+      if (p.id_articulo != null) mapaPrecios.set(Number(p.id_articulo), Number(p.precio));
+    });
+
+    let algoCambio = false;
+    cart.forEach(item => {
+      if (!item.id_articulo) return;
+      const precioActual = mapaPrecios.get(Number(item.id_articulo));
+      if (precioActual !== undefined && precioActual !== Number(item.precio)) {
+        console.warn(`💲 [checkout] Precio actualizado: "${item.nombre}" $${item.precio} → $${precioActual}`);
+        item.precio = precioActual;
+        algoCambio = true;
+      }
+    });
+
+    if (algoCambio) {
+      localStorage.setItem('carrito', JSON.stringify(cart));
+    }
+    return algoCambio;
+  } catch (e) {
+    console.error('Error sincronizando precios en checkout:', e);
+    return false;
+  }
+}
+
 // === EVENT LISTENERS PRINCIPALES ===
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   console.log('🚀 Checkout inicializando...');
   
   // Remover clase no-js pero NO inicializar animaciones
   document.documentElement.classList.remove('no-js');
   
+  // Sincronizar precios con el catálogo actual antes de mostrar el resumen
+  console.log('🔄 Sincronizando precios con catálogo actual...');
+  const preciosCambiaron = await actualizarPreciosCarritoDesdeProductos();
+  if (preciosCambiaron) {
+    // Mostrar aviso visible al cliente
+    const aviso = document.createElement('div');
+    aviso.className = 'alert alert-warning alert-dismissible fade show mx-3 mt-3';
+    aviso.setAttribute('role', 'alert');
+    aviso.innerHTML = '<strong>⚠️ Precios actualizados.</strong> Uno o más precios en tu carrito fueron actualizados al valor vigente.' +
+      ' <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>';
+    const container = document.querySelector('.container') || document.body;
+    container.insertBefore(aviso, container.firstChild);
+  }
+
   // Cargar datos directamente sin delay
   console.log('📊 Cargando resumen de compra inicial...');
   cargarResumenCompra();

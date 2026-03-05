@@ -159,6 +159,45 @@ function ordenarPorCategoria(productos) {
   });
 }
 
+// === SINCRONIZAR PRECIOS DEL CARRITO CON EL CATÁLOGO FRESCO ===
+// Se llama cada vez que se carga productos.json para asegurarse de que
+// el carrito en localStorage nunca tenga precios desactualizados.
+function sincronizarPreciosCarrito(productos) {
+  try {
+    const cartRaw = localStorage.getItem('carrito');
+    if (!cartRaw) return false;
+    const cart = JSON.parse(cartRaw);
+    if (!Array.isArray(cart) || cart.length === 0) return false;
+
+    // Construir mapa id_articulo → precio actual
+    const mapaPrecios = new Map();
+    productos.forEach(p => {
+      if (p.id_articulo != null) mapaPrecios.set(Number(p.id_articulo), Number(p.precio));
+    });
+
+    let algoCambio = false;
+    cart.forEach(item => {
+      if (!item.id_articulo) return;
+      const precioActual = mapaPrecios.get(Number(item.id_articulo));
+      if (precioActual !== undefined && precioActual !== Number(item.precio)) {
+        console.warn(`💲 Precio actualizado en carrito: "${item.nombre}" $${item.precio} → $${precioActual}`);
+        item.precio = precioActual;
+        algoCambio = true;
+      }
+    });
+
+    if (algoCambio) {
+      localStorage.setItem('carrito', JSON.stringify(cart));
+      // Refrescar el sidebar si está cargado
+      if (typeof actualizarCartSidenav === 'function') actualizarCartSidenav();
+    }
+    return algoCambio;
+  } catch (e) {
+    console.error('Error al sincronizar precios del carrito:', e);
+    return false;
+  }
+}
+
 //  Cargar productos desde productos.json del bucket
 async function cargarProductosCapri() {
   // Agregar timestamp para evitar caché del navegador
@@ -224,6 +263,10 @@ async function cargarProductosCapri() {
   
   // Ordenar productos por categoría alfabéticamente
   todosLosProductos = ordenarPorCategoria(todosLosProductos);
+
+  // Sincronizar precios del carrito con los datos frescos recién descargados
+  sincronizarPreciosCarrito([...todasLasNovedades, ...todosLosProductos]);
+
   productosAgrupados = agruparProductosPorCategoria(todosLosProductos);
   const categoriasOrdenadas = obtenerCategoriasOrdenadas(productosAgrupados);
   renderizarEnlacesCategorias(categoriasOrdenadas);
