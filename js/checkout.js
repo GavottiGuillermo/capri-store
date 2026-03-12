@@ -75,7 +75,7 @@ function cargarResumenCompra() {
   console.log('📊 Cargando resumen de compra...');
   
   const checkoutItems = document.getElementById('checkout-items');
-  const subtotalElement = document.getElementById('checkout-subtotal');
+  // const subtotalElement = document.getElementById('checkout-subtotal');
   const totalElement = document.getElementById('checkout-total');
   const cartCount = document.getElementById('cart-count');
   
@@ -99,7 +99,6 @@ function cargarResumenCompra() {
   if (!cartItems || cartItems.length === 0) {
     console.log('⚠️ Carrito vacío');
     if (checkoutItems) checkoutItems.innerHTML = '<div class="text-center py-4"><h5 class="text-muted">Tu carrito está vacío</h5><a href="index.html" class="btn btn-vino-tinto">Volver a la tienda</a></div>';
-    if (subtotalElement) subtotalElement.textContent = formatPrice(0);
     if (totalElement) totalElement.textContent = formatPrice(0);
     if (cartCount) cartCount.textContent = "0";
     return;
@@ -135,7 +134,6 @@ function cargarResumenCompra() {
   
   console.log('💰 Subtotal:', subtotal, 'Total:', total);
   
-  if (subtotalElement) subtotalElement.textContent = formatPrice(subtotal);
   if (totalElement) totalElement.textContent = formatPrice(total);
   if (cartCount) cartCount.textContent = cantidadTotal;
   
