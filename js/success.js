@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Inicializar funciones principales
         console.log('🔍 Iniciando consultarYMostrarNumeroPedido...');
         consultarYMostrarNumeroPedido();
+        cargarLinkConsultasWhatsapp();
         
         console.log('✅ Funciones inicializadas correctamente');
     } catch (error) {
@@ -233,9 +234,27 @@ function mostrarNumeroPedido(numeroDisplay, idCompleto) {
     // PASO 4: (Ya se limpia el carrito arriba con la función estándar)
 }
 
+// Carga el número de consultas WhatsApp desde el servidor y muestra el bloque
+function cargarLinkConsultasWhatsapp() {
+    const apiUrl = successResolveApiUrl('/contact-info');
+    fetch(apiUrl, { method: 'GET', credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            const numero = data && data.whatsapp ? String(data.whatsapp).replace(/\D/g, '') : '';
+            const bloque = document.getElementById('bloque-consultas-whatsapp');
+            const link = document.getElementById('link-consultas-whatsapp');
+            if (numero && bloque && link) {
+                link.href = `https://wa.me/${numero}`;
+                link.textContent = `Ante dudas sobre tu pedido, contactanos por WhatsApp`;
+                bloque.style.removeProperty('display');
+                bloque.style.display = 'flex';
+            }
+        })
+        .catch(() => {});
+}
+
 // Función para mostrar errores
-function mostrarError(mensaje) {
-    console.log('❌ Mostrando error:', mensaje);
+function mostrarError(mensaje) {    console.log('❌ Mostrando error:', mensaje);
     const procesandoDiv = document.getElementById('procesando-pedido');
     if (procesandoDiv) {
         procesandoDiv.classList.add('d-none');
