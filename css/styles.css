@@ -478,6 +478,10 @@ html {
 
 .card-img-top {
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Quitar el border-radius propio de Bootstrap: el overflow:hidden del padre lo recorta */
+  border-radius: 0 !important;
+  display: block;
+  width: 100%;
 }
 
 .card:hover .card-img-top, .card-product:hover .card-img-top {

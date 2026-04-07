@@ -1768,9 +1768,9 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     console.log(`[${timestamp}] 📋 Datos de la compra:`);
     
     // Extraer datos con valores por defecto seguros
-    const { first_name = '', last_name = '', phone } = customerData || {};
-    const nombre = first_name;
-    const apellido = last_name;
+    const { first_name, last_name, phone, nombre: nombreRaw, apellido: apellidoRaw } = customerData || {};
+    const nombre = nombreRaw || first_name || '';
+    const apellido = apellidoRaw || last_name || '';
     const telefono = customerData?.telefono || 
       (phone ? 
         (typeof phone === 'string' ? phone : `${phone.area_code}${phone.number}`) : 
@@ -1897,6 +1897,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     
     const consultasNumero = (CONSULTAS_WHATSAPP || '').replace(/\D/g, '');
     const consultasLink = consultasNumero ? `https://wa.me/${consultasNumero}` : null;
+    if (!consultasLink) {
+      console.warn(`[${timestamp}] ⚠️ CONSULTAS_WHATSAPP no configurado - {{6}} se enviará vacío`);\n    }
 
     const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
       `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
@@ -1937,7 +1939,7 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
               fechaTemplate,
               totalTexto,
               productosTemplate,
-              consultasLink || ''  // {{6}} - link de consultas (agregar al template en Meta)
+              consultasLink  // {{6}} - link de consultas
             ];
 
             resultCliente = await whatsappApiService.sendWhatsAppApiTemplateMessage(

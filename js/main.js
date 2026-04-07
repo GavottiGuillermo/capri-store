@@ -103,7 +103,14 @@ function renderizarEnlacesCategorias(categoriasOrdenadas) {
           event.preventDefault();
           const objetivo = document.querySelector(destino);
           if (objetivo) {
-            objetivo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Calcular offset real: navbar + barra de chips (ambas sticky)
+            const navbar = document.getElementById('mainNav');
+            const categoryBar = document.querySelector('.category-bar');
+            const offset = (navbar ? navbar.offsetHeight : 64)
+                         + (categoryBar ? categoryBar.offsetHeight : 0)
+                         + 12; // margen visual extra
+            const top = objetivo.getBoundingClientRect().top + window.pageYOffset - offset;
+            window.scrollTo({ top, behavior: 'smooth' });
           }
         }
       });
