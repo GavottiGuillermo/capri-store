@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE_URL = process.env.WHATSAPP_API_BASE_URL || 'https://graph.facebook.com';
-const DEFAULT_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v20.0';
+const DEFAULT_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v25.0';
 const DEFAULT_TIMEOUT_MS = Number(process.env.WHATSAPP_API_TIMEOUT_MS || '15000');
 const USE_WHATSAPP_API_RAW = process.env.USE_WHATSAPP_API ?? process.env.WHATSAPP_API_ENABLED ?? 'false';
 const WHATSAPP_API_PHONE_NUMBER_ID = process.env.WHATSAPP_API_PHONE_NUMBER_ID;
