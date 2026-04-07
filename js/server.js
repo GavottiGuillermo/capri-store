@@ -1898,7 +1898,8 @@ async function enviarNotificacionCompra(customerData, orderData, paymentInfo, es
     const consultasNumero = (CONSULTAS_WHATSAPP || '').replace(/\D/g, '');
     const consultasLink = consultasNumero ? `https://wa.me/${consultasNumero}` : null;
     if (!consultasLink) {
-      console.warn(`[${timestamp}] ⚠️ CONSULTAS_WHATSAPP no configurado - {{6}} se enviará vacío`);\n    }
+      console.warn(`[${timestamp}] ⚠️ CONSULTAS_WHATSAPP no configurado - {{6}} se enviará vacío`);
+    }
 
     const mensajeCliente = `🎉 *¡Gracias por tu compra en ${businessName}!* 🎉\n\n` +
       `✅ *Tu pago ha sido procesado exitosamente*\n\n` +
