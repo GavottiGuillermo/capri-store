@@ -1367,7 +1367,9 @@ app.post('/crear-preferencia', express.json(), async (req, res) => {
       // Metadata simplificado para identificación en webhook
       metadata: {
         telefono: String(datosComprador.telefono).replace(/\D/g, '').substring(0, 15),
-        email: String(datosComprador.email || '').trim().toLowerCase().substring(0, 254)
+        email: String(datosComprador.email || '').trim().toLowerCase().substring(0, 254),
+        nombre: String(datosComprador.nombre || datosComprador.first_name || '').trim().substring(0, 50),
+        apellido: String(datosComprador.apellido || datosComprador.last_name || '').trim().substring(0, 50)
       },
       // External reference para tracking adicional
       external_reference: `TEL${datosComprador.telefono}_${Date.now()}`
@@ -2099,8 +2101,8 @@ app.post('/webhook', async (req, res) => {
         try {
           if (paymentInfo.metadata) {
             customerData = {
-              nombre: paymentInfo.payer?.first_name || '',
-              apellido: paymentInfo.payer?.last_name || '',
+              nombre: paymentInfo.metadata.nombre || paymentInfo.payer?.first_name || '',
+              apellido: paymentInfo.metadata.apellido || paymentInfo.payer?.last_name || '',
               email: paymentInfo.metadata.email || paymentInfo.payer?.email || '',
               telefono: paymentInfo.metadata.telefono || paymentInfo.payer?.phone?.number || ''
             };
