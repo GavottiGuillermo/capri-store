@@ -648,8 +648,18 @@ async function cargarMasNovedades() {
 }
 
 
+// Extraer ID de artículo desde la URL de imagen o txt
+function extraerIdDesdeUrl(url) {
+  if (!url) return null;
+  const m = decodeURIComponent(url).match(/\/(\d+)-[^/]+/);
+  return m ? m[1] : null;
+}
+
 // Guardar producto en localStorage y redirigir
 function verDetalleCapri(prod) {
+  const id = extraerIdDesdeUrl(prod.txt || prod.imagen);
+  const detalleUrl = 'detalle.html' + (id ? '?id=' + id : '');
+
   // Permitir ver el detalle incluso si está sin stock
   fetch(prod.txt)
     .then(r => r.arrayBuffer())
@@ -690,7 +700,7 @@ function verDetalleCapri(prod) {
       }
     };
     localStorage.setItem('productoDetalle', JSON.stringify(productoDetalle));
-    window.location.href = 'detalle.html';
+    window.location.href = detalleUrl;
   }).catch(() => {
     // Si falla, guardar solo las urls pero incluir datos originales
     const productoDetalle = {
@@ -708,7 +718,7 @@ function verDetalleCapri(prod) {
       }
     };
     localStorage.setItem('productoDetalle', JSON.stringify(productoDetalle));
-    window.location.href = 'detalle.html';
+    window.location.href = detalleUrl;
   });
 }
 

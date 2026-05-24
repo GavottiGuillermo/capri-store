@@ -17,10 +17,69 @@ function detalleResolveApiUrl(pathname) {
 const CATEGORIAS_SIN_TALLE = ['accesorios', 'carteras', 'onafitness'];
 const VALORES_TALLE_OPCIONAL = new Set(['', 'sin talle', 'sin-talle', 'sintalle', 'unitalla', 'unico', 'único', 'ajustable', 'na', 'n/a', 'u']);
 
+// Carga un producto desde productos.json de GCS usando su ID numérico.
+// Retorna un objeto con el formato de productoDetalle, o null si no se encuentra.
+async function cargarProductoPorId(id) {
+  try {
+    const resp = await fetch(
+      `https://storage.googleapis.com/imagenes-web-capri/productos.json?t=${Date.now()}`,
+      { cache: 'no-store' }
+    );
+    if (!resp.ok) return null;
+    const productos = await resp.json();
+    const idNum = parseInt(id, 10);
+    const found = productos.find(p => {
+      const rawPath = decodeURIComponent(p.txt || p.imagen || '');
+      const m = rawPath.match(/\/(\d+)-[^/]+/);
+      return m && parseInt(m[1], 10) === idNum;
+    });
+    if (!found) return null;
+    // Cargar datos del .txt
+    try {
+      const txtResp = await fetch(found.txt, { cache: 'no-store' });
+      const buffer = await txtResp.arrayBuffer();
+      const txt = new TextDecoder('utf-8').decode(buffer);
+      const matches = txt.match(/\{([^}]+)\}/g) || [];
+      const limpiar = v => (v || '').replace(/[{}]/g, '').trim();
+      return {
+        nombre:  matches[0] ? limpiar(matches[0]) : '',
+        desc:    matches[1] ? limpiar(matches[1]) : '',
+        precio:  matches[2] ? limpiar(matches[2]) : '',
+        talle:   matches[3] ? limpiar(matches[3]) : '',
+        detalle: matches[4] ? limpiar(matches[4]) : '',
+        img: found.imagen,
+        txt: found.txt,
+        originalData: { imagen: found.imagen, txt: found.txt, categoria: found.categoria }
+      };
+    } catch {
+      return { nombre: '', desc: '', precio: '', talle: '', detalle: '', img: found.imagen, txt: found.txt,
+        originalData: { imagen: found.imagen, txt: found.txt, categoria: found.categoria } };
+    }
+  } catch { return null; }
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
-  // Obtener el producto seleccionado desde localStorage
-  const productoStr = localStorage.getItem('productoDetalle');
-  const producto = productoStr ? JSON.parse(productoStr) : null;
+  // Obtener el producto seleccionado: primero desde URL, luego localStorage
+  const urlParams = new URLSearchParams(window.location.search);
+  const idFromUrl = urlParams.get('id');
+
+  let productoStr = localStorage.getItem('productoDetalle');
+  let producto = productoStr ? JSON.parse(productoStr) : null;
+
+  // Si hay ?id= en la URL y el localStorage no corresponde a ese ID, cargar desde GCS
+  if (idFromUrl) {
+    const idNum = parseInt(idFromUrl, 10);
+    const localId = (() => {
+      if (!producto) return null;
+      const rawPath = decodeURIComponent(producto.img || producto.txt || '');
+      const m = rawPath.match(/\/(\d+)-[^/]+/);
+      return m ? parseInt(m[1], 10) : null;
+    })();
+    if (localId !== idNum) {
+      producto = await cargarProductoPorId(idFromUrl);
+      if (producto) localStorage.setItem('productoDetalle', JSON.stringify(producto));
+    }
+  }
   const selectTalleGlobal = document.getElementById('size');
   const inputCantidadGlobal = document.getElementById('quantity');
   if (selectTalleGlobal) {
