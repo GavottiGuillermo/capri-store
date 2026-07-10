@@ -1,4 +1,4 @@
- detalle.js
+// detalle.js
 // L�gica exclusiva para la ventana de detalle de producto en Capri Store
 
 const DETALLE_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
