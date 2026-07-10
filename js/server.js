@@ -270,7 +270,7 @@ app.use((req, res, next) => {
   res.header('X-XSS-Protection', '1; mode=block');
   
 // Middleware básico para health check sin autenticación
-  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia' || req.path === '/webhook' || req.path.startsWith('/numero-pedido/') || req.path === '/limpiar-sesiones-whatsapp') {
+  if (req.path === '/health' || req.path === '/' || req.path === '/debug' || req.path === '/contact-info' || req.path === '/stock-agotado' || req.path.startsWith('/stock-producto/') || req.path.startsWith('/variantes-producto/') || req.path === '/validar-stock-carrito' || req.path === '/crear-preferencia' || req.path === '/webhook' || req.path.startsWith('/numero-pedido/') || req.path === '/limpiar-sesiones-whatsapp') {
     return next();
   }
   
@@ -1017,6 +1017,7 @@ app.get('/debug', (req, res) => {
       '/whatsapp-full-reset (POST)',
       '/stock-agotado',
       '/stock-producto/:id',
+      '/variantes-producto/:id',
       '/validar-stock-carrito (POST)',
       '/crear-preferencia (POST)',
       '/webhook (POST)',
@@ -1169,6 +1170,109 @@ app.get('/stock-producto/:id', async (req, res) => {
       disponible: false, 
       stock: 0,
       error: 'Error al consultar stock'
+    });
+  }
+});
+
+// === VARIANTES DE UN PRODUCTO (COLOR + TALLE AGRUPADOS) ===
+// Dado un id_articulo cualquiera, busca su "prenda" y devuelve todas las
+// filas relacionadas (mismo nombre de prenda) agrupadas por color y talle,
+// indicando el stock disponible de cada combinación y los id_articulo
+// puntuales que se pueden vender para esa combinación.
+app.get('/variantes-producto/:id', async (req, res) => {
+  try {
+    const idArticulo = parseInt(req.params.id, 10);
+    console.log(`🎨 Consultando variantes del producto ID: ${idArticulo}`);
+
+    if (isNaN(idArticulo)) {
+      console.error('❌ ID de artículo inválido:', req.params.id);
+      return res.status(400).json({
+        error: 'ID de artículo inválido',
+        prenda: null,
+        variantes: []
+      });
+    }
+
+    if (typeof pool === 'undefined' || !pool) {
+      console.warn('⚠️ Base de datos no disponible - retornando sin variantes');
+      return res.json({
+        prenda: null,
+        variantes: []
+      });
+    }
+
+    // 1. Obtener la prenda (nombre) del producto de referencia
+    const refResult = await pool.query(`
+      SELECT prenda
+      FROM ${PRODUCTOS_TABLE}
+      WHERE id_articulo = $1
+    `, [idArticulo]);
+
+    if (refResult.rows.length === 0) {
+      console.log(`⚠️ Producto no encontrado en BD: ${idArticulo}`);
+      return res.json({
+        prenda: null,
+        variantes: []
+      });
+    }
+
+    const prenda = refResult.rows[0].prenda;
+
+    // 2. Traer todas las filas (todos los colores/talles) de esa misma prenda
+    //    publicadas en la web. publicado_en_web se guarda como texto ('True'/'False').
+    const result = await pool.query(`
+      SELECT id_articulo, color, talle, estado, publicado_en_web
+      FROM ${PRODUCTOS_TABLE}
+      WHERE prenda = $1
+      ORDER BY color, talle, id_articulo
+    `, [prenda]);
+
+    // 3. Agrupar por color -> talle, contando solo filas Disponible y publicadas
+    const coloresMap = new Map();
+
+    result.rows.forEach(row => {
+      const publicado = row.publicado_en_web === 'True' || row.publicado_en_web === true;
+      if (!publicado) return;
+
+      const color = row.color || 'Sin color';
+      const talle = row.talle || 'Único';
+      const disponible = row.estado === 'Disponible';
+
+      if (!coloresMap.has(color)) {
+        coloresMap.set(color, new Map());
+      }
+      const tallesMap = coloresMap.get(color);
+
+      if (!tallesMap.has(talle)) {
+        tallesMap.set(talle, { talle, stock: 0, ids: [] });
+      }
+      if (disponible) {
+        const entradaTalle = tallesMap.get(talle);
+        entradaTalle.stock += 1;
+        entradaTalle.ids.push(row.id_articulo);
+      }
+    });
+
+    const variantes = Array.from(coloresMap.entries()).map(([color, tallesMap]) => ({
+      color,
+      talles: Array.from(tallesMap.values())
+    }));
+
+    console.log(`✅ Variantes de "${prenda}": ${variantes.length} colores`);
+
+    res.json({
+      prenda,
+      variantes
+    });
+
+  } catch (error) {
+    console.error('❌ Error consultando variantes del producto:', error.message);
+    console.error('Stack trace:', error.stack);
+
+    res.status(500).json({
+      error: 'Error al consultar variantes',
+      prenda: null,
+      variantes: []
     });
   }
 });

@@ -81,6 +81,44 @@
     .cart-item {
       animation: fadeInLeft 0.3s ease-out;
     }
+
+    /* === SELECTOR DE COLOR Y TALLE === */
+    .color-swatch {
+      width: 38px; height: 38px; border-radius: 50%;
+      border: 2px solid #e0e0e0; cursor: pointer; padding: 0;
+      transition: border-color 0.15s, transform 0.15s;
+      position: relative;
+    }
+    .color-swatch.selected {
+      border-color: var(--vino-tinto);
+      transform: scale(1.10);
+    }
+    .color-swatch[title]::after {
+      content: attr(title);
+      position: absolute; bottom: -20px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px; color: var(--vino-tinto);
+      white-space: nowrap; pointer-events: none;
+    }
+    .talle-btn {
+      min-width: 50px; height: 40px; padding: 0 14px;
+      border-radius: 0.5rem;
+      border: 1.5px solid var(--rosado);
+      background: #fff; color: var(--vino-tinto);
+      font-weight: 600; font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .talle-btn:hover:not(:disabled) { background: var(--color-acento); }
+    .talle-btn.selected {
+      background: var(--vino-tinto);
+      border-color: var(--vino-tinto);
+      color: #fff;
+    }
+    .talle-btn:disabled {
+      background: #f1f1f1; border-color: #ddd; color: #bbb;
+      text-decoration: line-through; cursor: not-allowed;
+    }
   </style>
  </head>
  <body class="bg-white text-vino">
@@ -146,20 +184,29 @@
           <p class="text-rosado font-semibold h3 mb-4" id="precio-producto"></p>
           <p class="text-secondary mb-4 descripcion-producto"></p>
           <form id="productForm" class="checkout-section">
-            <div class="form-group">
-              <label class="font-weight-bold text-vino-tinto" for="size">Talle</label>
-              <select class="form-control border-rosado" id="size" name="size" required>
-                <option value="S">S</option>
-                <option value="M" selected>M</option>
-                <option value="L">L</option>
-                <option value="XL">XL</option>
-              </select>
+            <!-- Selector de color (oculto si solo hay un color) -->
+            <div class="form-group" id="grupo-color" style="display:none;">
+              <label class="font-weight-bold text-vino-tinto">Color</label>
+              <div id="color-options" class="d-flex flex-wrap" style="gap:10px;"></div>
             </div>
+            <!-- Selector de talle como botones dinámicos -->
             <div class="form-group">
-              <label class="font-weight-bold text-vino-tinto" for="quantity">Cantidad</label>
-              <input class="form-control border-rosado" id="quantity" min="1" name="quantity" required type="number" value="1"/>
+              <label class="font-weight-bold text-vino-tinto">Talle</label>
+              <!-- Select oculto mantenido para compatibilidad con código existente que lo referencia -->
+              <select id="size" name="size" style="display:none;" aria-hidden="true"></select>
+              <div id="talle-options" class="d-flex flex-wrap" style="gap:8px;"></div>
+              <small id="talle-mensaje" class="form-text text-secondary mt-1"></small>
             </div>
-            <button id="btnAgregarCarrito" class="btn btn-vino-tinto btn-block font-weight-bold py-3 micro-bounce glow-on-hover" type="submit">Agregar al carrito</button>
+            <!-- Selector de cantidad (aparece solo al elegir talle) -->
+            <div class="form-group" id="grupo-cantidad" style="display:none;">
+              <label class="font-weight-bold text-vino-tinto" for="quantity-select">Cantidad</label>
+              <div class="d-flex align-items-center" style="gap:12px;">
+                <select class="form-control border-rosado" id="quantity-select" style="max-width:100px;"></select>
+                <small id="stock-label" class="text-secondary"></small>
+              </div>
+              <input id="quantity" name="quantity" type="hidden" value="1"/>
+            </div>
+            <button id="btnAgregarCarrito" class="btn btn-vino-tinto btn-block font-weight-bold py-3 micro-bounce glow-on-hover" type="submit" disabled>Agregar al carrito</button>
           </form>
         </div>
         <div id="seccion-detalles" class="mt-5 pt-4 border-top border-rosado checkout-section" style="display: none;">

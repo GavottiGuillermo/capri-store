@@ -1,5 +1,5 @@
-// detalle.js
-// Lógica exclusiva para la ventana de detalle de producto en Capri Store
+ detalle.js
+// L�gica exclusiva para la ventana de detalle de producto en Capri Store
 
 const DETALLE_API_BASE = (typeof getCapriApiBaseUrl === 'function' && getCapriApiBaseUrl()) ||
   (window.CapriConfig && typeof window.CapriConfig.getApiBaseUrl === 'function'
@@ -17,7 +17,7 @@ function detalleResolveApiUrl(pathname) {
 const CATEGORIAS_SIN_TALLE = ['accesorios', 'carteras', 'onafitness'];
 const VALORES_TALLE_OPCIONAL = new Set(['', 'sin talle', 'sin-talle', 'sintalle', 'unitalla', 'unico', 'único', 'ajustable', 'na', 'n/a', 'u']);
 
-// Carga un producto desde productos.json de GCS usando su ID numérico.
+// Carga un producto desde productos.json de GCS usando su ID num�rico.
 // Retorna un objeto con el formato de productoDetalle, o null si no se encuentra.
 async function cargarProductoPorId(id) {
   try {
@@ -58,8 +58,242 @@ async function cargarProductoPorId(id) {
   } catch { return null; }
 }
 
+
+// =============================================================================
+// M�DULO DE VARIANTES (COLOR + TALLE + CANTIDAD)
+// Reemplaza la l�gica anterior de /stock-producto y configurarCampoTalle.
+// =============================================================================
+
+/** Estado en memoria de las variantes del producto visible. */
+const estadoVariantes = {
+  prenda: null,
+  variantes: [],        // [{ color, talles: [{talle, stock, ids}] }]
+  colorActual: null,
+  talleActual: null,    // objeto {talle, stock, ids} elegido por el usuario
+  imagenesPorColor: {} // { "Negro": "https://...", ... }
+};
+
+/** Consulta GET /variantes-producto/:id. Retorna { prenda, variantes } o null. */
+async function cargarVariantesProducto(idArticulo) {
+  if (!idArticulo) return null;
+  try {
+    const resp = await fetch(detalleResolveApiUrl(`/variantes-producto/${idArticulo}`), { cache: 'no-store' });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return (data && Array.isArray(data.variantes)) ? data : null;
+  } catch { return null; }
+}
+
+/**
+ * Recorre productos.json buscando entradas con el mismo campo "prenda",
+ * para obtener la URL de imagen de cada color.
+ * (Solo funciona con productos cargados tras el nuevo sistema Java.)
+ */
+async function cargarImagenesPorColor(prenda) {
+  const mapa = {};
+  if (!prenda) return mapa;
+  try {
+    const resp = await fetch(
+      `https://storage.googleapis.com/imagenes-web-capri/productos.json?t=${Date.now()}`,
+      { cache: 'no-store' }
+    );
+    if (!resp.ok) return mapa;
+    const lista = await resp.json();
+    lista.forEach(p => {
+      if (p.prenda === prenda && p.color && p.imagen) mapa[p.color] = p.imagen;
+    });
+  } catch {}
+  return mapa;
+}
+
+/** Extrae el id_articulo num�rico desde el objeto producto del localStorage. */
+function obtenerIdDesdeProducto(producto) {
+  if (!producto) return null;
+  if (producto.id_articulo) return parseInt(producto.id_articulo, 10);
+  const path = decodeURIComponent(producto.img || producto.txt || '');
+  const m = path.match(/\/(\d+)-[^/]+/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/** Traduce un nombre de color en espa�ol a un valor CSS v�lido. */
+function colorACss(nombre) {
+  const mapa = {
+    negro:'#2c2c2a', blanco:'#ffffff', rojo:'#c0392b', bordo:'#712b13',
+    azul:'#185fa5', verde:'#3b6d11', amarillo:'#e0a800', rosa:'#e29ca3',
+    rosado:'#e29ca3', gris:'#888780', beige:'#d8c9a3', marron:'#5a3a22',
+    'marrón':'#5a3a22', violeta:'#7f77dd', celeste:'#85b7eb',
+    naranja:'#d85a30', fucsia:'#d4537e', dorado:'#b08d57', plateado:'#c0c0c0'
+  };
+  const k = (nombre || '').toString().trim().toLowerCase();
+  return mapa[k] || k || '#cccccc';
+}
+
+/** Actualiza la imagen principal cuando el usuario cambia de color. */
+function actualizarImagenPorColor(color) {
+  const url = estadoVariantes.imagenesPorColor[color];
+  if (url) {
+    const img = document.getElementById('mainImage');
+    if (img) img.src = url;
+  }
+}
+
+/** Renderiza los c�rculos de color. Oculta el grupo si hay un solo color. */
+function renderizarColores() {
+  const grupo = document.getElementById('grupo-color');
+  const cont  = document.getElementById('color-options');
+  if (!grupo || !cont) return;
+  cont.innerHTML = '';
+
+  if (estadoVariantes.variantes.length <= 1) {
+    grupo.style.display = 'none';
+    if (estadoVariantes.variantes.length === 1) {
+      estadoVariantes.colorActual = estadoVariantes.variantes[0].color;
+    }
+    renderizarTalles();
+    return;
+  }
+
+  grupo.style.display = '';
+  estadoVariantes.variantes.forEach((v, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'color-swatch' + (i === 0 ? ' selected' : '');
+    btn.title = v.color;
+    btn.setAttribute('aria-label', v.color);
+    btn.style.background = colorACss(v.color);
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.color-swatch').forEach(c => c.classList.remove('selected'));
+      btn.classList.add('selected');
+      estadoVariantes.colorActual = v.color;
+      estadoVariantes.talleActual = null;
+      actualizarImagenPorColor(v.color);
+      renderizarTalles();
+    });
+    cont.appendChild(btn);
+  });
+
+  if (!estadoVariantes.colorActual && estadoVariantes.variantes.length) {
+    estadoVariantes.colorActual = estadoVariantes.variantes[0].color;
+  }
+}
+
+/** Renderiza los botones de talle para el color actualmente seleccionado. */
+function renderizarTalles() {
+  const cont    = document.getElementById('talle-options');
+  const mensaje = document.getElementById('talle-mensaje');
+  const selectOculto = document.getElementById('size');
+  if (!cont) return;
+
+  cont.innerHTML = '';
+  estadoVariantes.talleActual = null;
+  actualizarSelectorCantidad();
+  actualizarBotonAgregar();
+
+  const variante = estadoVariantes.variantes.find(v => v.color === estadoVariantes.colorActual);
+  const talles   = variante ? variante.talles : [];
+
+  if (!talles.length) {
+    if (mensaje) mensaje.textContent = 'Sin talles disponibles para este color.';
+    return;
+  }
+  if (mensaje) mensaje.textContent = 'Elegí un talle.';
+
+  talles.forEach(t => {
+    const disponible = t.stock > 0;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'talle-btn';
+    btn.textContent = t.talle;
+    btn.disabled = !disponible;
+    btn.setAttribute('aria-label', `Talle ${t.talle}${disponible ? '' : ' - Sin stock'}`);
+    btn.addEventListener('click', () => {
+      if (!disponible) return;
+      estadoVariantes.talleActual = t;
+      document.querySelectorAll('.talle-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      // Sincronizar select oculto (compatibilidad)
+      if (selectOculto) {
+        let opt = Array.from(selectOculto.options).find(o => o.value === t.talle);
+        if (!opt) { opt = document.createElement('option'); opt.value = t.talle; opt.textContent = t.talle; selectOculto.appendChild(opt); }
+        selectOculto.value = t.talle;
+      }
+      if (mensaje) mensaje.textContent = '';
+      actualizarSelectorCantidad();
+      actualizarBotonAgregar();
+    });
+    cont.appendChild(btn);
+  });
+}
+
+/** Construye el <select> de cantidad limitado al stock real de la combinaci�n. */
+function actualizarSelectorCantidad() {
+  const grupo       = document.getElementById('grupo-cantidad');
+  const select      = document.getElementById('quantity-select');
+  const inputOculto = document.getElementById('quantity');
+  const stockLabel  = document.getElementById('stock-label');
+  if (!grupo || !select) return;
+
+  if (!estadoVariantes.talleActual || estadoVariantes.talleActual.stock < 1) {
+    grupo.style.display = 'none';
+    if (inputOculto) inputOculto.value = 1;
+    return;
+  }
+
+  grupo.style.display = '';
+  select.innerHTML = '';
+  const max = estadoVariantes.talleActual.stock;
+  for (let i = 1; i <= max; i++) {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = i;
+    select.appendChild(opt);
+  }
+  select.value = 1;
+  if (inputOculto) inputOculto.value = 1;
+  if (stockLabel)  stockLabel.textContent = `${max} disponible${max !== 1 ? 's' : ''}`;
+  select.onchange = () => { if (inputOculto) inputOculto.value = select.value; };
+}
+
+/** Habilita o deshabilita el bot�n Agregar al carrito seg�n el estado actual. */
+function actualizarBotonAgregar() {
+  const btn = document.getElementById('btnAgregarCarrito');
+  if (!btn) return;
+  const hayStock = !!(estadoVariantes.talleActual && estadoVariantes.talleActual.stock > 0);
+  btn.disabled = !hayStock;
+  if (hayStock) {
+    btn.textContent = 'Agregar al carrito';
+    btn.classList.add('btn-vino-tinto'); btn.classList.remove('btn-secondary');
+  } else {
+    btn.textContent = estadoVariantes.variantes.length ? 'Elegí un talle' : 'Sin stock';
+    btn.classList.remove('btn-vino-tinto'); btn.classList.add('btn-secondary');
+  }
+}
+
+/**
+ * Punto de entrada del m�dulo.
+ * Llama al backend, puebla estadoVariantes y renderiza la UI.
+ * Se invoca desde el primer DOMContentLoaded una vez que el producto est� cargado.
+ */
+async function inicializarVariantes(producto) {
+  const idRef = obtenerIdDesdeProducto(producto);
+  if (!idRef) { actualizarBotonAgregar(); return; }
+
+  const data = await cargarVariantesProducto(idRef);
+  if (!data || !data.variantes.length) {
+    const msg = document.getElementById('talle-mensaje');
+    if (msg) msg.textContent = 'No se pudo verificar disponibilidad. Recargá la página.';
+    actualizarBotonAgregar();
+    return;
+  }
+
+  estadoVariantes.prenda    = data.prenda;
+  estadoVariantes.variantes = data.variantes;
+  estadoVariantes.imagenesPorColor = await cargarImagenesPorColor(data.prenda);
+
+  renderizarColores();
+}
+
+// =============================================================================
 document.addEventListener('DOMContentLoaded', async function() {
-  // Obtener el producto seleccionado: primero desde URL, luego localStorage
   const urlParams = new URLSearchParams(window.location.search);
   const idFromUrl = urlParams.get('id');
 
@@ -80,582 +314,162 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (producto) localStorage.setItem('productoDetalle', JSON.stringify(producto));
     }
   }
-  const selectTalleGlobal = document.getElementById('size');
-  const inputCantidadGlobal = document.getElementById('quantity');
-  if (selectTalleGlobal) {
-    configurarCampoTalle(selectTalleGlobal, producto?.talle, producto);
-  }
+  const limpiar = v => {
+    const s = (v || '').replace(/[{}]/g, '').trim();
+    const l = s.toLowerCase();
+    return (l === 'null' || l === 'undefined') ? '' : s;
+  };
+
+  // Poblar campos est�ticos (nombre, precio, descripci�n, detalle) desde el .txt de GCS
   if (producto && producto.txt) {
     try {
-      // Obtener los datos actualizados desde el .txt del producto
-      const resp = await fetch(producto.txt);
-      // Forzar decodificación UTF-8
-      const buffer = await resp.arrayBuffer();
-      const decoder = new TextDecoder('utf-8');
-      const txt = decoder.decode(buffer);
-      // Extraer información entre llaves en formato secuencial
-      // Formato: {Nombre}{Descripción}{Precio}{Talle}{Detalle}
-      const matches = txt.match(/\{([^}]+)\}/g) || [];
-      let nombre = producto.nombre;
-      let textoTarjeta = producto.desc;
-      let precio = producto.precio;
-      let talle = producto.talle || 'M';
-      let detalle = '';
+      const buf = await (await fetch(producto.txt)).arrayBuffer();
+      const txt = new TextDecoder('utf-8').decode(buf);
+      // Formato: {Nombre}{Descripci�n}{Precio}[{TalleObsoleto}]{Detalle}
+      const m = txt.match(/\{([^}]+)\}/g) || [];
+      const nombre      = limpiar(m[0]) || producto.nombre || '';
+      const descripcion = limpiar(m[1]) || producto.desc   || '';
+      const precio      = limpiar(m[2]) || producto.precio || '';
+      // m[3] era el talle fijo: ignorado intencionalmente, ahora viene de BBDD
+      const detalle     = limpiar(m[4]) || limpiar(m[3]) || '';
 
-      const limpiarCampo = (valor) => {
-        const limpio = (valor || '').replace(/[{}]/g, '').trim();
-        if (!limpio) return '';
-        const normalizado = limpio.toLowerCase();
-        return normalizado === 'null' || normalizado === 'undefined' ? '' : limpio;
-      };
-      if (matches.length) {
-        if (matches[0]) nombre = limpiarCampo(matches[0]) || nombre;
-        if (matches[1]) textoTarjeta = limpiarCampo(matches[1]) || textoTarjeta;
-        if (matches[2]) precio = limpiarCampo(matches[2]) || precio;
-        if (matches[3]) talle = limpiarCampo(matches[3]) || talle;
-        if (matches[4]) detalle = limpiarCampo(matches[4]) || detalle;
-      }
-      document.getElementById('mainImage').src = producto.img;
+      document.getElementById('mainImage').src = producto.img || '';
       document.getElementById('mainImage').alt = nombre;
-      document.getElementById('nombre-producto').textContent = nombre;
-      document.getElementById('precio-producto').textContent = precio ? ('$' + precio + ' ARS') : '';
-      
-      // Solo mostrar descripción si hay contenido válido
-      const descElement = document.querySelector('.descripcion-producto');
-      if (textoTarjeta && textoTarjeta !== 'null' && textoTarjeta.trim() !== '') {
-        descElement.textContent = textoTarjeta;
-        descElement.style.display = 'block';
-      } else {
-        descElement.style.display = 'none';
-      }
-      
-      // Solo mostrar sección de detalles si hay contenido válido
-      const seccionDetalles = document.getElementById('seccion-detalles');
-      const detalleContenido = document.getElementById('detalle-contenido');
-      if (detalle && detalle !== 'null' && detalle.trim() !== '') {
-        detalleContenido.textContent = detalle;
-        seccionDetalles.style.display = 'block';
-      } else {
-        seccionDetalles.style.display = 'none';
-      }
-      
-      const selectTalle = selectTalleGlobal;
-      const inputCantidad = inputCantidadGlobal;
-      if (selectTalle) {
-        configurarCampoTalle(selectTalle, talle, producto);
-      }
-      if (inputCantidad) {
-        inputCantidad.value = 1;
-        inputCantidad.disabled = true;
-        inputCantidad.style.backgroundColor = '#f8f9fa';
-        inputCantidad.style.cursor = 'not-allowed';
-      }
-      // Consultar stock usando nuevo endpoint
-      try {
-        const path = decodeURIComponent((producto.img || producto.txt || ''));
-        const m = path.match(/\/(\d+)-[^/]+/);
-        const id = m && m[1] ? parseInt(m[1], 10) : null;
-        if (id) {
-          let stockDisponible = 0;
-          try {
-                const stockResp = await fetch(detalleResolveApiUrl(`/stock-producto/${id}`), { cache: 'no-store' });
-            if (stockResp.ok) {
-              const stockData = await stockResp.json();
-              if (stockData && typeof stockData.stock !== 'undefined') {
-                stockDisponible = stockData.stock || 0;
-                console.log('📊 Stock obtenido del servidor:', stockDisponible);
-                
-                // Mostrar stock disponible
-                mostrarStockDisponible(stockDisponible);
-                
-                // Configurar cantidad y botón según stock
-                if (inputCantidad) {
-                  inputCantidad.max = stockDisponible;
-                  console.log('🔢 Stock establecido:', stockDisponible, 'max:', inputCantidad.max);
-                  
-                  if (stockDisponible > 0) {
-                    // HAY STOCK - Habilitar funcionalidad
-                    inputCantidad.disabled = false;
-                    inputCantidad.style.backgroundColor = '';
-                    inputCantidad.style.cursor = '';
-                    inputCantidad.value = 1;
-                    
-                    // Habilitar botón
-                    const btn = document.getElementById('btnAgregarCarrito');
-                    if (btn) {
-                      btn.disabled = false;
-                      btn.textContent = 'Agregar al carrito';
-                      btn.classList.remove('btn-secondary');
-                      btn.classList.add('btn-vino-tinto');
-                    }
-                    
-                    // Agregar validación estricta en el input
-                    inputCantidad.addEventListener('input', function() {
-                      const valor = parseInt(this.value) || 0;
-                      const maxPermitido = parseInt(this.max) || 0;
-                      if (valor > maxPermitido && maxPermitido > 0) {
-                        this.value = maxPermitido;
-                        console.log('⚠️ Cantidad ajustada al máximo permitido:', maxPermitido);
-                      }
-                    });
-                    
-                    inputCantidad.addEventListener('change', function() {
-                      const valor = parseInt(this.value) || 0;
-                      const maxPermitido = parseInt(this.max) || 0;
-                      if (valor > maxPermitido && maxPermitido > 0) {
-                        this.value = maxPermitido;
-                        console.log('⚠️ Cantidad ajustada al máximo permitido:', maxPermitido);
-                      }
-                      if (valor < 1) {
-                        this.value = 1;
-                      }
-                    });
-                  } else {
-                    // NO HAY STOCK - Bloquear todo
-                    console.log('❌ SIN STOCK - Bloqueando interfaz');
-                    inputCantidad.disabled = true;
-                    inputCantidad.style.backgroundColor = '#f8f9fa';
-                    inputCantidad.style.cursor = 'not-allowed';
-                    inputCantidad.value = 0;
-                    
-                    // Deshabilitar botón
-                    const btn = document.getElementById('btnAgregarCarrito');
-                    if (btn) {
-                      btn.disabled = true;
-                      btn.textContent = 'Sin stock';
-                      btn.classList.remove('btn-vino-tinto');
-                      btn.classList.add('btn-secondary');
-                    }
-                  }
-                  
-                  // Revalidar formulario después de actualizar el stock
-                  if (typeof window.validarFormularioDetalle === 'function') {
-                    console.log('🔄 Revalidando formulario después de cargar stock');
-                    window.validarFormularioDetalle();
-                  }
-                }
-              }
-            }
-          } catch {}
-          
-          if (stockDisponible === 0) {
-            const btn = document.getElementById('btnAgregarCarrito');
-            if (btn) {
-              btn.disabled = true;
-              btn.textContent = 'Sin stock';
-              btn.classList.remove('btn-vino-tinto');
-              btn.classList.add('btn-secondary');
-            }
-            // Revalidar formulario cuando no hay stock
-            if (typeof window.validarFormularioDetalle === 'function') {
-              window.validarFormularioDetalle();
-            }
-          }
-        }
-      } catch {}
-      // Actualizar la sección de detalles si existe información de detalle
-      if (detalle) {
-        const detallesList = document.querySelector('.list-unstyled');
-        if (detallesList) {
-          detallesList.innerHTML = '';
-          // Dividir el detalle en líneas y crear elementos de lista
-          const lineas = detalle.split('\n');
-          lineas.forEach(linea => {
-            if (linea.trim()) {
-              const li = document.createElement('li');
-              li.textContent = linea.trim();
-              detallesList.appendChild(li);
-            }
-          });
-        }
-      }
-    } catch (e) {
-      // Si falla el fetch, mostrar lo que haya en localStorage
-      document.getElementById('mainImage').src = producto.img;
-      document.getElementById('mainImage').alt = producto.nombre;
-      document.getElementById('nombre-producto').textContent = producto.nombre;
-      document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
-      document.querySelector('.descripcion-producto').textContent = producto.desc;
-      // Fallback: marcar sin stock si está en cache
-      try {
-        const path = decodeURIComponent((producto.img || producto.txt || ''));
-        const m = path.match(/\/(\d+)-[^/]+/);
-        const id = m && m[1] ? parseInt(m[1], 10) : null;
-        if (id && window.localStorage) {
-          const agotados = new Set(JSON.parse(localStorage.getItem('agotados') || '[]'));
-          if (agotados.has(id)) {
-            const btn = document.getElementById('btnAgregarCarrito');
-            if (btn) {
-              btn.disabled = true;
-              btn.textContent = 'Sin stock';
-              btn.classList.remove('btn-vino-tinto');
-              btn.classList.add('btn-secondary');
-            }
-          }
-        }
-      } catch {}
-      // Configurar talle y cantidad fijos (fallback)
-      const selectTalle = selectTalleGlobal;
-      const inputCantidad = inputCantidadGlobal;
-      if (selectTalle) {
-        configurarCampoTalle(selectTalle, producto?.talle, producto);
-      }
-      if (inputCantidad) {
-        inputCantidad.value = 1;
-        inputCantidad.disabled = true;
-        inputCantidad.style.backgroundColor = '#f8f9fa';
-        inputCantidad.style.cursor = 'not-allowed';
-      }
+      document.getElementById('nombre-producto').textContent  = nombre;
+      document.getElementById('precio-producto').textContent  = precio ? `$${precio} ARS` : '';
+
+      const descEl = document.querySelector('.descripcion-producto');
+      if (descEl) { descEl.textContent = descripcion; descEl.style.display = descripcion ? '' : 'none'; }
+
+      const secDet  = document.getElementById('seccion-detalles');
+      const contDet = document.getElementById('detalle-contenido');
+      if (secDet && contDet) { contDet.textContent = detalle; secDet.style.display = detalle ? '' : 'none'; }
+
+    } catch {
+      // Fallback desde localStorage
+      document.getElementById('mainImage').src = producto.img || '';
+      document.getElementById('mainImage').alt = producto.nombre || '';
+      document.getElementById('nombre-producto').textContent = producto.nombre || 'Producto';
+      document.getElementById('precio-producto').textContent = producto.precio ? `$${producto.precio} ARS` : '';
+      const descEl = document.querySelector('.descripcion-producto');
+      if (descEl) descEl.textContent = producto.desc || '';
     }
   } else if (producto) {
-    // Si no hay txt, usar los datos guardados
-    document.getElementById('mainImage').src = producto.img;
-    document.getElementById('mainImage').alt = producto.nombre;
-    document.getElementById('nombre-producto').textContent = producto.nombre;
-    document.getElementById('precio-producto').textContent = '$' + producto.precio + ' ARS';
-    document.querySelector('.descripcion-producto').textContent = producto.desc;
-    // Configurar talle y cantidad fijos
-    const selectTalle = selectTalleGlobal;
-    const inputCantidad = inputCantidadGlobal;
-    if (selectTalle) {
-      configurarCampoTalle(selectTalle, producto?.talle, producto);
-    }
-    if (inputCantidad) {
-      inputCantidad.value = 1;
-      inputCantidad.disabled = true;
-      inputCantidad.style.backgroundColor = '#f8f9fa';
-      inputCantidad.style.cursor = 'not-allowed';
-    }
+    document.getElementById('mainImage').src = producto.img || '';
+    document.getElementById('mainImage').alt = producto.nombre || '';
+    document.getElementById('nombre-producto').textContent = producto.nombre || 'Producto';
+    document.getElementById('precio-producto').textContent = producto.precio ? `$${producto.precio} ARS` : '';
+    const descEl = document.querySelector('.descripcion-producto');
+    if (descEl) descEl.textContent = producto.desc || '';
   } else {
     document.getElementById('nombre-producto').textContent = 'Producto no encontrado';
     document.getElementById('precio-producto').textContent = '';
-    document.querySelector('.descripcion-producto').textContent = '';
-    // Deshabilitar campos cuando no hay producto
-    const selectTalle = selectTalleGlobal;
-    const inputCantidad = inputCantidadGlobal;
-    if (selectTalle) {
-      configurarCampoTalle(selectTalle, '', producto);
-    }
-    if (inputCantidad) {
-      inputCantidad.value = 1;
-      inputCantidad.disabled = true;
-      inputCantidad.style.backgroundColor = '#f8f9fa';
-      inputCantidad.style.cursor = 'not-allowed';
-    }
+    const descEl = document.querySelector('.descripcion-producto');
+    if (descEl) descEl.textContent = '';
   }
+
+  // Inicializar selectores de color/talle/cantidad desde BBDD
+  await inicializarVariantes(producto);
 });
 
-// Lógica de agregar al carrito desde el detalle
-
+// L�gica del formulario: agregar al carrito
 document.addEventListener('DOMContentLoaded', function() {
-  // Event listener para botón "Seguir Comprando"
-  const seguirComprandoBtn = document.getElementById('seguirComprandoBtn');
-  if (seguirComprandoBtn) {
-    seguirComprandoBtn.addEventListener('click', function() {
+  const seguirBtn = document.getElementById('seguirComprandoBtn');
+  if (seguirBtn) {
+    seguirBtn.addEventListener('click', () => {
       if (typeof closeCartSidenav === 'function') closeCartSidenav();
       window.location.href = 'index.html';
     });
   }
 
-  const btnAgregar = document.getElementById('btnAgregarCarrito');
-  const selectTalle = document.getElementById('size');
-  const inputCantidad = document.getElementById('quantity');
   const productForm = document.getElementById('productForm');
-  if (btnAgregar && selectTalle && inputCantidad && productForm) {
-    // Obtener el producto para usar su talle original
+  if (!productForm) return;
+
+  productForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
     const productoStr = localStorage.getItem('productoDetalle');
     const producto = productoStr ? JSON.parse(productoStr) : null;
-    const metaTalleInicial = obtenerInfoTalleFormulario(producto?.talle, producto);
-    const talleOriginal = metaTalleInicial.valor;
-    
-    selectTalle.value = talleOriginal;
-    if (metaTalleInicial.opcional) {
-      selectTalle.dataset.optional = 'true';
-      selectTalle.required = false;
+
+    // Validar que el usuario eligi� un talle con stock
+    if (!estadoVariantes.talleActual || estadoVariantes.talleActual.stock < 1) {
+      if (typeof mostrarPopup === 'function') mostrarPopup('Elegí un talle disponible antes de continuar.', 'warning');
+      return;
     }
-    inputCantidad.value = 1;
-    btnAgregar.disabled = false;
-    btnAgregar.classList.remove('btn-secondary');
-    btnAgregar.classList.add('btn-vino-tinto');
-    
-    function validarFormulario() {
-      const talleOpcional = selectTalle.dataset.optional === 'true';
-      const talleValido = talleOpcional || selectTalle.value !== "";
-      const cantidadInput = parseInt(inputCantidad.value) || 0;
-      const maxStock = parseInt(inputCantidad.max) || 999; // Valor por defecto alto si no hay max establecido
-      const cantidadValida = cantidadInput > 0 && cantidadInput <= maxStock;
-      
-      console.log('🔍 Validando formulario:', {
-        talle: selectTalle.value,
-        talleValido,
-        cantidad: cantidadInput,
-        maxStock,
-        cantidadValida,
-        inputMax: inputCantidad.max
-      });
-      
-      // Mostrar mensaje si excede el stock y forzar corrección
-      if (cantidadInput > maxStock && maxStock < 999 && maxStock > 0) {
-        console.log('⚠️ Cantidad excede stock. Cantidad:', cantidadInput, 'Stock:', maxStock);
-        inputCantidad.value = maxStock;
-        cantidadInput = maxStock; // Actualizar la variable local
-      }
-      
-      // Validación más estricta - Si stock es 0, siempre deshabilitar
-      const stockValido = maxStock < 999 ? (maxStock > 0 && cantidadInput <= maxStock) : true;
-      
-      // Verificación especial para stock cero
-      if (maxStock === 0) {
-        btnAgregar.disabled = true;
-        btnAgregar.textContent = 'Sin stock';
-        btnAgregar.classList.remove('btn-vino-tinto');
-        btnAgregar.classList.add('btn-secondary');
-        console.log('❌ Botón deshabilitado - SIN STOCK');
-        return;
-      }
-      
-      if (talleValido && cantidadValida && stockValido) {
-        btnAgregar.disabled = false;
-        btnAgregar.textContent = 'Agregar al carrito';
-        btnAgregar.classList.remove('btn-secondary');
-        btnAgregar.classList.add('btn-vino-tinto');
-        console.log('✅ Botón habilitado - Stock:', maxStock);
-      } else {
-        btnAgregar.disabled = true;
-        btnAgregar.classList.remove('btn-vino-tinto');
-        btnAgregar.classList.add('btn-secondary');
-        console.log('❌ Botón deshabilitado - stockValido:', stockValido, 'maxStock:', maxStock, 'cantidad:', cantidadInput);
-      }
+    if (!producto) {
+      if (typeof mostrarPopup === 'function') mostrarPopup('Error: producto no encontrado.', 'error');
+      return;
     }
-    
-    // Hacer la función disponible globalmente para llamarla después de cargar el stock
-    window.validarFormularioDetalle = validarFormulario;
-    selectTalle.addEventListener('change', validarFormulario);
-    inputCantidad.addEventListener('input', validarFormulario);
-    validarFormulario();
-    productForm.addEventListener("submit", async function(e) {
-      e.preventDefault();
-      const productoStr = localStorage.getItem('productoDetalle');
-      const producto = productoStr ? JSON.parse(productoStr) : null;
-      const talleOpcional = selectTalle.dataset.optional === 'true';
-      const sizeValue = selectTalle.value || '';
-      const size = talleOpcional ? (sizeValue || 'UNICO') : sizeValue;
-      const sizeLabel = talleOpcional ? 'Único' : size;
-      const quantity = parseInt(inputCantidad.value);
-      const maxStock = parseInt(inputCantidad.max) || 0;
-      
-      if (!producto || (!size && !talleOpcional) || !quantity || quantity < 1) {
-        console.log('❌ Datos incompletos del formulario');
-        return;
+
+    const talle   = estadoVariantes.talleActual.talle;
+    const color   = estadoVariantes.colorActual || '';
+    const stockMax = estadoVariantes.talleActual.stock;
+    const idsDisponibles = estadoVariantes.talleActual.ids;
+
+    const selectCant = document.getElementById('quantity-select');
+    const quantity = Math.max(1, parseInt((selectCant && selectCant.value) || '1', 10));
+
+    if (quantity > stockMax) {
+      if (typeof mostrarPopup === 'function') mostrarPopup(`Solo hay ${stockMax} unidades disponibles de este talle.`, 'warning');
+      return;
+    }
+
+    // Chequear cu�ntas ya est�n en el carrito (misma combinaci�n)
+    const nombreItem = color
+      ? `${producto.nombre} - ${color} (Talle: ${talle})`
+      : `${producto.nombre} (Talle: ${talle})`;
+
+    let cantidadEnCarrito = 0;
+    try {
+      const items = JSON.parse(localStorage.getItem('carrito') || '[]');
+      const enCarrito = items.find(i => i.nombre === nombreItem && i.img === producto.img);
+      if (enCarrito) cantidadEnCarrito = enCarrito.cantidad || 0;
+    } catch {}
+
+    const stockRestante = stockMax - cantidadEnCarrito;
+    if (stockRestante <= 0) {
+      if (typeof mostrarPopup === 'function') mostrarPopup('Ya tenés todo el stock disponible de este talle en el carrito.', 'info');
+      return;
+    }
+    if (quantity > stockRestante) {
+      if (typeof mostrarPopup === 'function') {
+        mostrarPopup(`Solo podés agregar ${stockRestante} unidad${stockRestante !== 1 ? 'es' : ''} más. Ya tenés ${cantidadEnCarrito} en el carrito.`, 'warning');
       }
-      
-      // Validación estricta de stock antes de proceder
-      if (maxStock > 0 && quantity > maxStock) {
-        mostrarPopup(`Solo hay ${maxStock} unidades disponibles. Ajustando cantidad.`, 'warning');
-        inputCantidad.value = maxStock;
-        console.log('❌ Cantidad excede stock máximo');
-        return;
-      }
-      
-      console.log('🔍 Validando envío - Cantidad:', quantity, 'Stock máximo:', maxStock);
-      
-      let id = producto.id_articulo;
-      if (!id && producto.img) {
-        const m = decodeURIComponent(producto.img).match(/\/(\d+)-[^/]+/);
-        if (m && m[1]) id = parseInt(m[1], 10);
-      }
-      
-      if (!id) {
-        mostrarPopup('No se pudo determinar el ID del producto.', 'error');
-        return;
-      }
-      
-      // Validación CRÍTICA de stock antes de agregar al carrito
-      console.log('🔍 VALIDACIÓN CRÍTICA - Verificando stock antes de agregar...');
-      
-      // NUEVO: Verificar cuántas unidades ya hay en el carrito
-      let cantidadEnCarrito = 0;
-      try {
-        // Usar la misma lógica que agregarAlCarrito - buscar por nombre e img
-        const nombreCompleto = `${producto.nombre} (Talle: ${sizeLabel})`;
-        const cartRaw = localStorage.getItem("carrito");
-        const cartItems = cartRaw ? JSON.parse(cartRaw) : [];
-        
-        // Buscar exactamente como lo hace agregarAlCarrito: por nombre e img
-        const productoEnCarrito = cartItems.find(item => 
-          item.nombre === nombreCompleto && item.img === producto.img
-        );
-        
-        if (productoEnCarrito) {
-          cantidadEnCarrito = productoEnCarrito.cantidad || 0;
-          console.log('🛒 Cantidad ya en carrito (CORREGIDA):', cantidadEnCarrito);
-        }
-      } catch (error) {
-        console.warn('Error verificando carrito:', error);
-        cantidadEnCarrito = 0;
-      }
-      
-      try {
-        const stockResp = await fetch(detalleResolveApiUrl(`/stock-producto/${id}`), { cache: 'no-store' });
-        
-        if (stockResp.ok) {
-          const stockData = await stockResp.json();
-          
-          // Validar que la respuesta tenga los datos necesarios
-          if (stockData && typeof stockData.stock !== 'undefined') {
-            const stockActual = stockData.stock || 0;
-            const stockDisponible = stockActual - cantidadEnCarrito;
-            console.log('📊 Stock total:', stockActual, 'En carrito:', cantidadEnCarrito, 'Disponible:', stockDisponible, 'Solicitando:', quantity);
-            
-            if (stockActual === 0) {
-              console.log('❌ CRÍTICO: Sin stock disponible - Recargando página');
-              mostrarPopup('El producto ya no se encuentra en stock. La página se actualizará.', 'warning');
-              location.reload();
-              return;
-            }
-            
-            if (stockDisponible <= 0) {
-              console.log('❌ CRÍTICO: Ya tienes todo el stock disponible en el carrito');
-              mostrarPopup(`Ya tienes todo el stock disponible (${stockActual}) de este producto en tu carrito.`, 'info');
-              return;
-            }
-            
-            if (quantity > stockDisponible) {
-              console.log('❌ CRÍTICO: Cantidad solicitada excede stock disponible');
-              mostrarPopup(`Solo puedes agregar ${stockDisponible} unidades más de este producto. Ya tienes ${cantidadEnCarrito} en tu carrito.`, 'warning');
-              return;
-            }
-            
-            console.log('✅ Validación de stock exitosa - Procediendo a agregar al carrito');
-          } else {
-            console.error('❌ Respuesta del servidor inválida:', stockData);
-            alert('Error al verificar stock. Por favor, recarga la página.');
-            location.reload();
-            return;
-          }
-        } else {
-          console.log('❌ Error al consultar stock del servidor');
-          alert('Error de conexión al verificar stock. Por favor, recarga la página.');
-          location.reload();
-          return;
-        }
-      } catch (error) {
-        console.error('❌ Error crítico verificando stock:', error);
-        alert('Error al verificar stock. Por favor, recarga la página.');
-        location.reload();
-        return;
-      }
-      
-      // SI LLEGAMOS AQUÍ, TODAS LAS VALIDACIONES PASARON EXITOSAMENTE
-      console.log('✅ TODAS LAS VALIDACIONES PASARON - Agregando al carrito');
-      
-      // VALIDACIÓN FINAL: Verificar una última vez el stock justo antes de agregar
-      console.log('🔍 VALIDACIÓN FINAL - Última verificación de stock...');
-      try {
-        const stockFinalResp = await fetch(detalleResolveApiUrl(`/stock-producto/${id}`), { cache: 'no-store' });
-        
-        if (stockFinalResp.ok) {
-          const stockFinalData = await stockFinalResp.json();
-          
-          if (stockFinalData && typeof stockFinalData.stock !== 'undefined') {
-            const stockFinalActual = stockFinalData.stock || 0;
-            
-            // VALIDACIÓN FINAL CON CARRITO EN TIEMPO REAL
-            let cantidadFinalEnCarrito = 0;
-            try {
-              const nombreCompleto = `${producto.nombre} (Talle: ${sizeLabel})`;
-              const cartRaw = localStorage.getItem("carrito");
-              const cartItems = cartRaw ? JSON.parse(cartRaw) : [];
-              
-              // Buscar exactamente como lo hace agregarAlCarrito: por nombre e img
-              const productoFinalEnCarrito = cartItems.find(item => 
-                item.nombre === nombreCompleto && item.img === producto.img
-              );
-              
-              if (productoFinalEnCarrito) {
-                cantidadFinalEnCarrito = productoFinalEnCarrito.cantidad || 0;
-                console.log('🛒 VALIDACIÓN FINAL - Cantidad en carrito (CORREGIDA):', cantidadFinalEnCarrito);
-              }
-            } catch (error) {
-              console.warn('Error verificando carrito en validación final:', error);
-              cantidadFinalEnCarrito = 0;
-            }
-            
-            const stockFinalDisponible = stockFinalActual - cantidadFinalEnCarrito;
-            console.log('📊 VALIDACIÓN FINAL - Stock actual:', stockFinalActual, 'En carrito:', cantidadFinalEnCarrito, 'Disponible:', stockFinalDisponible, 'Solicitando:', quantity);
-            
-            if (stockFinalActual === 0) {
-              console.log('❌ VALIDACIÓN FINAL FALLÓ: Sin stock');
-              alert('El producto se agotó mientras procesabas la compra. La página se actualizará.');
-              location.reload();
-              return;
-            }
-            
-            if (stockFinalDisponible <= 0) {
-              console.log('❌ VALIDACIÓN FINAL FALLÓ: Todo el stock ya está en carrito');
-              alert('Ya no hay stock disponible para agregar. Otro usuario pudo haber tomado las últimas unidades.');
-              location.reload();
-              return;
-            }
-            
-            if (quantity > stockFinalDisponible) {
-              console.log('❌ VALIDACIÓN FINAL FALLÓ: Cantidad excede stock disponible');
-              alert(`Solo quedan ${stockFinalDisponible} unidades disponibles. La página se actualizará para mostrar el stock correcto.`);
-              location.reload();
-              return;
-            }
-            
-            console.log('✅ VALIDACIÓN FINAL EXITOSA - Procediendo a agregar al carrito');
-            
-          } else {
-            console.log('❌ VALIDACIÓN FINAL: Error en respuesta del servidor');
-            alert('Error al verificar stock final. La página se actualizará.');
-            location.reload();
-            return;
-          }
-        } else {
-          console.log('❌ VALIDACIÓN FINAL: Error de conexión');
-          alert('Error de conexión al verificar stock final. La página se actualizará.');
-          location.reload();
-          return;
-        }
-      } catch (error) {
-        console.error('❌ Error en validación final de stock:', error);
-        alert('Error crítico al verificar stock. La página se actualizará.');
-        location.reload();
-        return;
-      }
-      
-      // Lógica para agregar al carrito (usa función global)
-      if (typeof agregarAlCarrito === 'function') {
-        agregarAlCarrito(
-          `${producto.nombre} (Talle: ${sizeLabel})`,
-          Number(producto.precio),
-          producto.img,
-          quantity,
-          producto
-        );
-        if (typeof mostrarPopup === 'function') {
-          mostrarPopup(`Producto agregado al carrito: ${producto.nombre} (Talle: ${sizeLabel}) x${quantity}`);
-        }
-        console.log('✅ Producto agregado exitosamente al carrito');
-      } else {
-        console.error('❌ Función agregarAlCarrito no disponible');
-        alert('Error: No se pudo agregar el producto al carrito.');
-        return;
-      }
-      
-      // Resetear formulario solo si se agregó exitosamente
-      productForm.reset();
-      // Mantener el talle original del producto (no forzar "M")
-      configurarCampoTalle(selectTalle, producto?.talle, producto);
-      inputCantidad.value = 1;
-      btnAgregar.disabled = false;
-      btnAgregar.classList.remove('btn-secondary');
-      btnAgregar.classList.add('btn-vino-tinto');
-      validarFormulario();
-    });
-  }
+      return;
+    }
+
+    // Tomar los primeros N id_articulo disponibles
+    const idsAReservar = idsDisponibles.slice(0, quantity);
+
+    if (typeof agregarAlCarrito === 'function') {
+      agregarAlCarrito(
+        nombreItem,
+        Number(producto.precio),
+        producto.img,
+        quantity,
+        { ...producto, id_articulo: idsAReservar[0], ids_articulos: idsAReservar }
+      );
+      if (typeof mostrarPopup === 'function') mostrarPopup(`Agregado: ${nombreItem} x${quantity}`);
+      console.log('? Carrito actualizado:', nombreItem, 'x', quantity, '| IDs:', idsAReservar);
+    } else {
+      console.error('? agregarAlCarrito no disponible');
+      alert('Error al agregar al carrito.');
+      return;
+    }
+
+    // Resetear selecci�n de talle/cantidad sin recargar las variantes
+    document.querySelectorAll('.talle-btn').forEach(b => b.classList.remove('selected'));
+    estadoVariantes.talleActual = null;
+    const sc = document.getElementById('quantity-select');
+    if (sc) sc.innerHTML = '';
+    const gc = document.getElementById('grupo-cantidad');
+    if (gc) gc.style.display = 'none';
+    const qi = document.getElementById('quantity');
+    if (qi) qi.value = 1;
+    const sl = document.getElementById('stock-label');
+    if (sl) sl.textContent = '';
+    actualizarBotonAgregar();
+  });
 });
 
 function obtenerInfoTalleFormulario(talle, producto) {
@@ -689,7 +503,7 @@ function configurarCampoTalle(selectElement, talle, producto) {
 function esTalleOpcionalPorDatos(talle, producto) {
   const valor = (talle || '').toString().trim().toLowerCase();
   if (valor && !VALORES_TALLE_OPCIONAL.has(valor)) {
-    // Si el .txt trae un talle real (ej. S, M, L) respetarlo, aunque la categoría sea de accesorios
+    // Si el .txt trae un talle real (ej. S, M, L) respetarlo, aunque la categor�a sea de accesorios
     return false;
   }
   if (VALORES_TALLE_OPCIONAL.has(valor)) {
@@ -718,31 +532,23 @@ function obtenerSlugCategoriaDetalle(valor) {
   return slug;
 }
 
-// Función para mostrar el stock disponible
+// Funci�n para mostrar el stock disponible
 function mostrarStockDisponible(stock) {
-  // Buscar si ya existe el elemento de stock
   let stockElement = document.getElementById('stock-disponible');
-  
   if (!stockElement) {
-    // Crear elemento de stock si no existe
     stockElement = document.createElement('div');
     stockElement.id = 'stock-disponible';
     stockElement.className = 'mt-3 mb-2';
-    
-    // Insertarlo después del botón "Agregar al carrito"
     const botonAgregar = document.getElementById('btnAgregarCarrito');
     if (botonAgregar && botonAgregar.parentNode) {
       botonAgregar.parentNode.insertBefore(stockElement, botonAgregar.nextSibling);
     } else {
-      // Fallback: insertarlo después del precio si no encuentra el botón
       const precioElement = document.getElementById('precio-producto');
       if (precioElement && precioElement.parentNode) {
         precioElement.parentNode.insertBefore(stockElement, precioElement.nextSibling);
       }
     }
   }
-  
-  // Configurar el contenido y estilo según el stock
   if (stock > 0) {
     stockElement.innerHTML = `
       <div class="d-flex align-items-center">
@@ -760,93 +566,53 @@ function mostrarStockDisponible(stock) {
   }
 }
 
-// Función para mostrar pop-ups elegantes (copia de scripts.js para compatibilidad)
+// Funci�n para mostrar pop-ups elegantes (copia de scripts.js para compatibilidad)
 function mostrarPopup(mensaje, tipo = 'success') {
   if (window.mostrarPopup && typeof window.mostrarPopup === 'function' && window.mostrarPopup !== mostrarPopup) {
     window.mostrarPopup(mensaje, tipo);
     return;
   }
-  
+
   let popup = document.getElementById("popup-carrito");
   if (popup) popup.remove();
-  
-  // Definir colores y iconos según el tipo
+
   const tipos = {
-    success: { 
-      bg: 'linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%)', 
-      icon: '✓', 
-      color: '#fff' 
-    },
-    error: { 
-      bg: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', 
-      icon: '⚠', 
-      color: '#fff' 
-    },
-    warning: { 
-      bg: 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', 
-      icon: '!', 
-      color: '#212529' 
-    },
-    info: { 
-      bg: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', 
-      icon: 'ℹ', 
-      color: '#fff' 
-    }
+    success: { bg: 'linear-gradient(135deg, #6b0a0a 0%, #8b1538 100%)', icon: '?', color: '#fff' },
+    error:   { bg: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', icon: '?', color: '#fff' },
+    warning: { bg: 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', icon: '!', color: '#212529' },
+    info:    { bg: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', icon: '?', color: '#fff' }
   };
-  
+
   const config = tipos[tipo] || tipos.success;
-  
+
   popup = document.createElement("div");
   popup.id = "popup-carrito";
   popup.style.cssText = `
-    position: fixed;
-    top: 30px;
-    left: 50%;
+    position: fixed; top: 30px; left: 50%;
     transform: translateX(-50%) scale(0.8);
-    background: ${config.bg};
-    color: ${config.color};
-    padding: 20px 28px;
-    border-radius: 16px;
+    background: ${config.bg}; color: ${config.color};
+    padding: 20px 28px; border-radius: 16px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15);
-    backdrop-filter: blur(10px);
-    z-index: 9999;
-    font-size: 1rem;
-    font-weight: 500;
-    opacity: 0;
+    backdrop-filter: blur(10px); z-index: 9999;
+    font-size: 1rem; font-weight: 500; opacity: 0;
     transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     border: 1px solid rgba(255,255,255,0.2);
-    max-width: 350px;
-    min-width: 280px;
+    max-width: 350px; min-width: 280px;
   `;
-  
-  // Crear contenido con icono y mensaje
   popup.innerHTML = `
     <div style="display: flex; align-items: center; gap: 12px;">
-      <div style="
-        font-size: 1.4rem; 
-        font-weight: bold; 
-        background: rgba(255,255,255,0.2); 
-        width: 32px; 
-        height: 32px; 
-        border-radius: 50%; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center;
-        flex-shrink: 0;
-      ">${config.icon}</div>
+      <div style="font-size:1.4rem; font-weight:bold; background:rgba(255,255,255,0.2);
+        width:32px; height:32px; border-radius:50%; display:flex; align-items:center;
+        justify-content:center; flex-shrink:0;">${config.icon}</div>
       <div style="flex: 1; line-height: 1.4;">${mensaje}</div>
     </div>
   `;
-  
+
   document.body.appendChild(popup);
-  
-  // Animar aparición con rebote elegante
   requestAnimationFrame(() => {
     popup.style.opacity = '1';
     popup.style.transform = 'translateX(-50%) scale(1)';
   });
-  
-  // Animar desaparición
   setTimeout(() => {
     popup.style.opacity = '0';
     popup.style.transform = 'translateX(-50%) scale(0.9)';
