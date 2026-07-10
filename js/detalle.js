@@ -339,11 +339,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       document.getElementById('precio-producto').textContent  = precio ? `$${precio} ARS` : '';
 
       const descEl = document.querySelector('.descripcion-producto');
-      if (descEl) { descEl.textContent = descripcion; descEl.style.display = descripcion ? '' : 'none'; }
+      if (descEl) { descEl.textContent = descripcion || ''; descEl.style.display = descripcion ? '' : 'none'; }
 
       const secDet  = document.getElementById('seccion-detalles');
       const contDet = document.getElementById('detalle-contenido');
-      if (secDet && contDet) { contDet.textContent = detalle; secDet.style.display = detalle ? '' : 'none'; }
+      if (secDet && contDet) { contDet.textContent = detalle || ''; secDet.style.display = detalle ? '' : 'none'; }
 
     } catch {
       // Fallback desde localStorage
