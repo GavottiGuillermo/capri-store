@@ -33,6 +33,12 @@
     <div id="loading" class="text-center text-muted">Verificando sesión...</div>
 
     <div id="content" style="display:none;">
+      <ul class="nav nav-tabs mb-3" id="admin-tabs">
+        <li class="nav-item"><a class="nav-link active" href="#" data-tab="articulos-web">Artículos Web</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-tab="stock">Stock</a></li>
+      </ul>
+
+      <div id="tab-articulos-web">
       <h4 class="mb-3">Artículos Web</h4>
       <p class="text-muted small">Publicación y edición de artículos en la tienda online. El desktop sigue funcionando en paralelo.</p>
 
@@ -190,6 +196,121 @@
             <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-ajuste">Aplicar ajuste</button>
           </form>
           <div id="resultado-ajuste" class="alert mt-3 alert-resultado" style="display:none;"></div>
+        </div>
+      </div>
+      </div>
+
+      <div id="tab-stock" style="display:none;">
+        <h4 class="mb-3">Stock</h4>
+        <p class="text-muted small">Listado de stock actual y carga manual de lotes nuevos (equivalente a la pestaña "Carga Manual" del desktop).</p>
+
+        <!-- Listado de stock -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="card-titulo">Stock actual</span>
+              <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar-stock">↻ Refrescar</button>
+            </div>
+            <div class="form-row mb-2">
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-id" placeholder="ID..." /></div>
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-prenda" placeholder="Prenda..." /></div>
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-estado" placeholder="Estado..." /></div>
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-categoria" placeholder="Categoría..." /></div>
+            </div>
+            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+              <table class="table table-sm table-hover" id="tabla-stock">
+                <thead class="thead-light" style="position: sticky; top: 0;">
+                  <tr>
+                    <th>ID</th>
+                    <th>Prenda</th>
+                    <th>Estado</th>
+                    <th>Categoría</th>
+                    <th>Color</th>
+                    <th>Talle</th>
+                    <th>Precio efec.</th>
+                    <th>Precio transf.</th>
+                    <th>Publicado</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-stock"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Carga manual de lote -->
+        <div class="card mb-5">
+          <div class="card-body">
+            <span class="card-titulo">Carga manual de lote</span>
+            <p class="text-muted small">Agregá los productos de este lote uno por uno y finalizá para insertarlos todos juntos en la base de datos.</p>
+
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Inversor</label>
+                <input type="text" class="form-control form-control-sm" id="lote-inversor" />
+              </div>
+              <div class="form-group col-md-6">
+                <label>Observación</label>
+                <input type="text" class="form-control form-control-sm" id="lote-observacion" />
+              </div>
+            </div>
+
+            <hr />
+
+            <form id="form-agregar-producto-lote">
+              <div class="form-row">
+                <div class="form-group col-md-2">
+                  <label>Prenda</label>
+                  <input type="text" class="form-control form-control-sm" name="prenda" required />
+                </div>
+                <div class="form-group col-md-2">
+                  <label>Categoría</label>
+                  <input type="text" class="form-control form-control-sm" name="categoria" required />
+                </div>
+                <div class="form-group col-md-2">
+                  <label>Color</label>
+                  <input type="text" class="form-control form-control-sm" name="color" required />
+                </div>
+                <div class="form-group col-md-2">
+                  <label>Talle</label>
+                  <input type="text" class="form-control form-control-sm" name="talle" required />
+                </div>
+                <div class="form-group col-md-2">
+                  <label>Precio compra</label>
+                  <input type="number" step="0.01" class="form-control form-control-sm" name="precio_compra" required />
+                </div>
+                <div class="form-group col-md-2">
+                  <label>Precio venta (transf.)</label>
+                  <input type="number" step="0.01" class="form-control form-control-sm" name="precio_venta_transferencia" required />
+                </div>
+              </div>
+              <button type="submit" class="btn btn-outline-secondary btn-sm" id="btn-agregar-producto-lote">+ Agregar producto</button>
+            </form>
+
+            <div class="table-responsive mt-3">
+              <table class="table table-sm" id="tabla-lote">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Prenda</th>
+                    <th>Categoría</th>
+                    <th>Color</th>
+                    <th>Talle</th>
+                    <th>Precio compra</th>
+                    <th>Precio venta efec. (-10%)</th>
+                    <th>Precio venta transf.</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-lote"></tbody>
+              </table>
+            </div>
+
+            <div class="mt-3">
+              <button class="btn btn-vino-tinto btn-sm" id="btn-finalizar-carga" disabled>Finalizar carga</button>
+              <button class="btn btn-outline-danger btn-sm" id="btn-cancelar-carga" disabled>Cancelar carga</button>
+            </div>
+            <div id="resultado-lote" class="alert mt-3 alert-resultado" style="display:none;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -420,6 +541,176 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Aplicar ajuste';
+      }
+    });
+
+    // === Tabs ===
+    let stockCargado = false;
+    document.querySelectorAll('#admin-tabs .nav-link').forEach(link => {
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        document.querySelectorAll('#admin-tabs .nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        const tab = link.dataset.tab;
+        document.getElementById('tab-articulos-web').style.display = tab === 'articulos-web' ? 'block' : 'none';
+        document.getElementById('tab-stock').style.display = tab === 'stock' ? 'block' : 'none';
+        if (tab === 'stock' && !stockCargado) {
+          stockCargado = true;
+          cargarStock();
+        }
+      });
+    });
+
+    // === Stock: listado ===
+    let stockCache = [];
+
+    async function cargarStock() {
+      const tbody = document.getElementById('tbody-stock');
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Cargando...</td></tr>';
+      try {
+        const resp = await fetch('/admin/stock', { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al cargar el stock');
+        stockCache = data.productos;
+        renderStock();
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">${error.message}</td></tr>`;
+      }
+    }
+
+    function renderStock() {
+      const tbody = document.getElementById('tbody-stock');
+      const filtroId = document.getElementById('filtro-stock-id').value.trim();
+      const filtroPrenda = document.getElementById('filtro-stock-prenda').value.trim().toLowerCase();
+      const filtroEstado = document.getElementById('filtro-stock-estado').value.trim().toLowerCase();
+      const filtroCategoria = document.getElementById('filtro-stock-categoria').value.trim().toLowerCase();
+
+      const filtrados = stockCache.filter(p => {
+        const coincideId = !filtroId || String(p.out_id_articulo).includes(filtroId);
+        const coincidePrenda = !filtroPrenda || (p.out_nombre_articulo || '').toLowerCase().includes(filtroPrenda);
+        const coincideEstado = !filtroEstado || (p.out_estado || '').toLowerCase().includes(filtroEstado);
+        const coincideCategoria = !filtroCategoria || (p.out_categoria || '').toLowerCase().includes(filtroCategoria);
+        return coincideId && coincidePrenda && coincideEstado && coincideCategoria;
+      });
+
+      tbody.innerHTML = '';
+      filtrados.forEach(p => {
+        const publicado = p.out_publicado_en_web === 'True' || p.out_publicado_en_web === true;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.out_id_articulo}</td>
+          <td>${p.out_nombre_articulo || ''}</td>
+          <td>${p.out_estado || ''}</td>
+          <td>${p.out_categoria || ''}</td>
+          <td>${p.out_color || ''}</td>
+          <td>${p.out_talle || ''}</td>
+          <td>$${Number(p.out_precio_venta_efectivo || 0).toLocaleString('es-AR')}</td>
+          <td>$${Number(p.out_precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
+          <td>${publicado ? '✅' : '—'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('btn-refrescar-stock').addEventListener('click', cargarStock);
+    ['filtro-stock-id', 'filtro-stock-prenda', 'filtro-stock-estado', 'filtro-stock-categoria'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderStock);
+    });
+
+    // === Stock: carga manual de lote ===
+    let productosLote = [];
+
+    function renderProductosLote() {
+      const tbody = document.getElementById('tbody-lote');
+      tbody.innerHTML = '';
+      productosLote.forEach((p, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.prenda}</td>
+          <td>${p.categoria}</td>
+          <td>${p.color}</td>
+          <td>${p.talle}</td>
+          <td>$${p.precio_compra.toLocaleString('es-AR')}</td>
+          <td>$${(Math.round(p.precio_venta_transferencia * 0.9 * 100) / 100).toLocaleString('es-AR')}</td>
+          <td>$${p.precio_venta_transferencia.toLocaleString('es-AR')}</td>
+          <td><button type="button" class="btn btn-sm btn-outline-danger btn-quitar-lote" data-index="${index}">Quitar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('.btn-quitar-lote').forEach(btn => {
+        btn.addEventListener('click', () => {
+          productosLote.splice(parseInt(btn.dataset.index, 10), 1);
+          renderProductosLote();
+        });
+      });
+      const hayProductos = productosLote.length > 0;
+      document.getElementById('btn-finalizar-carga').disabled = !hayProductos;
+      document.getElementById('btn-cancelar-carga').disabled = !hayProductos;
+    }
+
+    document.getElementById('form-agregar-producto-lote').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const precioCompra = Number(form.precio_compra.value);
+      const precioVenta = Number(form.precio_venta_transferencia.value);
+      if (precioVenta < precioCompra) {
+        mostrarResultado('resultado-lote', false, "El 'Precio de venta' no puede ser menor que el 'Precio de compra'.");
+        return;
+      }
+      productosLote.push({
+        prenda: form.prenda.value.trim(),
+        categoria: form.categoria.value.trim(),
+        color: form.color.value.trim(),
+        talle: form.talle.value.trim(),
+        precio_compra: precioCompra,
+        precio_venta_transferencia: precioVenta
+      });
+      form.reset();
+      document.getElementById('resultado-lote').style.display = 'none';
+      renderProductosLote();
+    });
+
+    document.getElementById('btn-cancelar-carga').addEventListener('click', () => {
+      if (!confirm('¿Cancelar la carga? Se perderán los productos agregados a este lote.')) return;
+      productosLote = [];
+      document.getElementById('lote-inversor').value = '';
+      document.getElementById('lote-observacion').value = '';
+      document.getElementById('resultado-lote').style.display = 'none';
+      renderProductosLote();
+    });
+
+    document.getElementById('btn-finalizar-carga').addEventListener('click', async () => {
+      const inversor = document.getElementById('lote-inversor').value.trim();
+      const observacion = document.getElementById('lote-observacion').value.trim();
+      if (!inversor || !observacion) {
+        mostrarResultado('resultado-lote', false, "Los campos 'Inversor' y 'Observación' son obligatorios para finalizar la carga.");
+        return;
+      }
+      if (!confirm('¿Confirmás la carga del lote? Esta acción insertará el lote y los productos en la base de datos.')) return;
+
+      const btn = document.getElementById('btn-finalizar-carga');
+      btn.disabled = true;
+      btn.textContent = 'Cargando...';
+      try {
+        const resp = await fetch('/admin/stock/lotes', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inversor, observacion, productos: productosLote })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo cargar el lote');
+        mostrarResultado('resultado-lote', true, `Lote cargado correctamente. ${data.cantidad} producto(s) insertado(s).`);
+        productosLote = [];
+        document.getElementById('lote-inversor').value = '';
+        document.getElementById('lote-observacion').value = '';
+        renderProductosLote();
+        cargarStock();
+      } catch (error) {
+        mostrarResultado('resultado-lote', false, error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Finalizar carga';
       }
     });
 

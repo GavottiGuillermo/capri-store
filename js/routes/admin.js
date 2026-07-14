@@ -82,5 +82,6 @@ router.get('/me', (req, res) => {
 });
 
 router.use('/articulos-web', require('./admin/articulos-web'));
+router.use('/stock', require('./admin/stock'));
 
 module.exports = router;
