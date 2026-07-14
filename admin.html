@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <title>Capri Store - Panel Admin</title>
+  <link rel="icon" type="image/jpeg" href="assets/img/logo-capri.jpg" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet"/>
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    :root { --vino-tinto: #6b0a0a; }
+    body { font-family: 'Montserrat', sans-serif; }
+    .navbar-brand { font-weight: bold; }
+    .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; border: none; }
+    .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark" style="background-color: var(--vino-tinto);">
+    <span class="navbar-brand">Capri Store · Panel Admin</span>
+    <button class="btn btn-outline-light btn-sm" id="logout-btn">Cerrar sesión</button>
+  </nav>
+
+  <div class="container py-5">
+    <div id="loading" class="text-center text-muted">Verificando sesión...</div>
+    <div id="content" style="display:none;">
+      <h3>Bienvenido, <span id="admin-username"></span></h3>
+      <p class="text-muted">La sesión de admin quedó funcionando (Fase 1). Los módulos de gestión (artículos, stock, ventas, cash flow) se agregan en las próximas fases.</p>
+    </div>
+  </div>
+
+  <script>
+    const loadingEl = document.getElementById('loading');
+    const contentEl = document.getElementById('content');
+
+    async function checkSession() {
+      try {
+        const response = await fetch('/admin/me', { credentials: 'same-origin' });
+        if (!response.ok) {
+          throw new Error('No autenticado');
+        }
+        const data = await response.json();
+        document.getElementById('admin-username').textContent = data.username;
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+      } catch (error) {
+        window.location.href = 'admin-login.html';
+      }
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await fetch('/admin/logout', { method: 'POST', credentials: 'same-origin' });
+      window.location.href = 'admin-login.html';
+    });
+
+    checkSession();
+  </script>
+</body>
+</html>

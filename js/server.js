@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 
 // Cargar variables de entorno antes de inicializar servicios dependientes
@@ -173,6 +174,7 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cookieParser());
 
 // ===============================
 // RUTAS
