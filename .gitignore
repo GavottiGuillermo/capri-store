@@ -50,3 +50,6 @@ server_final.js
 # Local testing tools
 test-scripts/
 local-tools/
+
+# Código externo de referencia (ej: app de escritorio Java), no forma parte de este repo
+.external/
