@@ -53,3 +53,8 @@ local-tools/
 
 # Código externo de referencia (ej: app de escritorio Java), no forma parte de este repo
 .external/
+
+# Credenciales copiadas manualmente a la raíz para configurar el entorno local (Fase 2 y otras)
+capri-store-*.json
+database.properties
+CredencialesBD.txt

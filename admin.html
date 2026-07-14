@@ -14,36 +14,200 @@
     .navbar-brand { font-weight: bold; }
     .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; border: none; }
     .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
+    .card-titulo { font-weight: bold; color: var(--vino-tinto); }
+    #tabla-productos { font-size: 0.85rem; }
+    #tabla-productos td, #tabla-productos th { vertical-align: middle; }
+    .alert-resultado { white-space: pre-wrap; font-size: 0.85rem; }
   </style>
 </head>
 <body>
   <nav class="navbar navbar-dark" style="background-color: var(--vino-tinto);">
     <span class="navbar-brand">Capri Store · Panel Admin</span>
-    <button class="btn btn-outline-light btn-sm" id="logout-btn">Cerrar sesión</button>
+    <span>
+      <span class="text-light mr-3">Hola, <span id="admin-username"></span></span>
+      <button class="btn btn-outline-light btn-sm" id="logout-btn">Cerrar sesión</button>
+    </span>
   </nav>
 
-  <div class="container py-5">
+  <div class="container py-4">
     <div id="loading" class="text-center text-muted">Verificando sesión...</div>
+
     <div id="content" style="display:none;">
-      <h3>Bienvenido, <span id="admin-username"></span></h3>
-      <p class="text-muted">La sesión de admin quedó funcionando (Fase 1). Los módulos de gestión (artículos, stock, ventas, cash flow) se agregan en las próximas fases.</p>
+      <h4 class="mb-3">Artículos Web</h4>
+      <p class="text-muted small">Publicación y edición de artículos en la tienda online. El desktop sigue funcionando en paralelo.</p>
+
+      <!-- Tabla de productos disponibles -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="card-titulo">Productos disponibles</span>
+            <div>
+              <input type="text" id="filtro-prenda" class="form-control form-control-sm d-inline-block" style="width:220px;" placeholder="Filtrar por prenda..." />
+              <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar">↻ Refrescar</button>
+            </div>
+          </div>
+          <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+            <table class="table table-sm table-hover" id="tabla-productos">
+              <thead class="thead-light" style="position: sticky; top: 0;">
+                <tr>
+                  <th></th>
+                  <th>ID</th>
+                  <th>Prenda</th>
+                  <th>Color</th>
+                  <th>Talle</th>
+                  <th>Precio transf.</th>
+                  <th>Publicado</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-productos"></tbody>
+            </table>
+          </div>
+          <small class="text-muted"><span id="seleccion-count">0</span> seleccionados</small>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- Generar y subir artículo -->
+        <div class="col-md-6 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <span class="card-titulo">Generar y subir artículo</span>
+              <p class="text-muted small">Usa los productos seleccionados en la tabla (deben ser todos la misma prenda y color). Una carga = un color.</p>
+              <form id="form-generar">
+                <div class="form-group">
+                  <label>Título</label>
+                  <input type="text" class="form-control form-control-sm" name="titulo" />
+                </div>
+                <div class="form-group">
+                  <label>Texto corto</label>
+                  <input type="text" class="form-control form-control-sm" name="texto" />
+                </div>
+                <div class="form-group">
+                  <label>Precio (transferencia)</label>
+                  <input type="number" class="form-control form-control-sm" name="precio" />
+                </div>
+                <div class="form-group">
+                  <label>Detalle</label>
+                  <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Categoría</label>
+                  <select class="form-control form-control-sm" name="categoria">
+                    <option value="Remeras">Remeras</option>
+                    <option value="Pantalones">Pantalones</option>
+                    <option value="Vestidos">Vestidos</option>
+                    <option value="Buzos">Buzos</option>
+                    <option value="Conjuntos">Conjuntos</option>
+                    <option value="Accesorios">Accesorios</option>
+                    <option value="Carteras">Carteras</option>
+                    <option value="OnaFitness">OnaFitness</option>
+                  </select>
+                </div>
+                <div class="form-group form-check">
+                  <input type="checkbox" class="form-check-input" id="chk-novedad" name="novedad" />
+                  <label class="form-check-label" for="chk-novedad">¿Novedad?</label>
+                </div>
+                <div class="form-group">
+                  <label>Imagen</label>
+                  <input type="file" class="form-control-file" name="imagen" accept="image/*" required />
+                </div>
+                <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-generar">Generar y subir</button>
+              </form>
+              <div id="resultado-generar" class="alert mt-3 alert-resultado" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modificar artículo publicado -->
+        <div class="col-md-6 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <span class="card-titulo">Modificar artículo publicado</span>
+              <p class="text-muted small">Ingresá el ID de un artículo ya publicado para cargar sus datos actuales.</p>
+              <div class="form-group d-flex">
+                <input type="number" class="form-control form-control-sm mr-2" id="modificar-id" placeholder="ID artículo" />
+                <button class="btn btn-sm btn-outline-secondary" id="btn-cargar-modificar">Cargar datos</button>
+              </div>
+              <form id="form-modificar" style="display:none;">
+                <div class="form-group">
+                  <label>Título</label>
+                  <input type="text" class="form-control form-control-sm" name="titulo" />
+                </div>
+                <div class="form-group">
+                  <label>Texto corto</label>
+                  <input type="text" class="form-control form-control-sm" name="texto" />
+                </div>
+                <div class="form-group">
+                  <label>Precio (transferencia)</label>
+                  <input type="number" class="form-control form-control-sm" name="precio" required />
+                </div>
+                <div class="form-group">
+                  <label>Detalle</label>
+                  <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Categoría</label>
+                  <select class="form-control form-control-sm" name="categoria">
+                    <option value="Remeras">Remeras</option>
+                    <option value="Pantalones">Pantalones</option>
+                    <option value="Vestidos">Vestidos</option>
+                    <option value="Buzos">Buzos</option>
+                    <option value="Conjuntos">Conjuntos</option>
+                    <option value="Accesorios">Accesorios</option>
+                    <option value="Carteras">Carteras</option>
+                    <option value="OnaFitness">OnaFitness</option>
+                  </select>
+                </div>
+                <div class="form-group form-check">
+                  <input type="checkbox" class="form-check-input" id="chk-novedad-modif" name="novedad" />
+                  <label class="form-check-label" for="chk-novedad-modif">¿Novedad?</label>
+                </div>
+                <div class="form-group">
+                  <label>Imagen actual</label>
+                  <div><small class="text-muted" id="imagen-actual-nombre">-</small></div>
+                </div>
+                <div class="form-group">
+                  <label>Nueva imagen (opcional)</label>
+                  <input type="file" class="form-control-file" name="imagen" accept="image/*" />
+                </div>
+                <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-modificar">Guardar cambios</button>
+              </form>
+              <div id="resultado-modificar" class="alert mt-3 alert-resultado" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ajuste porcentual -->
+      <div class="card mb-5">
+        <div class="card-body">
+          <span class="card-titulo">Ajuste porcentual de precios</span>
+          <p class="text-muted small">Aplica el ajuste a los productos seleccionados en la tabla (solo se ajustan los ya publicados en la web).</p>
+          <form id="form-ajuste" class="form-inline">
+            <label class="mr-2">Porcentaje:</label>
+            <input type="number" step="0.01" class="form-control form-control-sm mr-2" name="porcentaje" placeholder="Ej: 10 o -5" style="width:140px;" required />
+            <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-ajuste">Aplicar ajuste</button>
+          </form>
+          <div id="resultado-ajuste" class="alert mt-3 alert-resultado" style="display:none;"></div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
+    let productosCache = [];
 
     async function checkSession() {
       try {
         const response = await fetch('/admin/me', { credentials: 'same-origin' });
-        if (!response.ok) {
-          throw new Error('No autenticado');
-        }
+        if (!response.ok) throw new Error('No autenticado');
         const data = await response.json();
         document.getElementById('admin-username').textContent = data.username;
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
+        cargarProductos();
       } catch (error) {
         window.location.href = 'admin-login.html';
       }
@@ -52,6 +216,190 @@
     document.getElementById('logout-btn').addEventListener('click', async () => {
       await fetch('/admin/logout', { method: 'POST', credentials: 'same-origin' });
       window.location.href = 'admin-login.html';
+    });
+
+    function mostrarResultado(elId, ok, texto) {
+      const el = document.getElementById(elId);
+      el.style.display = 'block';
+      el.className = 'alert mt-3 alert-resultado ' + (ok ? 'alert-success' : 'alert-danger');
+      el.textContent = texto;
+    }
+
+    async function cargarProductos() {
+      const tbody = document.getElementById('tbody-productos');
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>';
+      try {
+        const resp = await fetch('/admin/articulos-web/productos', { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al cargar productos');
+        productosCache = data.productos;
+        renderProductos();
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">${error.message}</td></tr>`;
+      }
+    }
+
+    function renderProductos() {
+      const tbody = document.getElementById('tbody-productos');
+      const filtro = document.getElementById('filtro-prenda').value.trim().toLowerCase();
+      const filtrados = productosCache.filter(p => !filtro || (p.prenda || '').toLowerCase().includes(filtro));
+
+      tbody.innerHTML = '';
+      filtrados.forEach(p => {
+        const publicado = p.publicado_en_web === 'True' || p.publicado_en_web === true;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" class="chk-producto" value="${p.id_articulo}"></td>
+          <td>${p.id_articulo}</td>
+          <td>${p.prenda || ''}</td>
+          <td>${p.color || ''}</td>
+          <td>${p.talle || ''}</td>
+          <td>$${Number(p.precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
+          <td>${publicado ? '✅' : '—'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.chk-producto').forEach(chk => {
+        chk.addEventListener('change', actualizarContadorSeleccion);
+      });
+      actualizarContadorSeleccion();
+    }
+
+    function actualizarContadorSeleccion() {
+      document.getElementById('seleccion-count').textContent = getSeleccionados().length;
+    }
+
+    function getSeleccionados() {
+      return Array.from(document.querySelectorAll('.chk-producto:checked')).map(chk => parseInt(chk.value, 10));
+    }
+
+    document.getElementById('filtro-prenda').addEventListener('input', renderProductos);
+    document.getElementById('btn-refrescar').addEventListener('click', cargarProductos);
+
+    // === Generar y subir ===
+    document.getElementById('form-generar').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const ids = getSeleccionados();
+      if (ids.length === 0) {
+        mostrarResultado('resultado-generar', false, 'Seleccioná al menos un producto en la tabla.');
+        return;
+      }
+      const form = event.target;
+      const btn = document.getElementById('btn-generar');
+      btn.disabled = true;
+      btn.textContent = 'Subiendo...';
+
+      const formData = new FormData(form);
+      formData.set('novedad', document.getElementById('chk-novedad').checked ? 'true' : 'false');
+      formData.set('ids', JSON.stringify(ids));
+
+      try {
+        const resp = await fetch('/admin/articulos-web/generar', {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: formData
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al generar el artículo');
+        mostrarResultado('resultado-generar', true, `Artículo subido correctamente. Carpeta: ${data.carpeta}`);
+        form.reset();
+        cargarProductos();
+      } catch (error) {
+        mostrarResultado('resultado-generar', false, error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generar y subir';
+      }
+    });
+
+    // === Modificar artículo publicado ===
+    document.getElementById('btn-cargar-modificar').addEventListener('click', async () => {
+      const id = document.getElementById('modificar-id').value;
+      if (!id) return;
+      try {
+        const resp = await fetch(`/admin/articulos-web/${id}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo cargar el artículo');
+
+        const form = document.getElementById('form-modificar');
+        form.style.display = 'block';
+        form.titulo.value = data.titulo === 'null' ? '' : data.titulo;
+        form.texto.value = data.texto === 'null' ? '' : data.texto;
+        form.precio.value = data.precio === 'null' ? '' : data.precio;
+        form.detalle.value = data.detalle === 'null' ? '' : data.detalle;
+        const categoriaBase = (data.categoria || '').replace('-Novedad', '');
+        form.categoria.value = categoriaBase;
+        document.getElementById('chk-novedad-modif').checked = (data.categoria || '').endsWith('-Novedad');
+        document.getElementById('imagen-actual-nombre').textContent = data.imagen ? data.imagen.split('/').pop() : '(sin imagen)';
+        document.getElementById('resultado-modificar').style.display = 'none';
+      } catch (error) {
+        mostrarResultado('resultado-modificar', false, error.message);
+      }
+    });
+
+    document.getElementById('form-modificar').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const id = document.getElementById('modificar-id').value;
+      if (!id) return;
+      const form = event.target;
+      const btn = document.getElementById('btn-modificar');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      const formData = new FormData(form);
+      formData.set('novedad', document.getElementById('chk-novedad-modif').checked ? 'true' : 'false');
+
+      try {
+        const resp = await fetch(`/admin/articulos-web/${id}`, {
+          method: 'PUT',
+          credentials: 'same-origin',
+          body: formData
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al modificar el artículo');
+        mostrarResultado('resultado-modificar', true, 'Artículo modificado correctamente.');
+        cargarProductos();
+      } catch (error) {
+        mostrarResultado('resultado-modificar', false, error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar cambios';
+      }
+    });
+
+    // === Ajuste porcentual ===
+    document.getElementById('form-ajuste').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const ids = getSeleccionados();
+      if (ids.length === 0) {
+        mostrarResultado('resultado-ajuste', false, 'Seleccioná al menos un producto en la tabla.');
+        return;
+      }
+      const porcentaje = Number(event.target.porcentaje.value);
+      const btn = document.getElementById('btn-ajuste');
+      btn.disabled = true;
+      btn.textContent = 'Aplicando...';
+
+      try {
+        const resp = await fetch('/admin/articulos-web/ajuste-porcentual', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, porcentaje })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al aplicar el ajuste');
+        const resumen = `Actualizados: ${data.actualizados.length}\nOmitidos: ${data.omitidos.length}` +
+          (data.omitidos.length ? '\n' + data.omitidos.map(o => `#${o.id}: ${o.motivo}`).join('\n') : '');
+        mostrarResultado('resultado-ajuste', true, resumen);
+        cargarProductos();
+      } catch (error) {
+        mostrarResultado('resultado-ajuste', false, error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Aplicar ajuste';
+      }
     });
 
     checkSession();

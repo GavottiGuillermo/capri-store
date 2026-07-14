@@ -81,4 +81,6 @@ router.get('/me', (req, res) => {
   res.json({ success: true, username: req.admin.username });
 });
 
+router.use('/articulos-web', require('./admin/articulos-web'));
+
 module.exports = router;
