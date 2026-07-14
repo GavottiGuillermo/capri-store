@@ -57,6 +57,7 @@
                   <th>Talle</th>
                   <th>Precio transf.</th>
                   <th>Publicado</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="tbody-productos"></tbody>
@@ -227,7 +228,7 @@
 
     async function cargarProductos() {
       const tbody = document.getElementById('tbody-productos');
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Cargando...</td></tr>';
       try {
         const resp = await fetch('/admin/articulos-web/productos', { credentials: 'same-origin' });
         const data = await resp.json();
@@ -235,7 +236,7 @@
         productosCache = data.productos;
         renderProductos();
       } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${error.message}</td></tr>`;
       }
     }
 
@@ -256,6 +257,7 @@
           <td>${p.talle || ''}</td>
           <td>$${Number(p.precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
           <td>${publicado ? '✅' : '—'}</td>
+          <td>${publicado ? `<button class="btn btn-sm btn-outline-danger btn-quitar" data-id="${p.id_articulo}">Quitar</button>` : ''}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -263,7 +265,26 @@
       document.querySelectorAll('.chk-producto').forEach(chk => {
         chk.addEventListener('change', actualizarContadorSeleccion);
       });
+      document.querySelectorAll('.btn-quitar').forEach(btn => {
+        btn.addEventListener('click', () => quitarDeLaWeb(btn.dataset.id, btn));
+      });
       actualizarContadorSeleccion();
+    }
+
+    async function quitarDeLaWeb(id, btn) {
+      if (!confirm(`¿Quitar el artículo #${id} de la web? Se borra la carpeta e imagen de GCS.`)) return;
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const resp = await fetch(`/admin/articulos-web/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo quitar el artículo');
+        cargarProductos();
+      } catch (error) {
+        alert(error.message);
+        btn.disabled = false;
+        btn.textContent = 'Quitar';
+      }
     }
 
     function actualizarContadorSeleccion() {

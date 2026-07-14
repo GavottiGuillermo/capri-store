@@ -294,6 +294,40 @@ router.put('/:idArticulo', requireGcs, requireDb, upload.single('imagen'), async
   }
 });
 
+// === QUITAR ARTÍCULO DE LA WEB (equivalente a quitarDeLaWeb) ===
+// Nota: igual que el desktop, solo desmarca publicado_en_web del id_articulo puntual aunque
+// la carpeta/imagen borrada sea compartida por otros talles del mismo color (limitación preexistente).
+router.delete('/:idArticulo', requireGcs, requireDb, async (req, res) => {
+  const idArticulo = parseInt(req.params.idArticulo, 10);
+  if (!Number.isInteger(idArticulo)) {
+    return res.status(400).json({ success: false, error: 'ID de artículo inválido' });
+  }
+
+  try {
+    const productos = await gcs.getProductosJson();
+    const idStr = String(idArticulo);
+    const indiceExistente = productos.findIndex(p => String(p.carpeta || '').startsWith(`${idStr}-`));
+    if (indiceExistente === -1) {
+      return res.status(404).json({ success: false, error: 'El artículo no está publicado en la web' });
+    }
+    const carpeta = productos[indiceExistente].carpeta;
+
+    productos.splice(indiceExistente, 1);
+    await gcs.saveProductosJson(productos);
+    await gcs.deleteFolder(`Novedades/${carpeta}/`);
+
+    await db.pool.query(
+      `UPDATE ${db.PRODUCTOS_TABLE} SET publicado_en_web = 'False' WHERE id_articulo = $1`,
+      [idArticulo]
+    );
+
+    res.json({ success: true, carpeta });
+  } catch (error) {
+    console.error('❌ Error quitando artículo de la web:', error.message);
+    res.status(500).json({ success: false, error: 'Error al quitar el artículo de la web' });
+  }
+});
+
 // === AJUSTE PORCENTUAL DE PRECIOS (equivalente a aplicarAjustePorcentualEnWeb) ===
 router.post('/ajuste-porcentual', express.json(), requireGcs, requireDb, async (req, res) => {
   try {

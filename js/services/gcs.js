@@ -63,6 +63,15 @@ async function deleteFile(destPath) {
   }
 }
 
+// Borra todos los blobs bajo un prefijo (una carpeta completa), best-effort igual que deleteFile.
+async function deleteFolder(prefix) {
+  try {
+    await getBucket().deleteFiles({ prefix, force: true });
+  } catch (error) {
+    console.error(`⚠️ No se pudo borrar la carpeta ${prefix} de GCS:`, error.message);
+  }
+}
+
 async function readTextFile(destPath) {
   try {
     const [contents] = await getBucket().file(destPath).download();
@@ -128,6 +137,7 @@ module.exports = {
   pathFromPublicUrl,
   uploadBuffer,
   deleteFile,
+  deleteFolder,
   readTextFile,
   getProductosJson,
   saveProductosJson,
