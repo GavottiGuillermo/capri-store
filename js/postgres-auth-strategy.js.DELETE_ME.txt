@@ -1,3 +1,0 @@
-# Archivo eliminado: postgres-auth-strategy.js
-# Motivo: El sistema ya no utiliza sesiones persistentes ni PostgreSQL para WhatsApp.
-# Puedes borrar este archivo del repositorio.
