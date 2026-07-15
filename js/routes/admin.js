@@ -66,6 +66,14 @@ router.post('/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// GET /admin (navegación directa del navegador, no llamada AJAX): redirige a la
+// página de login o al dashboard según haya sesión, en vez de devolver JSON.
+router.get('/', (req, res) => {
+  const token = req.cookies?.[auth.COOKIE_NAME];
+  const payload = auth.verifyAdminToken(token);
+  res.redirect(payload ? '/admin.html' : '/admin-login.html');
+});
+
 // A partir de acá, todas las rutas de /admin/* requieren sesión válida.
 router.use((req, res, next) => {
   const token = req.cookies?.[auth.COOKIE_NAME];
