@@ -36,6 +36,7 @@
       <ul class="nav nav-tabs mb-3" id="admin-tabs">
         <li class="nav-item"><a class="nav-link active" href="#" data-tab="articulos-web">Artículos Web</a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-tab="stock">Stock</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-tab="ventas">Ventas</a></li>
       </ul>
 
       <div id="tab-articulos-web">
@@ -313,6 +314,90 @@
           </div>
         </div>
       </div>
+
+      <div id="tab-ventas" style="display:none;">
+        <h4 class="mb-3">Ventas</h4>
+        <p class="text-muted small">Venta presencial: agregá artículos disponibles al carrito y confirmá la venta, o hacé una devolución de un artículo ya vendido.</p>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="card-titulo">Artículos</span>
+              <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar-ventas">↻ Refrescar</button>
+            </div>
+            <div class="form-row mb-2">
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-id" placeholder="ID..." /></div>
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-prenda" placeholder="Prenda..." /></div>
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-estado" placeholder="Estado..." /></div>
+              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-categoria" placeholder="Categoría..." /></div>
+            </div>
+            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+              <table class="table table-sm table-hover" id="tabla-ventas">
+                <thead class="thead-light" style="position: sticky; top: 0;">
+                  <tr>
+                    <th>ID</th>
+                    <th>Prenda</th>
+                    <th>Estado</th>
+                    <th>Categoría</th>
+                    <th>Color</th>
+                    <th>Talle</th>
+                    <th>Precio efec.</th>
+                    <th>Precio transf.</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-ventas"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-5">
+          <div class="card-body">
+            <span class="card-titulo">Carrito</span>
+            <div class="table-responsive mt-2">
+              <table class="table table-sm" id="tabla-carrito">
+                <thead class="thead-light">
+                  <tr>
+                    <th>ID</th>
+                    <th>Prenda</th>
+                    <th>Color</th>
+                    <th>Talle</th>
+                    <th>Precio</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-carrito"></tbody>
+              </table>
+            </div>
+
+            <div class="form-row align-items-end">
+              <div class="form-group col-md-4">
+                <label>Cliente (opcional)</label>
+                <input type="text" class="form-control form-control-sm" id="venta-cliente" placeholder="No proporcionado" />
+              </div>
+              <div class="form-group col-md-4">
+                <label class="d-block">Método de pago</label>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="venta-metodo-pago" id="venta-metodo-transferencia" value="Transferencia" checked>
+                  <label class="form-check-label" for="venta-metodo-transferencia">Transferencia</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="venta-metodo-pago" id="venta-metodo-efectivo" value="Efectivo">
+                  <label class="form-check-label" for="venta-metodo-efectivo">Efectivo</label>
+                </div>
+              </div>
+              <div class="form-group col-md-4 text-md-right">
+                <div><strong>Total: $<span id="venta-total">0</span></strong></div>
+              </div>
+            </div>
+
+            <button class="btn btn-vino-tinto btn-sm" id="btn-finalizar-venta" disabled>Confirmar venta</button>
+            <button class="btn btn-outline-danger btn-sm" id="btn-cancelar-venta" disabled>Cancelar</button>
+            <div id="resultado-venta" class="alert mt-3 alert-resultado" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -546,6 +631,7 @@
 
     // === Tabs ===
     let stockCargado = false;
+    let ventasCargado = false;
     document.querySelectorAll('#admin-tabs .nav-link').forEach(link => {
       link.addEventListener('click', (event) => {
         event.preventDefault();
@@ -554,9 +640,14 @@
         const tab = link.dataset.tab;
         document.getElementById('tab-articulos-web').style.display = tab === 'articulos-web' ? 'block' : 'none';
         document.getElementById('tab-stock').style.display = tab === 'stock' ? 'block' : 'none';
+        document.getElementById('tab-ventas').style.display = tab === 'ventas' ? 'block' : 'none';
         if (tab === 'stock' && !stockCargado) {
           stockCargado = true;
           cargarStock();
+        }
+        if (tab === 'ventas' && !ventasCargado) {
+          ventasCargado = true;
+          cargarVentas();
         }
       });
     });
@@ -713,6 +804,199 @@
         btn.textContent = 'Finalizar carga';
       }
     });
+
+    // === Ventas: listado + carrito (equivalente a la pestaña Ventas del desktop) ===
+    let ventasCache = [];
+    let carrito = [];
+
+    async function cargarVentas() {
+      const tbody = document.getElementById('tbody-ventas');
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Cargando...</td></tr>';
+      try {
+        const resp = await fetch('/admin/stock', { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al cargar los artículos');
+        ventasCache = data.productos;
+        // Sacar del carrito cualquier artículo que ya no esté Disponible (p.ej. vendido en otra sesión).
+        const disponibles = new Set(ventasCache.filter(p => p.out_estado === 'Disponible').map(p => p.out_id_articulo));
+        carrito = carrito.filter(item => disponibles.has(item.id));
+        renderVentas();
+        renderCarrito();
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">${error.message}</td></tr>`;
+      }
+    }
+
+    function renderVentas() {
+      const tbody = document.getElementById('tbody-ventas');
+      const filtroId = document.getElementById('filtro-ventas-id').value.trim();
+      const filtroPrenda = document.getElementById('filtro-ventas-prenda').value.trim().toLowerCase();
+      const filtroEstado = document.getElementById('filtro-ventas-estado').value.trim().toLowerCase();
+      const filtroCategoria = document.getElementById('filtro-ventas-categoria').value.trim().toLowerCase();
+
+      const filtrados = ventasCache.filter(p => {
+        const coincideId = !filtroId || String(p.out_id_articulo).includes(filtroId);
+        const coincidePrenda = !filtroPrenda || (p.out_nombre_articulo || '').toLowerCase().includes(filtroPrenda);
+        const coincideEstado = !filtroEstado || (p.out_estado || '').toLowerCase().includes(filtroEstado);
+        const coincideCategoria = !filtroCategoria || (p.out_categoria || '').toLowerCase().includes(filtroCategoria);
+        return coincideId && coincidePrenda && coincideEstado && coincideCategoria;
+      });
+
+      const enCarrito = new Set(carrito.map(item => item.id));
+
+      tbody.innerHTML = '';
+      filtrados.forEach(p => {
+        const disponible = p.out_estado === 'Disponible';
+        const tr = document.createElement('tr');
+        let accion;
+        if (disponible) {
+          accion = enCarrito.has(p.out_id_articulo)
+            ? '<span class="text-muted small">En carrito</span>'
+            : `<button class="btn btn-sm btn-outline-secondary btn-agregar-carrito" data-id="${p.out_id_articulo}">Agregar</button>`;
+        } else {
+          accion = `<button class="btn btn-sm btn-outline-danger btn-devolver" data-id="${p.out_id_articulo}">Devolución</button>`;
+        }
+        tr.innerHTML = `
+          <td>${p.out_id_articulo}</td>
+          <td>${p.out_nombre_articulo || ''}</td>
+          <td>${p.out_estado || ''}</td>
+          <td>${p.out_categoria || ''}</td>
+          <td>${p.out_color || ''}</td>
+          <td>${p.out_talle || ''}</td>
+          <td>$${Number(p.out_precio_venta_efectivo || 0).toLocaleString('es-AR')}</td>
+          <td>$${Number(p.out_precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
+          <td>${accion}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.btn-agregar-carrito').forEach(btn => {
+        btn.addEventListener('click', () => agregarAlCarrito(parseInt(btn.dataset.id, 10)));
+      });
+      document.querySelectorAll('.btn-devolver').forEach(btn => {
+        btn.addEventListener('click', () => devolverArticulo(parseInt(btn.dataset.id, 10), btn));
+      });
+    }
+
+    document.getElementById('btn-refrescar-ventas').addEventListener('click', cargarVentas);
+    ['filtro-ventas-id', 'filtro-ventas-prenda', 'filtro-ventas-estado', 'filtro-ventas-categoria'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderVentas);
+    });
+
+    function agregarAlCarrito(id) {
+      if (carrito.some(item => item.id === id)) return;
+      const producto = ventasCache.find(p => p.out_id_articulo === id);
+      if (!producto) return;
+      carrito.push({
+        id: producto.out_id_articulo,
+        prenda: producto.out_nombre_articulo,
+        color: producto.out_color,
+        talle: producto.out_talle,
+        precio_venta_efectivo: Number(producto.out_precio_venta_efectivo || 0),
+        precio_venta_transferencia: Number(producto.out_precio_venta_transferencia || 0)
+      });
+      renderVentas();
+      renderCarrito();
+    }
+
+    function quitarDelCarrito(id) {
+      carrito = carrito.filter(item => item.id !== id);
+      renderVentas();
+      renderCarrito();
+    }
+
+    function metodoPagoSeleccionado() {
+      return document.querySelector('input[name="venta-metodo-pago"]:checked').value;
+    }
+
+    function renderCarrito() {
+      const tbody = document.getElementById('tbody-carrito');
+      const metodo = metodoPagoSeleccionado();
+      tbody.innerHTML = '';
+      let total = 0;
+      carrito.forEach(item => {
+        const precio = metodo === 'Efectivo' ? item.precio_venta_efectivo : item.precio_venta_transferencia;
+        total += precio;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.id}</td>
+          <td>${item.prenda || ''}</td>
+          <td>${item.color || ''}</td>
+          <td>${item.talle || ''}</td>
+          <td>$${precio.toLocaleString('es-AR')}</td>
+          <td><button type="button" class="btn btn-sm btn-outline-danger btn-quitar-carrito" data-id="${item.id}">Quitar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('.btn-quitar-carrito').forEach(btn => {
+        btn.addEventListener('click', () => quitarDelCarrito(parseInt(btn.dataset.id, 10)));
+      });
+      document.getElementById('venta-total').textContent = total.toLocaleString('es-AR');
+      const hayItems = carrito.length > 0;
+      document.getElementById('btn-finalizar-venta').disabled = !hayItems;
+      document.getElementById('btn-cancelar-venta').disabled = !hayItems;
+    }
+
+    document.querySelectorAll('input[name="venta-metodo-pago"]').forEach(radio => {
+      radio.addEventListener('change', renderCarrito);
+    });
+
+    document.getElementById('btn-cancelar-venta').addEventListener('click', () => {
+      if (!confirm('¿Cancelar la venta? Se vacía el carrito.')) return;
+      carrito = [];
+      document.getElementById('venta-cliente').value = '';
+      document.getElementById('resultado-venta').style.display = 'none';
+      renderVentas();
+      renderCarrito();
+    });
+
+    document.getElementById('btn-finalizar-venta').addEventListener('click', async () => {
+      const metodoPago = metodoPagoSeleccionado();
+      const nombreCliente = document.getElementById('venta-cliente').value.trim();
+      const total = carrito.reduce((suma, item) => suma + (metodoPago === 'Efectivo' ? item.precio_venta_efectivo : item.precio_venta_transferencia), 0);
+      if (!confirm(`¿Confirmar venta de ${carrito.length} artículo(s) por $${total.toLocaleString('es-AR')} (${metodoPago})?`)) return;
+
+      const btn = document.getElementById('btn-finalizar-venta');
+      btn.disabled = true;
+      btn.textContent = 'Confirmando...';
+      try {
+        const resp = await fetch('/admin/ventas/confirmar', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: carrito.map(item => item.id), metodoPago, nombreCliente })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo confirmar la venta');
+        mostrarResultado('resultado-venta', true, `Venta confirmada. Total: $${Number(data.total).toLocaleString('es-AR')}`);
+        carrito = [];
+        document.getElementById('venta-cliente').value = '';
+        cargarVentas();
+        if (stockCargado) cargarStock();
+      } catch (error) {
+        mostrarResultado('resultado-venta', false, error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar venta';
+      }
+    });
+
+    async function devolverArticulo(id, btn) {
+      if (!confirm(`¿Confirmás la devolución del artículo #${id}? Vuelve a quedar Disponible.`)) return;
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const resp = await fetch(`/admin/ventas/devolver/${id}`, { method: 'POST', credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo devolver el artículo');
+        cargarVentas();
+        if (stockCargado) cargarStock();
+      } catch (error) {
+        alert(error.message);
+        btn.disabled = false;
+        btn.textContent = 'Devolución';
+      }
+    }
 
     checkSession();
   </script>
