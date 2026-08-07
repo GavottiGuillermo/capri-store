@@ -317,9 +317,112 @@
     </div>
   </div>
 
+  <!-- ===================== MODAL: fotos y descripción ===================== -->
+  <!-- Sirve tanto para preparar contenido sin publicar como para editar algo ya publicado.
+       Se abre con los artículos seleccionados del listado (todos de la misma prenda). -->
+  <div class="modal fade" id="modal-contenido" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Fotos y descripción — <span id="mc-prenda"></span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3" id="mc-ayuda"></p>
+          <form id="form-contenido">
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Título</label>
+                <input type="text" class="form-control form-control-sm" name="titulo" />
+              </div>
+              <div class="form-group col-md-6">
+                <label>Subtítulo <span class="text-muted small">(texto corto en la tarjeta)</span></label>
+                <input type="text" class="form-control form-control-sm" name="texto" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>Precio (transferencia)</label>
+                <input type="number" class="form-control form-control-sm" name="precio" />
+              </div>
+              <div class="form-group col-md-5">
+                <label>Categoría</label>
+                <select class="form-control form-control-sm" name="categoria">
+                  <option value="Remeras">Remeras</option>
+                  <option value="Pantalones">Pantalones</option>
+                  <option value="Vestidos">Vestidos</option>
+                  <option value="Buzos">Buzos</option>
+                  <option value="Conjuntos">Conjuntos</option>
+                  <option value="Accesorios">Accesorios</option>
+                  <option value="Carteras">Carteras</option>
+                  <option value="OnaFitness">OnaFitness</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="mc-novedad" name="novedad" />
+                  <label class="form-check-label" for="mc-novedad">¿Novedad?</label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Descripción larga <span class="text-muted small">(sección "Detalles" en la web)</span></label>
+              <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
+            </div>
+            <hr />
+            <div class="form-group mb-0">
+              <label>Fotos por color</label>
+              <div id="mc-imagenes-por-color"></div>
+              <small class="form-text text-muted">Si elegís fotos para un color, reemplazan las de ese color. Los colores que dejes vacíos conservan las que ya tenían.</small>
+            </div>
+          </form>
+          <div id="resultado-contenido" class="alert mt-3 mb-0 alert-resultado" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-guardar-contenido">Guardar sin publicar</button>
+          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-guardar-publicar">Guardar y publicar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: ajuste porcentual ===================== -->
+  <div class="modal fade" id="modal-ajuste" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Ajustar precio</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">Se aplica a los <strong id="ma-count">0</strong> artículo(s) seleccionados. Solo afecta a los que ya están publicados en la web.</p>
+          <div class="form-group mb-0">
+            <label>Porcentaje</label>
+            <input type="number" step="0.01" class="form-control form-control-sm" id="ma-porcentaje" placeholder="Ej: 10 o -5" />
+          </div>
+          <div id="resultado-ajuste" class="alert mt-3 mb-0 alert-resultado" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-aplicar-ajuste">Aplicar ajuste</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
+
+    // Red de seguridad: si algo del script revienta al cargar, el panel quedaba colgado en
+    // "Verificando sesión..." sin ninguna pista de qué pasó. Preferimos mostrar el error.
+    window.addEventListener('error', (evento) => {
+      if (contentEl.style.display === 'block') return; // ya cargó: el error es de una acción puntual
+      loadingEl.className = 'alert alert-danger alert-resultado';
+      loadingEl.textContent = 'Error al cargar el panel: ' + (evento.message || 'error desconocido') +
+        '\n(' + (evento.filename || '') + ':' + (evento.lineno || '?') + ')';
+    });
 
     async function checkSession() {
       try {
@@ -1167,99 +1270,5 @@
 
     checkSession();
   </script>
-
-  <!-- ===================== MODAL: fotos y descripción ===================== -->
-  <!-- Sirve tanto para preparar contenido sin publicar como para editar algo ya publicado.
-       Se abre con los artículos seleccionados del listado (todos de la misma prenda). -->
-  <div class="modal fade" id="modal-contenido" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Fotos y descripción — <span id="mc-prenda"></span></h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
-        </div>
-        <div class="modal-body">
-          <p class="text-muted small mb-3" id="mc-ayuda"></p>
-          <form id="form-contenido">
-            <div class="form-row">
-              <div class="form-group col-md-6">
-                <label>Título</label>
-                <input type="text" class="form-control form-control-sm" name="titulo" />
-              </div>
-              <div class="form-group col-md-6">
-                <label>Subtítulo <span class="text-muted small">(texto corto en la tarjeta)</span></label>
-                <input type="text" class="form-control form-control-sm" name="texto" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group col-md-4">
-                <label>Precio (transferencia)</label>
-                <input type="number" class="form-control form-control-sm" name="precio" />
-              </div>
-              <div class="form-group col-md-5">
-                <label>Categoría</label>
-                <select class="form-control form-control-sm" name="categoria">
-                  <option value="Remeras">Remeras</option>
-                  <option value="Pantalones">Pantalones</option>
-                  <option value="Vestidos">Vestidos</option>
-                  <option value="Buzos">Buzos</option>
-                  <option value="Conjuntos">Conjuntos</option>
-                  <option value="Accesorios">Accesorios</option>
-                  <option value="Carteras">Carteras</option>
-                  <option value="OnaFitness">OnaFitness</option>
-                </select>
-              </div>
-              <div class="form-group col-md-3 d-flex align-items-end">
-                <div class="form-check">
-                  <input type="checkbox" class="form-check-input" id="mc-novedad" name="novedad" />
-                  <label class="form-check-label" for="mc-novedad">¿Novedad?</label>
-                </div>
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Descripción larga <span class="text-muted small">(sección "Detalles" en la web)</span></label>
-              <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
-            </div>
-            <hr />
-            <div class="form-group mb-0">
-              <label>Fotos por color</label>
-              <div id="mc-imagenes-por-color"></div>
-              <small class="form-text text-muted">Si elegís fotos para un color, reemplazan las de ese color. Los colores que dejes vacíos conservan las que ya tenían.</small>
-            </div>
-          </form>
-          <div id="resultado-contenido" class="alert mt-3 mb-0 alert-resultado" style="display:none;"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-guardar-contenido">Guardar sin publicar</button>
-          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-guardar-publicar">Guardar y publicar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================== MODAL: ajuste porcentual ===================== -->
-  <div class="modal fade" id="modal-ajuste" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Ajustar precio</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
-        </div>
-        <div class="modal-body">
-          <p class="text-muted small">Se aplica a los <strong id="ma-count">0</strong> artículo(s) seleccionados. Solo afecta a los que ya están publicados en la web.</p>
-          <div class="form-group mb-0">
-            <label>Porcentaje</label>
-            <input type="number" step="0.01" class="form-control form-control-sm" id="ma-porcentaje" placeholder="Ej: 10 o -5" />
-          </div>
-          <div id="resultado-ajuste" class="alert mt-3 mb-0 alert-resultado" style="display:none;"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-aplicar-ajuste">Aplicar ajuste</button>
-        </div>
-      </div>
-    </div>
-  </div>
 </body>
 </html>
