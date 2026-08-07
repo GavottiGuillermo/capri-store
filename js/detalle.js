@@ -17,6 +17,27 @@ function detalleResolveApiUrl(pathname) {
 const CATEGORIAS_SIN_TALLE = ['accesorios', 'carteras', 'onafitness'];
 const VALORES_TALLE_OPCIONAL = new Set(['', 'sin talle', 'sin-talle', 'sintalle', 'unitalla', 'unico', 'único', 'ajustable', 'na', 'n/a', 'u']);
 
+/**
+ * Limpia un campo leído del catálogo.
+ * Los campos vacíos se guardan en el .txt con el literal "null" (así los escribe el generador
+ * de artículos del panel), y ese mismo literal quedó copiado en localStorage por el catálogo.
+ * Sin filtrarlo, se muestra la palabra "null" en la página.
+ */
+function limpiarTexto(valor) {
+  const s = String(valor ?? '').replace(/[{}]/g, '').trim();
+  const l = s.toLowerCase();
+  return (l === 'null' || l === 'undefined') ? '' : s;
+}
+
+/** Escribe la subdescripción y oculta el párrafo por completo si no hay texto. */
+function mostrarDescripcion(texto) {
+  const el = document.querySelector('.descripcion-producto');
+  if (!el) return;
+  const limpio = limpiarTexto(texto);
+  el.textContent = limpio;
+  el.style.display = limpio ? '' : 'none';
+}
+
 // Carga un producto desde productos.json de GCS usando su ID num�rico.
 // Retorna un objeto con el formato de productoDetalle, o null si no se encuentra.
 async function cargarProductoPorId(id) {
@@ -40,13 +61,12 @@ async function cargarProductoPorId(id) {
       const buffer = await txtResp.arrayBuffer();
       const txt = new TextDecoder('utf-8').decode(buffer);
       const matches = txt.match(/\{([^}]+)\}/g) || [];
-      const limpiar = v => (v || '').replace(/[{}]/g, '').trim();
       return {
-        nombre:  matches[0] ? limpiar(matches[0]) : '',
-        desc:    matches[1] ? limpiar(matches[1]) : '',
-        precio:  matches[2] ? limpiar(matches[2]) : '',
-        talle:   matches[3] ? limpiar(matches[3]) : '',
-        detalle: matches[4] ? limpiar(matches[4]) : '',
+        nombre:  limpiarTexto(matches[0]),
+        desc:    limpiarTexto(matches[1]),
+        precio:  limpiarTexto(matches[2]),
+        talle:   limpiarTexto(matches[3]),
+        detalle: limpiarTexto(matches[4]),
         img: found.imagen,
         txt: found.txt,
         originalData: { imagen: found.imagen, txt: found.txt, categoria: found.categoria }
@@ -365,58 +385,57 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (producto) localStorage.setItem('productoDetalle', JSON.stringify(producto));
     }
   }
-  const limpiar = v => {
-    const s = (v || '').replace(/[{}]/g, '').trim();
-    const l = s.toLowerCase();
-    return (l === 'null' || l === 'undefined') ? '' : s;
-  };
-
-  // Poblar campos est�ticos (nombre, precio, descripci�n, detalle) desde el .txt de GCS
+  // Poblar campos est�ticos (nombre, precio, descripci�n, detalle) desde el .txt de GCS.
+  // Todos los valores pasan por limpiarTexto(), incluidos los que vienen de localStorage:
+  // el catalogo los guarda crudos y pueden traer el literal "null".
   if (producto && producto.txt) {
     try {
       const buf = await (await fetch(producto.txt)).arrayBuffer();
       const txt = new TextDecoder('utf-8').decode(buf);
       // Formato: {Nombre}{Descripci�n}{Precio}[{TalleObsoleto}]{Detalle}
       const m = txt.match(/\{([^}]+)\}/g) || [];
-      const nombre      = limpiar(m[0]) || producto.nombre || '';
-      const descripcion = limpiar(m[1]) || producto.desc   || '';
-      const precio      = limpiar(m[2]) || producto.precio || '';
-      // m[3] era el talle fijo: ignorado intencionalmente, ahora viene de BBDD
-      const detalle     = limpiar(m[4]) || limpiar(m[3]) || '';
+      const nombre      = limpiarTexto(m[0]) || limpiarTexto(producto.nombre);
+      const descripcion = limpiarTexto(m[1]) || limpiarTexto(producto.desc);
+      const precio      = limpiarTexto(m[2]) || limpiarTexto(producto.precio);
+      // El detalle se ubica segun el formato del .txt, igual que parseTxtContent() en gcs.js:
+      //   viejo (5 campos): {nombre}{desc}{precio}{talle}{detalle} -> m[4], y m[3] es el talle
+      //                     obsoleto (el talle sale de la BD), asi que se ignora.
+      //   nuevo (4 campos): {nombre}{desc}{precio}{detalle}        -> m[3]
+      // Elegirlo con `m[4] || m[3]` mostraba el talle como "Detalle" cuando el .txt viejo
+      // tenia el detalle vacio (el caso de la mayoria de los articulos ya publicados).
+      const detalle     = m.length >= 5 ? limpiarTexto(m[4]) : limpiarTexto(m[3]);
 
       document.getElementById('mainImage').src = producto.img || '';
       document.getElementById('mainImage').alt = nombre;
       document.getElementById('nombre-producto').textContent  = nombre;
       document.getElementById('precio-producto').textContent  = precio ? `$${precio} ARS` : '';
 
-      const descEl = document.querySelector('.descripcion-producto');
-      if (descEl) { descEl.textContent = descripcion || ''; descEl.style.display = descripcion ? '' : 'none'; }
+      mostrarDescripcion(descripcion);
 
       const secDet  = document.getElementById('seccion-detalles');
       const contDet = document.getElementById('detalle-contenido');
-      if (secDet && contDet) { contDet.textContent = detalle || ''; secDet.style.display = detalle ? '' : 'none'; }
+      if (secDet && contDet) { contDet.textContent = detalle; secDet.style.display = detalle ? '' : 'none'; }
 
     } catch {
       // Fallback desde localStorage
       document.getElementById('mainImage').src = producto.img || '';
-      document.getElementById('mainImage').alt = producto.nombre || '';
-      document.getElementById('nombre-producto').textContent = producto.nombre || 'Producto';
-      document.getElementById('precio-producto').textContent = producto.precio ? `$${producto.precio} ARS` : '';
-      const descEl = document.querySelector('.descripcion-producto');
-      if (descEl) descEl.textContent = producto.desc || '';
+      document.getElementById('mainImage').alt = limpiarTexto(producto.nombre);
+      document.getElementById('nombre-producto').textContent = limpiarTexto(producto.nombre) || 'Producto';
+      const precioFallback = limpiarTexto(producto.precio);
+      document.getElementById('precio-producto').textContent = precioFallback ? `$${precioFallback} ARS` : '';
+      mostrarDescripcion(producto.desc);
     }
   } else if (producto) {
     document.getElementById('mainImage').src = producto.img || '';
-    document.getElementById('mainImage').alt = producto.nombre || '';
-    document.getElementById('nombre-producto').textContent = producto.nombre || 'Producto';
-    document.getElementById('precio-producto').textContent = producto.precio ? `$${producto.precio} ARS` : '';
-    const descEl = document.querySelector('.descripcion-producto');
-    if (descEl) descEl.textContent = producto.desc || '';
+    document.getElementById('mainImage').alt = limpiarTexto(producto.nombre);
+    document.getElementById('nombre-producto').textContent = limpiarTexto(producto.nombre) || 'Producto';
+    const precioFallback = limpiarTexto(producto.precio);
+    document.getElementById('precio-producto').textContent = precioFallback ? `$${precioFallback} ARS` : '';
+    mostrarDescripcion(producto.desc);
   } else {
     document.getElementById('nombre-producto').textContent = 'Producto no encontrado';
     document.getElementById('precio-producto').textContent = '';
-    const descEl = document.querySelector('.descripcion-producto');
-    if (descEl) descEl.textContent = '';
+    mostrarDescripcion('');
   }
 
   // Inicializar selectores de color/talle/cantidad desde BBDD

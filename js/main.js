@@ -691,12 +691,19 @@ function verDetalleCapri(prod) {
     
     let nombre = '', textoTarjeta = '', precio = '', talle = '', detalle = '';
     if (matches && matches.length >= 1) {
-      // Extraer solo los campos disponibles, permitiendo que estén vacíos
-      nombre = matches[0] ? matches[0].replace(/[{}]/g, '').trim() : '';
-      textoTarjeta = matches[1] ? matches[1].replace(/[{}]/g, '').trim() : '';
-      precio = matches[2] ? matches[2].replace(/[{}]/g, '').trim() : '';
-      talle = matches[3] ? matches[3].replace(/[{}]/g, '').trim() : '';
-      detalle = matches[4] ? matches[4].replace(/[{}]/g, '').trim() : '';
+      // Extraer solo los campos disponibles, permitiendo que estén vacíos.
+      // Los campos sin valor se guardan en el .txt con el literal "null": se descarta acá para
+      // no persistirlo en localStorage y que detalle.html no lo muestre como texto.
+      const limpiarCampo = (v) => {
+        const s = (v || '').replace(/[{}]/g, '').trim();
+        const l = s.toLowerCase();
+        return (l === 'null' || l === 'undefined') ? '' : s;
+      };
+      nombre = limpiarCampo(matches[0]);
+      textoTarjeta = limpiarCampo(matches[1]);
+      precio = limpiarCampo(matches[2]);
+      talle = limpiarCampo(matches[3]);
+      detalle = limpiarCampo(matches[4]);
     }
     
     const productoDetalle = {
