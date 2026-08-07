@@ -143,6 +143,97 @@ async function reemplazarImagenesDeColor(rutaCarpeta, color, archivos, imagenesP
   return urls;
 }
 
+// Reconstruye el mapeo color -> fotos a partir de los nombres de archivo del contenido en GCS.
+// Las fotos se suben como "{colorSlug}-{n}.ext", así que el propio nombre es el mapeo: eso permite
+// publicar un artículo cuyo contenido se cargó antes (borrador) sin volver a subir nada.
+// Las carpetas viejas tienen una sola foto llamada "{carpeta}.jpg", que no matchea ningún slug:
+// en ese caso todo va al primer color, que es exactamente lo que representaba ese formato.
+function reconstruirColoresDesdeContenido(imagenes, gruposColor) {
+  const usadas = new Set();
+  const colores = gruposColor.map(grupo => {
+    const slug = gcs.slugify(grupo.color);
+    const propias = imagenes.filter(url => {
+      const archivo = decodeURIComponent(url).split('/').pop() || '';
+      const match = new RegExp(`^${slug}-\\d+\\.`, 'i').test(archivo);
+      if (match) usadas.add(url);
+      return match;
+    });
+    return { color: grupo.color, ids: grupo.ids, imagenes: propias };
+  });
+
+  const sueltas = imagenes.filter(url => !usadas.has(url));
+  if (sueltas.length > 0 && colores.length > 0) {
+    colores[0].imagenes = colores[0].imagenes.concat(sueltas);
+  }
+  return colores.filter(c => c.imagenes.length > 0);
+}
+
+// === LISTADO UNIFICADO DE ARTÍCULOS ===
+// Una sola fuente para la pantalla de Artículos: trae TODOS los artículos del sistema (sin filtrar
+// por estado, como el listado de Stock) y le suma el estado web de cada uno: si está publicado y
+// si tiene contenido cargado (fotos/descripción) aunque no esté publicado.
+// Publicado = tiene entrada en productos.json. Contenido = tiene carpeta en GCS. Son independientes.
+router.get('/listado', requireDb, async (req, res) => {
+  try {
+    const [productosDb, productosJson, contenidoPorId] = await Promise.all([
+      db.pool.query(`
+        SELECT id_articulo, prenda, estado, categoria, color, talle,
+               precio_compra, precio_venta_efectivo, precio_venta_transferencia, publicado_en_web
+        FROM ${db.PRODUCTOS_TABLE}
+        ORDER BY id_articulo ASC
+      `),
+      gcs.isConfigured() ? gcs.getProductosJson() : Promise.resolve([]),
+      gcs.isConfigured() ? gcs.listarContenidoWeb() : Promise.resolve(new Map()),
+    ]);
+
+    // Índice id_articulo -> tarjeta publicada que lo cubre.
+    const entradaPorId = new Map();
+    productosJson.forEach(raw => {
+      const entrada = gcs.normalizeProductoEntry(raw);
+      if (entrada) entrada.ids.forEach(id => entradaPorId.set(id, entrada));
+    });
+
+    const articulos = productosDb.rows.map(row => {
+      const entrada = entradaPorId.get(row.id_articulo) || null;
+      const contenidoPropio = contenidoPorId.get(row.id_articulo) || null;
+      // Las fotos pueden estar en la tarjeta (si está publicada) o sueltas en GCS (borrador).
+      const fotosPublicadas = entrada ? entrada.colores.reduce((n, c) => n + c.imagenes.length, 0) : 0;
+      const fotosBorrador = contenidoPropio ? contenidoPropio.imagenes.length : 0;
+
+      return {
+        id_articulo: row.id_articulo,
+        prenda: row.prenda,
+        estado: row.estado,
+        categoria: row.categoria,
+        color: row.color,
+        talle: row.talle,
+        precio_compra: row.precio_compra,
+        precio_venta_efectivo: row.precio_venta_efectivo,
+        precio_venta_transferencia: row.precio_venta_transferencia,
+        // "Publicado" = tiene entrada en productos.json, que es lo que la tienda realmente
+        // renderiza. El flag publicado_en_web de la BD se expone aparte: hoy van siempre juntos
+        // (verificado, 0 discrepancias) porque estas rutas los actualizan a la vez, pero si
+        // alguna vez se desalinean conviene verlo en pantalla en lugar de taparlo con un OR.
+        publicado: !!entrada,
+        marcado_bd: row.publicado_en_web === 'True',
+        inconsistente: !!entrada !== (row.publicado_en_web === 'True'),
+        // Se prefiere la carpeta de productos.json: la derivada del blob no es fiable con prendas
+        // que llevan "/" en el nombre.
+        carpeta: entrada ? entrada.carpeta : (contenidoPropio ? contenidoPropio.carpeta : null),
+        tiene_contenido: !!entrada || !!contenidoPropio,
+        fotos: Math.max(fotosPublicadas, fotosBorrador),
+        // id de referencia para editar/publicar el contenido de la tarjeta que lo cubre.
+        id_contenido: entrada ? entrada.idPrincipal : (contenidoPropio ? row.id_articulo : null),
+      };
+    });
+
+    res.json({ success: true, articulos });
+  } catch (error) {
+    console.error('❌ Error armando el listado de artículos:', error.message);
+    res.status(500).json({ success: false, error: 'Error al consultar el listado de artículos' });
+  }
+});
+
 // === LISTADO DE PRODUCTOS DISPONIBLES (equivalente a obtenerProductosDesdeBD) ===
 router.get('/productos', requireDb, async (req, res) => {
   try {
@@ -226,8 +317,14 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
     if (result.rows.length !== ids.length) {
       return res.status(400).json({ success: false, error: 'Alguno de los id_articulo no existe' });
     }
-    if (result.rows.some(r => r.estado !== 'Disponible')) {
-      return res.status(400).json({ success: false, error: 'Todos los artículos deben estar en estado Disponible' });
+    // `publicar=false` guarda solo el contenido (fotos + descripción) sin mostrarlo en la tienda:
+    // permite preparar un artículo con fotos y texto y publicarlo después con POST /:id/publicar.
+    const publicar = req.body.publicar === undefined ? true : isNovedadFlag(req.body.publicar);
+
+    // Publicar exige stock disponible (misma regla que el desktop). Cargar contenido no: se puede
+    // dejar preparado un artículo aunque ahora mismo esté sin stock.
+    if (publicar && result.rows.some(r => r.estado !== 'Disponible')) {
+      return res.status(400).json({ success: false, error: 'Para publicar, todos los artículos deben estar en estado Disponible' });
     }
     const prenda = result.rows[0].prenda;
     if (result.rows.some(r => r.prenda !== prenda)) {
@@ -257,16 +354,33 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
     // Reusar la carpeta si esta prenda ya estaba publicada, para no invalidar URLs vigentes.
     const indiceExistente = gcs.findEntryIndexByProducto(productos, prenda);
     const entradaExistente = indiceExistente >= 0 ? gcs.normalizeProductoEntry(productos[indiceExistente]) : null;
+
+    // Fotos que ya existen para esta prenda. Si está publicada salen de su entrada; si no, puede
+    // haber contenido cargado como borrador en GCS, que se reconstruye por el nombre de archivo.
+    let coloresPrevios = entradaExistente?.colores || [];
+    let carpetaBorrador = null;
+    if (!entradaExistente) {
+      const contenido = await gcs.listarContenidoWeb();
+      for (const id of ids) {
+        const propio = contenido.get(id);
+        if (propio && propio.imagenes.length > 0) {
+          coloresPrevios = reconstruirColoresDesdeContenido(propio.imagenes, coloresSeleccionados);
+          carpetaBorrador = propio.carpeta;
+          break;
+        }
+      }
+    }
+
     const idPrincipal = entradaExistente?.idPrincipal ?? Math.min(...ids);
-    const nombreBase = entradaExistente?.carpeta || `${idPrincipal}-${prenda.trim()}`;
+    const nombreBase = entradaExistente?.carpeta || carpetaBorrador || `${idPrincipal}-${prenda.trim()}`;
     const rutaCarpeta = `Novedades/${nombreBase}/`;
 
-    // Cada color necesita al menos una imagen: nueva o preexistente de una publicación anterior.
+    // Cada color necesita al menos una imagen: nueva o preexistente de una carga anterior.
     const coloresFinales = [];
     for (const grupo of coloresSeleccionados) {
       const slug = gcs.slugify(grupo.color);
       const archivos = archivosPorColor.get(grupo.color) || [];
-      const previo = entradaExistente?.colores.find(c => gcs.slugify(c.color) === slug);
+      const previo = coloresPrevios.find(c => gcs.slugify(c.color) === slug);
 
       if (archivos.length === 0 && (!previo || previo.imagenes.length === 0)) {
         return res.status(400).json({
@@ -282,9 +396,9 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
       coloresFinales.push({ color: grupo.color, ids: grupo.ids, imagenes });
     }
 
-    // Conservar colores ya publicados que no vinieron en esta selección (publicación incremental).
+    // Conservar colores ya cargados que no vinieron en esta selección (carga incremental).
     const slugsNuevos = new Set(coloresFinales.map(c => gcs.slugify(c.color)));
-    for (const previo of entradaExistente?.colores || []) {
+    for (const previo of coloresPrevios) {
       if (!slugsNuevos.has(gcs.slugify(previo.color)) && previo.imagenes.length > 0) {
         coloresFinales.push(previo);
       }
@@ -300,34 +414,162 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
     const contenidoTxt = gcs.buildTxtContent({ titulo, texto, precio, detalle });
     const urlTxt = await gcs.uploadBuffer(`${rutaCarpeta}${nombreBase}.txt`, Buffer.from(contenidoTxt, 'utf8'), 'text/plain; charset=utf-8');
 
-    const nuevaEntrada = gcs.buildProductoEntry({
-      producto: prenda,
-      categoria,
-      carpeta: nombreBase,
-      txt: urlTxt,
-      colores: coloresFinales
-    });
-    if (indiceExistente >= 0) {
-      productos[indiceExistente] = nuevaEntrada;
-    } else {
-      productos.push(nuevaEntrada);
+    // productos.json es el índice de lo PUBLICADO: solo se toca al publicar, o para mantener
+    // sincronizada una tarjeta que ya estaba publicada (editar contenido no despublica).
+    if (publicar || indiceExistente >= 0) {
+      const nuevaEntrada = gcs.buildProductoEntry({
+        producto: prenda,
+        categoria,
+        carpeta: nombreBase,
+        txt: urlTxt,
+        colores: coloresFinales
+      });
+      if (indiceExistente >= 0) {
+        productos[indiceExistente] = nuevaEntrada;
+      } else {
+        productos.push(nuevaEntrada);
+      }
+      await gcs.saveProductosJson(productos);
     }
-    await gcs.saveProductosJson(productos);
 
-    await db.pool.query(
-      `UPDATE ${db.PRODUCTOS_TABLE} SET publicado_en_web = 'True' WHERE id_articulo = ANY($1::int[])`,
-      [ids]
-    );
+    if (publicar) {
+      await db.pool.query(
+        `UPDATE ${db.PRODUCTOS_TABLE} SET publicado_en_web = 'True' WHERE id_articulo = ANY($1::int[])`,
+        [ids]
+      );
+    }
 
     res.json({
       success: true,
       carpeta: nombreBase,
       txt: urlTxt,
+      publicado: publicar || indiceExistente >= 0,
       colores: coloresFinales.map(c => ({ color: c.color, imagenes: c.imagenes.length }))
     });
   } catch (error) {
     console.error('❌ Error generando/subiendo artículo web:', error.message);
     res.status(500).json({ success: false, error: 'Error al generar y subir el artículo' });
+  }
+});
+
+// === PUBLICAR UN ARTÍCULO YA PREPARADO ===
+// Toma el contenido que ya está en GCS (fotos + .txt cargados con publicar=false) y lo pasa a la
+// tienda: arma la entrada de productos.json y marca publicado_en_web. No sube archivos.
+router.post('/:idArticulo/publicar', requireGcs, requireDb, async (req, res) => {
+  const idArticulo = parseInt(req.params.idArticulo, 10);
+  if (!Number.isInteger(idArticulo)) {
+    return res.status(400).json({ success: false, error: 'ID de artículo inválido' });
+  }
+
+  try {
+    const refResult = await db.pool.query(
+      `SELECT prenda FROM ${db.PRODUCTOS_TABLE} WHERE id_articulo = $1`,
+      [idArticulo]
+    );
+    if (refResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Artículo no encontrado' });
+    }
+    const prenda = refResult.rows[0].prenda;
+
+    // Se publican todas las unidades Disponibles de la prenda (la tarjeta es por prenda).
+    const unidades = await db.pool.query(
+      `SELECT id_articulo, color, estado FROM ${db.PRODUCTOS_TABLE}
+       WHERE prenda = $1 AND estado = 'Disponible' ORDER BY id_articulo`,
+      [prenda]
+    );
+    if (unidades.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'No hay unidades Disponibles de esta prenda para publicar' });
+    }
+    const gruposColor = agruparIdsPorColor(unidades.rows);
+    const ids = unidades.rows.map(r => r.id_articulo);
+
+    const productos = await gcs.getProductosJson();
+    const indiceExistente = gcs.findEntryIndexByProducto(productos, prenda);
+
+    // Buscar el contenido cargado: puede estar bajo el id de cualquier unidad de la prenda.
+    const contenido = await gcs.listarContenidoWeb();
+    let encontrado = null;
+    for (const id of [idArticulo, ...ids]) {
+      const propio = contenido.get(id);
+      if (propio && propio.imagenes.length > 0) { encontrado = propio; break; }
+    }
+    if (!encontrado) {
+      return res.status(400).json({
+        success: false,
+        error: 'El artículo no tiene fotos cargadas. Cargá el contenido antes de publicarlo.'
+      });
+    }
+
+    const carpeta = indiceExistente >= 0
+      ? gcs.normalizeProductoEntry(productos[indiceExistente]).carpeta
+      : encontrado.carpeta;
+    const colores = reconstruirColoresDesdeContenido(encontrado.imagenes, gruposColor);
+    if (colores.length === 0) {
+      return res.status(400).json({ success: false, error: 'No se pudo asociar ninguna foto a los colores del artículo' });
+    }
+
+    // La categoría vive en productos.json; si es la primera publicación se lee del .txt/BD.
+    const categoriaPrevia = indiceExistente >= 0 ? productos[indiceExistente].categoria : null;
+    const categoriaDb = await db.pool.query(
+      `SELECT categoria FROM ${db.PRODUCTOS_TABLE} WHERE id_articulo = $1`, [idArticulo]
+    );
+    const categoria = categoriaPrevia || gcs.normalizeTextField(categoriaDb.rows[0]?.categoria);
+
+    const entrada = gcs.buildProductoEntry({
+      producto: prenda,
+      categoria,
+      carpeta,
+      txt: encontrado.txt || gcs.publicUrlFor(`Novedades/${carpeta}/${carpeta}.txt`),
+      colores
+    });
+    if (indiceExistente >= 0) productos[indiceExistente] = entrada;
+    else productos.push(entrada);
+    await gcs.saveProductosJson(productos);
+
+    const idsPublicados = colores.reduce((acc, c) => acc.concat(c.ids), []);
+    await db.pool.query(
+      `UPDATE ${db.PRODUCTOS_TABLE} SET publicado_en_web = 'True' WHERE id_articulo = ANY($1::int[])`,
+      [idsPublicados]
+    );
+
+    res.json({ success: true, carpeta, ids: idsPublicados, colores: colores.map(c => ({ color: c.color, imagenes: c.imagenes.length })) });
+  } catch (error) {
+    console.error('❌ Error publicando artículo:', error.message);
+    res.status(500).json({ success: false, error: 'Error al publicar el artículo' });
+  }
+});
+
+// === QUITAR DE LA TIENDA PERO CONSERVAR EL CONTENIDO ===
+// Saca la tarjeta de productos.json y desmarca publicado_en_web, pero NO borra las fotos ni el
+// .txt de GCS: así se puede volver a publicar sin cargar todo de nuevo.
+// (`DELETE /:id` es la versión destructiva, que además borra la carpeta.)
+router.post('/:idArticulo/despublicar', requireGcs, requireDb, async (req, res) => {
+  const idArticulo = parseInt(req.params.idArticulo, 10);
+  if (!Number.isInteger(idArticulo)) {
+    return res.status(400).json({ success: false, error: 'ID de artículo inválido' });
+  }
+
+  try {
+    const productos = await gcs.getProductosJson();
+    const indice = gcs.findEntryIndexByArticuloId(productos, idArticulo);
+    if (indice === -1) {
+      return res.status(404).json({ success: false, error: 'El artículo no está publicado en la web' });
+    }
+    const entrada = gcs.normalizeProductoEntry(productos[indice]);
+    const ids = entrada.ids.length > 0 ? entrada.ids : [idArticulo];
+
+    productos.splice(indice, 1);
+    await gcs.saveProductosJson(productos);
+
+    await db.pool.query(
+      `UPDATE ${db.PRODUCTOS_TABLE} SET publicado_en_web = 'False' WHERE id_articulo = ANY($1::int[])`,
+      [ids]
+    );
+
+    res.json({ success: true, carpeta: entrada.carpeta, ids, contenidoConservado: true });
+  } catch (error) {
+    console.error('❌ Error despublicando artículo:', error.message);
+    res.status(500).json({ success: false, error: 'Error al quitar el artículo de la web' });
   }
 });
 

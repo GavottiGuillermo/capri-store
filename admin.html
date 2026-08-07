@@ -15,8 +15,9 @@
     .btn-vino-tinto { background-color: var(--vino-tinto); color: #fff; border: none; }
     .btn-vino-tinto:hover { background-color: #4a0707; color: #fff; }
     .card-titulo { font-weight: bold; color: var(--vino-tinto); }
-    #tabla-productos { font-size: 0.85rem; }
-    #tabla-productos td, #tabla-productos th { vertical-align: middle; }
+    #tabla-articulos { font-size: 0.85rem; }
+    #tabla-articulos td, #tabla-articulos th { vertical-align: middle; }
+    #tabla-articulos thead th { background-color: #e9ecef; }
     .alert-resultado { white-space: pre-wrap; font-size: 0.85rem; }
   </style>
 </head>
@@ -34,222 +35,39 @@
 
     <div id="content" style="display:none;">
       <ul class="nav nav-tabs mb-3" id="admin-tabs">
-        <li class="nav-item"><a class="nav-link active" href="#" data-tab="articulos-web">Artículos Web</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-tab="stock">Stock</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-tab="ventas">Ventas</a></li>
+        <li class="nav-item"><a class="nav-link active" href="#" data-tab="articulos">Artículos</a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-tab="cashflow">Cash Flow</a></li>
       </ul>
 
-      <div id="tab-articulos-web">
-      <h4 class="mb-3">Artículos Web</h4>
-      <p class="text-muted small">Publicación y edición de artículos en la tienda online. El desktop sigue funcionando en paralelo.</p>
-
-      <!-- Tabla de productos disponibles -->
-      <div class="card mb-4">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="card-titulo">Productos disponibles</span>
-            <div>
-              <input type="text" id="filtro-prenda" class="form-control form-control-sm d-inline-block" style="width:220px;" placeholder="Filtrar por prenda..." />
-              <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar">↻ Refrescar</button>
-            </div>
-          </div>
-          <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
-            <table class="table table-sm table-hover" id="tabla-productos">
-              <thead class="thead-light" style="position: sticky; top: 0;">
-                <tr>
-                  <th></th>
-                  <th>ID</th>
-                  <th>Prenda</th>
-                  <th>Color</th>
-                  <th>Talle</th>
-                  <th>Precio transf.</th>
-                  <th>Publicado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="tbody-productos"></tbody>
-            </table>
-          </div>
-          <small class="text-muted"><span id="seleccion-count">0</span> seleccionados</small>
-        </div>
-      </div>
-
-      <div class="row">
-        <!-- Generar y subir artículo -->
-        <div class="col-md-6 mb-4">
-          <div class="card h-100">
-            <div class="card-body">
-              <span class="card-titulo">Generar y subir artículo</span>
-              <p class="text-muted small">Usa los productos seleccionados en la tabla (deben ser todos de la misma prenda). Podés seleccionar <strong>varios colores a la vez</strong> y subir <strong>varias fotos por color</strong>: todo queda en una sola tarjeta del catálogo.</p>
-              <form id="form-generar">
-                <div class="form-group">
-                  <label>Título</label>
-                  <input type="text" class="form-control form-control-sm" name="titulo" />
-                </div>
-                <div class="form-group">
-                  <label>Texto corto</label>
-                  <input type="text" class="form-control form-control-sm" name="texto" />
-                </div>
-                <div class="form-group">
-                  <label>Precio (transferencia)</label>
-                  <input type="number" class="form-control form-control-sm" name="precio" />
-                </div>
-                <div class="form-group">
-                  <label>Detalle</label>
-                  <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
-                </div>
-                <div class="form-group">
-                  <label>Categoría</label>
-                  <select class="form-control form-control-sm" name="categoria">
-                    <option value="Remeras">Remeras</option>
-                    <option value="Pantalones">Pantalones</option>
-                    <option value="Vestidos">Vestidos</option>
-                    <option value="Buzos">Buzos</option>
-                    <option value="Conjuntos">Conjuntos</option>
-                    <option value="Accesorios">Accesorios</option>
-                    <option value="Carteras">Carteras</option>
-                    <option value="OnaFitness">OnaFitness</option>
-                  </select>
-                </div>
-                <div class="form-group form-check">
-                  <input type="checkbox" class="form-check-input" id="chk-novedad" name="novedad" />
-                  <label class="form-check-label" for="chk-novedad">¿Novedad?</label>
-                </div>
-                <div class="form-group">
-                  <label>Fotos por color</label>
-                  <div id="imagenes-por-color">
-                    <small class="text-muted">Seleccioná productos en la tabla para cargar sus fotos.</small>
-                  </div>
-                </div>
-                <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-generar">Generar y subir</button>
-              </form>
-              <div id="resultado-generar" class="alert mt-3 alert-resultado" style="display:none;"></div>
-            </div>
+      <!-- ===================== ARTÍCULOS (listado único) ===================== -->
+      <!-- Una sola pantalla para todo el ciclo de vida de un artículo: verlo, cargarle fotos y
+           descripción, publicarlo o quitarlo de la tienda, venderlo y devolverlo. Las acciones que
+           necesitan formulario abren un panel o un modal en vez de vivir sueltas en la página. -->
+      <div id="tab-articulos">
+        <div class="d-flex justify-content-between align-items-center flex-wrap mb-1">
+          <h4 class="mb-0">Artículos</h4>
+          <div class="btn-toolbar">
+            <button class="btn btn-sm btn-vino-tinto mr-2" id="btn-panel-lote">+ Cargar mercadería</button>
+            <button class="btn btn-sm btn-outline-secondary mr-2" id="btn-panel-carrito">
+              Carrito <span class="badge badge-secondary" id="carrito-count">0</span>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar-articulos">↻ Refrescar</button>
           </div>
         </div>
+        <p class="text-muted small">
+          Todo el stock del sistema en un listado. Desde acá cargás fotos y descripciones (se pueden
+          guardar sin publicar), publicás o quitás de la tienda, y registrás ventas hechas por fuera
+          de la web (Instagram, transferencia, local).
+        </p>
 
-        <!-- Modificar artículo publicado -->
-        <div class="col-md-6 mb-4">
-          <div class="card h-100">
-            <div class="card-body">
-              <span class="card-titulo">Modificar artículo publicado</span>
-              <p class="text-muted small">Ingresá el ID de un artículo ya publicado para cargar sus datos actuales.</p>
-              <div class="form-group d-flex">
-                <input type="number" class="form-control form-control-sm mr-2" id="modificar-id" placeholder="ID artículo" />
-                <button class="btn btn-sm btn-outline-secondary" id="btn-cargar-modificar">Cargar datos</button>
-              </div>
-              <form id="form-modificar" style="display:none;">
-                <div class="form-group">
-                  <label>Título</label>
-                  <input type="text" class="form-control form-control-sm" name="titulo" />
-                </div>
-                <div class="form-group">
-                  <label>Texto corto</label>
-                  <input type="text" class="form-control form-control-sm" name="texto" />
-                </div>
-                <div class="form-group">
-                  <label>Precio (transferencia)</label>
-                  <input type="number" class="form-control form-control-sm" name="precio" required />
-                </div>
-                <div class="form-group">
-                  <label>Detalle</label>
-                  <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
-                </div>
-                <div class="form-group">
-                  <label>Categoría</label>
-                  <select class="form-control form-control-sm" name="categoria">
-                    <option value="Remeras">Remeras</option>
-                    <option value="Pantalones">Pantalones</option>
-                    <option value="Vestidos">Vestidos</option>
-                    <option value="Buzos">Buzos</option>
-                    <option value="Conjuntos">Conjuntos</option>
-                    <option value="Accesorios">Accesorios</option>
-                    <option value="Carteras">Carteras</option>
-                    <option value="OnaFitness">OnaFitness</option>
-                  </select>
-                </div>
-                <div class="form-group form-check">
-                  <input type="checkbox" class="form-check-input" id="chk-novedad-modif" name="novedad" />
-                  <label class="form-check-label" for="chk-novedad-modif">¿Novedad?</label>
-                </div>
-                <div class="form-group">
-                  <label>Fotos actuales</label>
-                  <div><small class="text-muted" id="imagen-actual-nombre">-</small></div>
-                </div>
-                <div class="form-group">
-                  <label>Reemplazar fotos (opcional)</label>
-                  <div id="modificar-imagenes-por-color">
-                    <small class="text-muted">Cargá un artículo para ver sus colores.</small>
-                  </div>
-                  <small class="form-text text-muted">Si elegís fotos para un color, reemplazan todas las de ese color. Los colores que dejes vacíos no se tocan.</small>
-                </div>
-                <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-modificar">Guardar cambios</button>
-              </form>
-              <div id="resultado-modificar" class="alert mt-3 alert-resultado" style="display:none;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Ajuste porcentual -->
-      <div class="card mb-5">
-        <div class="card-body">
-          <span class="card-titulo">Ajuste porcentual de precios</span>
-          <p class="text-muted small">Aplica el ajuste a los productos seleccionados en la tabla (solo se ajustan los ya publicados en la web).</p>
-          <form id="form-ajuste" class="form-inline">
-            <label class="mr-2">Porcentaje:</label>
-            <input type="number" step="0.01" class="form-control form-control-sm mr-2" name="porcentaje" placeholder="Ej: 10 o -5" style="width:140px;" required />
-            <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-ajuste">Aplicar ajuste</button>
-          </form>
-          <div id="resultado-ajuste" class="alert mt-3 alert-resultado" style="display:none;"></div>
-        </div>
-      </div>
-      </div>
-
-      <div id="tab-stock" style="display:none;">
-        <h4 class="mb-3">Stock</h4>
-        <p class="text-muted small">Listado de stock actual y carga manual de lotes nuevos (equivalente a la pestaña "Carga Manual" del desktop).</p>
-
-        <!-- Listado de stock -->
-        <div class="card mb-4">
+        <!-- Panel: cargar mercadería nueva (modelo + matriz color x talle) -->
+        <div class="card mb-3" id="panel-lote" style="display:none;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="card-titulo">Stock actual</span>
-              <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar-stock">↻ Refrescar</button>
+              <span class="card-titulo">Cargar mercadería (lote nuevo)</span>
+              <button class="btn btn-sm btn-link text-muted" id="btn-cerrar-lote">Cerrar</button>
             </div>
-            <div class="form-row mb-2">
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-id" placeholder="ID..." /></div>
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-prenda" placeholder="Prenda..." /></div>
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-estado" placeholder="Estado..." /></div>
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-stock-categoria" placeholder="Categoría..." /></div>
-            </div>
-            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
-              <table class="table table-sm table-hover" id="tabla-stock">
-                <thead class="thead-light" style="position: sticky; top: 0;">
-                  <tr>
-                    <th>ID</th>
-                    <th>Prenda</th>
-                    <th>Estado</th>
-                    <th>Categoría</th>
-                    <th>Color</th>
-                    <th>Talle</th>
-                    <th>Precio efec.</th>
-                    <th>Precio transf.</th>
-                    <th>Publicado</th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-stock"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- Carga manual de lote -->
-        <div class="card mb-5">
-          <div class="card-body">
-            <span class="card-titulo">Carga manual de lote</span>
-            <p class="text-muted small">Cargá un <strong>modelo</strong> (prenda + categoría + precios) y definí sus <strong>variantes</strong> en la matriz de color × talle. Cada unidad entra como su propia fila en la base, igual que en el desktop.</p>
+            <p class="text-muted small">Cargá un <strong>modelo</strong> (prenda + categoría + precios) y definí sus <strong>variantes</strong> en la matriz de color × talle. Cada unidad entra como su propia fila en la base.</p>
 
             <div class="form-row">
               <div class="form-group col-md-6">
@@ -331,49 +149,16 @@
             <div id="resultado-lote" class="alert mt-3 alert-resultado" style="display:none;"></div>
           </div>
         </div>
-      </div>
 
-      <div id="tab-ventas" style="display:none;">
-        <h4 class="mb-3">Ventas</h4>
-        <p class="text-muted small">Venta presencial: agregá artículos disponibles al carrito y confirmá la venta, o hacé una devolución de un artículo ya vendido.</p>
-
-        <div class="card mb-4">
+        <!-- Panel: carrito de venta presencial / por fuera de la web -->
+        <div class="card mb-3" id="panel-carrito" style="display:none;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="card-titulo">Artículos</span>
-              <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar-ventas">↻ Refrescar</button>
+              <span class="card-titulo">Venta</span>
+              <button class="btn btn-sm btn-link text-muted" id="btn-cerrar-carrito">Cerrar</button>
             </div>
-            <div class="form-row mb-2">
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-id" placeholder="ID..." /></div>
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-prenda" placeholder="Prenda..." /></div>
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-estado" placeholder="Estado..." /></div>
-              <div class="col"><input type="text" class="form-control form-control-sm" id="filtro-ventas-categoria" placeholder="Categoría..." /></div>
-            </div>
-            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
-              <table class="table table-sm table-hover" id="tabla-ventas">
-                <thead class="thead-light" style="position: sticky; top: 0;">
-                  <tr>
-                    <th>ID</th>
-                    <th>Prenda</th>
-                    <th>Estado</th>
-                    <th>Categoría</th>
-                    <th>Color</th>
-                    <th>Talle</th>
-                    <th>Precio efec.</th>
-                    <th>Precio transf.</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-ventas"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="card mb-5">
-          <div class="card-body">
-            <span class="card-titulo">Carrito</span>
-            <div class="table-responsive mt-2">
+            <p class="text-muted small">Para ventas hechas por fuera de la tienda online (Instagram, transferencia, local). Agregá artículos desde el listado con "Vender".</p>
+            <div class="table-responsive">
               <table class="table table-sm" id="tabla-carrito">
                 <thead class="thead-light">
                   <tr>
@@ -411,8 +196,70 @@
             </div>
 
             <button class="btn btn-vino-tinto btn-sm" id="btn-finalizar-venta" disabled>Confirmar venta</button>
-            <button class="btn btn-outline-danger btn-sm" id="btn-cancelar-venta" disabled>Cancelar</button>
+            <button class="btn btn-outline-danger btn-sm" id="btn-cancelar-venta" disabled>Vaciar carrito</button>
             <div id="resultado-venta" class="alert mt-3 alert-resultado" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Filtros + acciones sobre la selección -->
+        <div class="card mb-3">
+          <div class="card-body py-2">
+            <div class="form-row">
+              <div class="col-md-2 mb-1"><input type="text" class="form-control form-control-sm" id="f-id" placeholder="ID..." /></div>
+              <div class="col-md-3 mb-1"><input type="text" class="form-control form-control-sm" id="f-prenda" placeholder="Prenda..." /></div>
+              <div class="col-md-2 mb-1"><input type="text" class="form-control form-control-sm" id="f-categoria" placeholder="Categoría..." /></div>
+              <div class="col-md-2 mb-1">
+                <select class="form-control form-control-sm" id="f-estado">
+                  <option value="">Estado: todos</option>
+                  <option value="Disponible">Disponible</option>
+                  <option value="Sin Stock">Sin stock</option>
+                </select>
+              </div>
+              <div class="col-md-3 mb-1">
+                <select class="form-control form-control-sm" id="f-web">
+                  <option value="">Web: todos</option>
+                  <option value="publicado">Publicados</option>
+                  <option value="no-publicado">No publicados</option>
+                  <option value="con-fotos">Con fotos cargadas</option>
+                  <option value="sin-fotos">Sin fotos</option>
+                  <option value="listo-publicar">Con fotos, sin publicar</option>
+                </select>
+              </div>
+            </div>
+            <div class="d-flex align-items-center flex-wrap mt-1">
+              <small class="text-muted mr-3"><strong id="seleccion-count">0</strong> seleccionado(s)</small>
+              <button class="btn btn-sm btn-outline-primary mr-2" id="btn-contenido-seleccion" disabled>Fotos y descripción</button>
+              <button class="btn btn-sm btn-outline-success mr-2" id="btn-publicar-seleccion" disabled>Publicar en la web</button>
+              <button class="btn btn-sm btn-outline-secondary mr-2" id="btn-ajuste-seleccion" disabled>Ajustar precio %</button>
+              <button class="btn btn-sm btn-outline-dark" id="btn-vender-seleccion" disabled>Vender</button>
+            </div>
+            <div id="resultado-acciones" class="alert mt-2 mb-0 alert-resultado" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Listado -->
+        <div class="card mb-5">
+          <div class="card-body">
+            <div class="table-responsive" style="max-height: 560px; overflow-y: auto;">
+              <table class="table table-sm table-hover" id="tabla-articulos">
+                <thead class="thead-light" style="position: sticky; top: 0; z-index: 2;">
+                  <tr>
+                    <th><input type="checkbox" id="chk-todos" title="Seleccionar todo lo filtrado" /></th>
+                    <th>ID</th>
+                    <th>Prenda</th>
+                    <th>Color</th>
+                    <th>Talle</th>
+                    <th>Estado</th>
+                    <th>Precio efec.</th>
+                    <th>Precio transf.</th>
+                    <th>Web</th>
+                    <th style="min-width:150px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-articulos"></tbody>
+              </table>
+            </div>
+            <small class="text-muted" id="resumen-listado"></small>
           </div>
         </div>
       </div>
@@ -473,7 +320,6 @@
   <script>
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
-    let productosCache = [];
 
     async function checkSession() {
       try {
@@ -483,7 +329,7 @@
         document.getElementById('admin-username').textContent = data.username;
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
-        cargarProductos();
+        cargarArticulos();
       } catch (error) {
         window.location.href = 'admin-login.html';
       }
@@ -501,373 +347,422 @@
       el.textContent = texto;
     }
 
-    async function cargarProductos() {
-      const tbody = document.getElementById('tbody-productos');
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Cargando...</td></tr>';
+    // ===================== LISTADO ÚNICO DE ARTÍCULOS =====================
+    // Una sola fuente de datos (GET /admin/articulos-web/listado) que combina el stock de la BD
+    // con el estado web de cada artículo: publicado (está en la tienda) y con contenido cargado
+    // (fotos/descripción en GCS). Son estados independientes: se puede tener fotos sin publicar.
+    let articulosCache = [];
+
+    async function cargarArticulos() {
+      const tbody = document.getElementById('tbody-articulos');
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Cargando...</td></tr>';
       try {
-        const resp = await fetch('/admin/articulos-web/productos', { credentials: 'same-origin' });
+        const resp = await fetch('/admin/articulos-web/listado', { credentials: 'same-origin' });
         const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Error al cargar productos');
-        productosCache = data.productos;
-        renderProductos();
+        if (!data.success) throw new Error(data.error || 'Error al cargar los artículos');
+        articulosCache = data.articulos;
+        // Sacar del carrito lo que ya no esté disponible (ej. vendido desde otra sesión).
+        const disponibles = new Set(articulosCache.filter(a => a.estado === 'Disponible').map(a => a.id_articulo));
+        carrito = carrito.filter(item => disponibles.has(item.id));
+        renderArticulos();
+        renderCarrito();
       } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger">${error.message}</td></tr>`;
       }
     }
 
-    function renderProductos() {
-      const tbody = document.getElementById('tbody-productos');
-      const filtro = document.getElementById('filtro-prenda').value.trim().toLowerCase();
-      const filtrados = productosCache.filter(p => !filtro || (p.prenda || '').toLowerCase().includes(filtro));
+    function articulosFiltrados() {
+      const fId = document.getElementById('f-id').value.trim();
+      const fPrenda = document.getElementById('f-prenda').value.trim().toLowerCase();
+      const fCategoria = document.getElementById('f-categoria').value.trim().toLowerCase();
+      const fEstado = document.getElementById('f-estado').value;
+      const fWeb = document.getElementById('f-web').value;
+
+      return articulosCache.filter(a => {
+        if (fId && !String(a.id_articulo).includes(fId)) return false;
+        if (fPrenda && !(a.prenda || '').toLowerCase().includes(fPrenda)) return false;
+        if (fCategoria && !(a.categoria || '').toLowerCase().includes(fCategoria)) return false;
+        if (fEstado && a.estado !== fEstado) return false;
+        if (fWeb === 'publicado' && !a.publicado) return false;
+        if (fWeb === 'no-publicado' && a.publicado) return false;
+        if (fWeb === 'con-fotos' && !a.tiene_contenido) return false;
+        if (fWeb === 'sin-fotos' && a.tiene_contenido) return false;
+        if (fWeb === 'listo-publicar' && !(a.tiene_contenido && !a.publicado)) return false;
+        return true;
+      });
+    }
+
+    // Etiqueta del estado web: publicado / con fotos listo para publicar / sin fotos.
+    function badgeWeb(a) {
+      if (a.inconsistente) {
+        return '<span class="badge badge-warning" title="El flag de la BD y productos.json no coinciden">⚠ revisar</span>';
+      }
+      if (a.publicado) {
+        return `<span class="badge badge-success">Publicado</span> <small class="text-muted">${a.fotos} 📷</small>`;
+      }
+      if (a.tiene_contenido) {
+        return `<span class="badge badge-info">Con fotos</span> <small class="text-muted">${a.fotos} 📷</small>`;
+      }
+      return '<span class="badge badge-light text-muted">Sin fotos</span>';
+    }
+
+    function renderArticulos() {
+      const tbody = document.getElementById('tbody-articulos');
+      const filtrados = articulosFiltrados();
+      const enCarrito = new Set(carrito.map(i => i.id));
+      const seleccionados = new Set(getSeleccionados());
 
       tbody.innerHTML = '';
-      filtrados.forEach(p => {
-        const publicado = p.publicado_en_web === 'True' || p.publicado_en_web === true;
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Sin resultados para los filtros aplicados.</td></tr>';
+      }
+
+      filtrados.forEach(a => {
+        const disponible = a.estado === 'Disponible';
         const tr = document.createElement('tr');
+
+        // Acciones contextuales: solo se ofrece lo que tiene sentido para el estado de la fila.
+        const acciones = [];
+        acciones.push(`<button class="btn btn-sm btn-outline-primary btn-acc" data-acc="contenido" data-id="${a.id_articulo}" title="Cargar o editar fotos y descripción">📷</button>`);
+        if (!a.publicado && a.tiene_contenido) {
+          acciones.push(`<button class="btn btn-sm btn-outline-success btn-acc" data-acc="publicar" data-id="${a.id_articulo}" title="Publicar en la tienda">Publicar</button>`);
+        }
+        if (a.publicado) {
+          acciones.push(`<button class="btn btn-sm btn-outline-warning btn-acc" data-acc="despublicar" data-id="${a.id_articulo}" title="Quitar de la tienda (conserva las fotos)">Quitar</button>`);
+        }
+        if (disponible) {
+          acciones.push(enCarrito.has(a.id_articulo)
+            ? '<span class="badge badge-dark align-middle">En carrito</span>'
+            : `<button class="btn btn-sm btn-outline-dark btn-acc" data-acc="vender" data-id="${a.id_articulo}" title="Registrar venta por fuera de la web">Vender</button>`);
+        } else {
+          acciones.push(`<button class="btn btn-sm btn-outline-danger btn-acc" data-acc="devolver" data-id="${a.id_articulo}" title="Revertir la venta">Devolución</button>`);
+        }
+
         tr.innerHTML = `
-          <td><input type="checkbox" class="chk-producto" value="${p.id_articulo}"></td>
-          <td>${p.id_articulo}</td>
-          <td>${p.prenda || ''}</td>
-          <td>${p.color || ''}</td>
-          <td>${p.talle || ''}</td>
-          <td>$${Number(p.precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
-          <td>${publicado ? '✅' : '—'}</td>
-          <td>${publicado ? `<button class="btn btn-sm btn-outline-danger btn-quitar" data-id="${p.id_articulo}">Quitar</button>` : ''}</td>
+          <td><input type="checkbox" class="chk-articulo" value="${a.id_articulo}" ${seleccionados.has(a.id_articulo) ? 'checked' : ''}></td>
+          <td>${a.id_articulo}</td>
+          <td>${a.prenda || ''}</td>
+          <td>${a.color || ''}</td>
+          <td>${a.talle || ''}</td>
+          <td>${disponible ? a.estado : `<span class="text-muted">${a.estado}</span>`}</td>
+          <td>$${Number(a.precio_venta_efectivo || 0).toLocaleString('es-AR')}</td>
+          <td>$${Number(a.precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
+          <td>${badgeWeb(a)}</td>
+          <td class="text-nowrap">${acciones.join(' ')}</td>
         `;
         tbody.appendChild(tr);
       });
 
-      document.querySelectorAll('.chk-producto').forEach(chk => {
-        chk.addEventListener('change', actualizarContadorSeleccion);
+      document.querySelectorAll('.chk-articulo').forEach(chk => {
+        chk.addEventListener('change', actualizarAccionesSeleccion);
       });
-      document.querySelectorAll('.btn-quitar').forEach(btn => {
-        btn.addEventListener('click', () => quitarDeLaWeb(btn.dataset.id, btn));
+      document.querySelectorAll('.btn-acc').forEach(btn => {
+        btn.addEventListener('click', () => ejecutarAccionFila(btn.dataset.acc, parseInt(btn.dataset.id, 10), btn));
       });
-      actualizarContadorSeleccion();
-    }
 
-    async function quitarDeLaWeb(id, btn) {
-      if (!confirm(`¿Quitar el artículo #${id} de la web? Se borra la carpeta e imagen de GCS.`)) return;
-      btn.disabled = true;
-      btn.textContent = '...';
-      try {
-        const resp = await fetch(`/admin/articulos-web/${id}`, { method: 'DELETE', credentials: 'same-origin' });
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'No se pudo quitar el artículo');
-        cargarProductos();
-      } catch (error) {
-        alert(error.message);
-        btn.disabled = false;
-        btn.textContent = 'Quitar';
-      }
-    }
+      const publicados = filtrados.filter(a => a.publicado).length;
+      const conFotos = filtrados.filter(a => a.tiene_contenido).length;
+      document.getElementById('resumen-listado').textContent =
+        `${filtrados.length} de ${articulosCache.length} artículo(s) · ${publicados} publicado(s) · ${conFotos} con fotos`;
 
-    function actualizarContadorSeleccion() {
-      document.getElementById('seleccion-count').textContent = getSeleccionados().length;
-      renderImagenesPorColor();
+      actualizarAccionesSeleccion();
     }
 
     function getSeleccionados() {
-      return Array.from(document.querySelectorAll('.chk-producto:checked')).map(chk => parseInt(chk.value, 10));
+      return Array.from(document.querySelectorAll('.chk-articulo:checked')).map(chk => parseInt(chk.value, 10));
     }
 
-    // Colores distintos entre los productos seleccionados, en orden de aparición.
-    // Cada color es un grupo de unidades físicas que van a compartir las mismas fotos.
-    function getColoresSeleccionados() {
+    function getArticulo(id) {
+      return articulosCache.find(a => a.id_articulo === id);
+    }
+
+    function actualizarAccionesSeleccion() {
       const ids = getSeleccionados();
-      const colores = [];
-      ids.forEach(id => {
-        const p = productosCache.find(x => x.id_articulo === id);
-        if (!p) return;
-        const color = p.color || '';
-        if (!colores.includes(color)) colores.push(color);
-      });
-      return colores;
+      document.getElementById('seleccion-count').textContent = ids.length;
+      const hay = ids.length > 0;
+      document.getElementById('btn-contenido-seleccion').disabled = !hay;
+      document.getElementById('btn-publicar-seleccion').disabled = !hay;
+      document.getElementById('btn-ajuste-seleccion').disabled = !hay;
+      // Vender solo tiene sentido si hay algo disponible entre lo seleccionado.
+      const vendibles = ids.filter(id => getArticulo(id)?.estado === 'Disponible');
+      document.getElementById('btn-vender-seleccion').disabled = vendibles.length === 0;
     }
 
-    // Un input de archivos (múltiple) por cada color de la selección.
-    function renderImagenesPorColor() {
-      const cont = document.getElementById('imagenes-por-color');
-      if (!cont) return;
-      const colores = getColoresSeleccionados();
+    ['f-id', 'f-prenda', 'f-categoria', 'f-estado', 'f-web'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderArticulos);
+      document.getElementById(id).addEventListener('change', renderArticulos);
+    });
+    document.getElementById('btn-refrescar-articulos').addEventListener('click', cargarArticulos);
+    document.getElementById('chk-todos').addEventListener('change', (e) => {
+      document.querySelectorAll('.chk-articulo').forEach(chk => { chk.checked = e.target.checked; });
+      actualizarAccionesSeleccion();
+    });
 
-      if (colores.length === 0) {
-        cont.innerHTML = '<small class="text-muted">Seleccioná productos en la tabla para cargar sus fotos.</small>';
+    // === Acciones por fila ===
+    async function ejecutarAccionFila(accion, id, btn) {
+      if (accion === 'contenido') return abrirModalContenido([id]);
+      if (accion === 'vender') return agregarAlCarrito(id);
+      if (accion === 'devolver') return devolverArticulo(id, btn);
+      if (accion === 'publicar') return publicarArticulo(id, btn);
+      if (accion === 'despublicar') return despublicarArticulo(id, btn);
+    }
+
+    async function accionSimple(url, btn, textoOriginal, confirmacion) {
+      if (confirmacion && !confirm(confirmacion)) return;
+      if (btn) { btn.disabled = true; btn.textContent = '...'; }
+      try {
+        const resp = await fetch(url, { method: 'POST', credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo completar la acción');
+        await cargarArticulos();
+        return data;
+      } catch (error) {
+        mostrarResultado('resultado-acciones', false, error.message);
+        if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
+      }
+    }
+
+    function publicarArticulo(id, btn) {
+      return accionSimple(`/admin/articulos-web/${id}/publicar`, btn, 'Publicar');
+    }
+
+    function despublicarArticulo(id, btn) {
+      return accionSimple(`/admin/articulos-web/${id}/despublicar`, btn, 'Quitar',
+        `¿Quitar de la tienda el artículo #${id}? Las fotos y la descripción se conservan, así que después podés volver a publicarlo sin cargarlas de nuevo.`);
+    }
+
+    // === Acciones sobre la selección ===
+    document.getElementById('btn-contenido-seleccion').addEventListener('click', () => abrirModalContenido(getSeleccionados()));
+    document.getElementById('btn-vender-seleccion').addEventListener('click', () => {
+      getSeleccionados().filter(id => getArticulo(id)?.estado === 'Disponible').forEach(id => agregarAlCarrito(id, true));
+      renderArticulos();
+      renderCarrito();
+      abrirPanel('panel-carrito');
+    });
+
+    document.getElementById('btn-publicar-seleccion').addEventListener('click', async () => {
+      const ids = getSeleccionados();
+      // La tarjeta de la tienda es por prenda, así que publicar N artículos de la misma prenda es
+      // una sola operación: se agrupa para no llamar al endpoint una vez por unidad.
+      const prendas = [...new Set(ids.map(id => getArticulo(id)?.prenda).filter(Boolean))];
+      const sinFotos = ids.filter(id => !getArticulo(id)?.tiene_contenido);
+      if (sinFotos.length === ids.length) {
+        mostrarResultado('resultado-acciones', false, 'Ninguno de los artículos seleccionados tiene fotos cargadas. Cargá el contenido primero.');
+        return;
+      }
+      if (!confirm(`¿Publicar ${prendas.length} prenda(s) en la tienda?`)) return;
+
+      const errores = [];
+      for (const prenda of prendas) {
+        const idRef = ids.find(id => getArticulo(id)?.prenda === prenda && getArticulo(id)?.tiene_contenido);
+        if (!idRef) { errores.push(`${prenda}: sin fotos cargadas`); continue; }
+        try {
+          const resp = await fetch(`/admin/articulos-web/${idRef}/publicar`, { method: 'POST', credentials: 'same-origin' });
+          const data = await resp.json();
+          if (!data.success) errores.push(`${prenda}: ${data.error}`);
+        } catch (e) { errores.push(`${prenda}: ${e.message}`); }
+      }
+      await cargarArticulos();
+      mostrarResultado('resultado-acciones', errores.length === 0,
+        errores.length === 0 ? `${prendas.length} prenda(s) publicada(s).` : 'Con errores:\n' + errores.join('\n'));
+    });
+
+    // === Modal de fotos y descripción ===
+    let mcIds = [];
+    let mcColores = [];
+
+    async function abrirModalContenido(ids) {
+      if (ids.length === 0) return;
+      const articulos = ids.map(getArticulo).filter(Boolean);
+      const prendas = [...new Set(articulos.map(a => a.prenda))];
+      if (prendas.length > 1) {
+        mostrarResultado('resultado-acciones', false,
+          `Las fotos y la descripción se cargan por prenda. Seleccioná artículos de una sola prenda (hay ${prendas.length}: ${prendas.join(', ')}).`);
         return;
       }
 
-      // Preservar los archivos ya elegidos si los colores no cambiaron (evita perder la selección
-      // del usuario cada vez que toca un checkbox).
-      const anteriores = Array.from(cont.querySelectorAll('input[type=file]')).map(i => i.dataset.color);
-      if (anteriores.length === colores.length && anteriores.every((c, i) => c === colores[i])) return;
+      // La tarjeta cubre toda la prenda: se incluyen todas sus unidades disponibles, no solo las
+      // tildadas, para que cada color quede con sus fotos.
+      const prenda = prendas[0];
+      mcIds = articulosCache
+        .filter(a => a.prenda === prenda && a.estado === 'Disponible')
+        .map(a => a.id_articulo);
+      if (mcIds.length === 0) mcIds = ids;
 
+      mcColores = [];
+      mcIds.forEach(id => {
+        const color = getArticulo(id)?.color || '';
+        if (!mcColores.includes(color)) mcColores.push(color);
+      });
+
+      document.getElementById('mc-prenda').textContent = prenda;
+      document.getElementById('resultado-contenido').style.display = 'none';
+      const form = document.getElementById('form-contenido');
+      form.reset();
+
+      const yaPublicado = articulos.some(a => a.publicado);
+      const tieneContenido = articulos.some(a => a.tiene_contenido);
+      document.getElementById('mc-ayuda').textContent = yaPublicado
+        ? `Este artículo ya está publicado: los cambios se reflejan en la tienda al guardar. Cubre ${mcIds.length} unidad(es) en ${mcColores.length} color(es).`
+        : `Cubre ${mcIds.length} unidad(es) en ${mcColores.length} color(es). Podés guardar el contenido sin publicar y publicarlo más adelante.`;
+
+      // Precargar los textos si ya hay contenido guardado.
+      let existentes = [];
+      if (tieneContenido) {
+        try {
+          const resp = await fetch(`/admin/articulos-web/${mcIds[0]}`, { credentials: 'same-origin' });
+          const data = await resp.json();
+          if (data.success) {
+            form.titulo.value = data.titulo || '';
+            form.texto.value = data.texto || '';
+            form.precio.value = data.precio || '';
+            form.detalle.value = data.detalle || '';
+            const base = (data.categoria || '').replace('-Novedad', '');
+            if (base) form.categoria.value = base;
+            document.getElementById('mc-novedad').checked = (data.categoria || '').endsWith('-Novedad');
+            existentes = data.colores || [];
+          }
+        } catch { /* si falla la precarga se abre vacío, no es bloqueante */ }
+      }
+      if (!form.precio.value) {
+        form.precio.value = getArticulo(mcIds[0])?.precio_venta_transferencia || '';
+      }
+
+      // Un input de archivos por color, indicando cuántas fotos ya tiene cada uno.
+      const cont = document.getElementById('mc-imagenes-por-color');
       cont.innerHTML = '';
-      colores.forEach((color, indice) => {
+      mcColores.forEach((color, indice) => {
+        const previo = existentes.find(c => (c.color || '').trim().toLowerCase() === color.trim().toLowerCase());
+        const actuales = previo ? previo.imagenes.length : 0;
         const wrapper = document.createElement('div');
         wrapper.className = 'mb-2';
         wrapper.innerHTML = `
-          <label class="small mb-1">${color || '(sin color)'} <span class="text-muted">— podés elegir varias</span></label>
-          <input type="file" class="form-control-file input-img-color" accept="image/*" multiple
-                 data-color="${color}" data-indice="${indice}" />
+          <label class="small mb-1">
+            ${color || '(sin color)'}
+            <span class="text-muted">${actuales > 0 ? `— ${actuales} foto(s) cargada(s)` : '— sin fotos'}</span>
+          </label>
+          <input type="file" class="form-control-file mc-input-img" accept="image/*" multiple
+                 data-color="${color}" data-indice="${indice}" data-actuales="${actuales}" />
         `;
         cont.appendChild(wrapper);
       });
+
+      $('#modal-contenido').modal('show');
     }
 
-    document.getElementById('filtro-prenda').addEventListener('input', renderProductos);
-    document.getElementById('btn-refrescar').addEventListener('click', cargarProductos);
+    async function guardarContenido(publicar) {
+      const form = document.getElementById('form-contenido');
+      const inputs = Array.from(document.querySelectorAll('.mc-input-img'));
 
-    // === Generar y subir ===
-    document.getElementById('form-generar').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const ids = getSeleccionados();
-      if (ids.length === 0) {
-        mostrarResultado('resultado-generar', false, 'Seleccioná al menos un producto en la tabla.');
-        return;
-      }
-      const form = event.target;
-      const colores = getColoresSeleccionados();
-      const inputs = Array.from(document.querySelectorAll('.input-img-color'));
-
-      // Todo color de la selección necesita al menos una foto (el servidor lo revalida, pero
-      // avisar acá evita subir el resto para nada).
-      const sinFoto = colores.filter((color, i) => !inputs[i] || inputs[i].files.length === 0);
-      if (sinFoto.length > 0) {
-        mostrarResultado('resultado-generar', false,
-          'Faltan fotos para: ' + sinFoto.map(c => c || '(sin color)').join(', '));
+      // Cada color necesita fotos: nuevas o de una carga anterior.
+      const faltan = inputs.filter(i => i.files.length === 0 && Number(i.dataset.actuales) === 0)
+        .map(i => i.dataset.color || '(sin color)');
+      if (faltan.length > 0) {
+        mostrarResultado('resultado-contenido', false, 'Faltan fotos para: ' + faltan.join(', '));
         return;
       }
 
-      const btn = document.getElementById('btn-generar');
-      btn.disabled = true;
-      btn.textContent = 'Subiendo...';
+      const botones = [document.getElementById('btn-guardar-contenido'), document.getElementById('btn-guardar-publicar')];
+      botones.forEach(b => { b.disabled = true; });
 
       const formData = new FormData(form);
-      formData.set('novedad', document.getElementById('chk-novedad').checked ? 'true' : 'false');
-      formData.set('ids', JSON.stringify(ids));
-      // El servidor resuelve el nombre de archivo a partir de este orden (img_<indice> -> color).
-      formData.set('ordenColores', JSON.stringify(colores));
+      formData.set('novedad', document.getElementById('mc-novedad').checked ? 'true' : 'false');
+      formData.set('ids', JSON.stringify(mcIds));
+      formData.set('ordenColores', JSON.stringify(mcColores));
+      formData.set('publicar', publicar ? 'true' : 'false');
       inputs.forEach(input => {
         Array.from(input.files).forEach(file => formData.append(`img_${input.dataset.indice}`, file));
       });
 
       try {
         const resp = await fetch('/admin/articulos-web/generar', {
-          method: 'POST',
-          credentials: 'same-origin',
-          body: formData
+          method: 'POST', credentials: 'same-origin', body: formData
         });
         const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Error al generar el artículo');
-        const detalle = (data.colores || []).map(c => `${c.color || '(sin color)'}: ${c.imagenes} foto(s)`).join('\n');
-        mostrarResultado('resultado-generar', true,
-          `Artículo subido correctamente. Carpeta: ${data.carpeta}\n${detalle}`);
-        form.reset();
-        cargarProductos();
+        if (!data.success) throw new Error(data.error || 'No se pudo guardar el contenido');
+        $('#modal-contenido').modal('hide');
+        const detalle = (data.colores || []).map(c => `${c.color || '(sin color)'}: ${c.imagenes} foto(s)`).join(' · ');
+        mostrarResultado('resultado-acciones', true,
+          (data.publicado ? 'Contenido guardado y publicado en la tienda.' : 'Contenido guardado (sin publicar).') + '\n' + detalle);
+        await cargarArticulos();
       } catch (error) {
-        mostrarResultado('resultado-generar', false, error.message);
+        mostrarResultado('resultado-contenido', false, error.message);
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Generar y subir';
+        botones.forEach(b => { b.disabled = false; });
       }
+    }
+
+    document.getElementById('btn-guardar-contenido').addEventListener('click', () => guardarContenido(false));
+    document.getElementById('btn-guardar-publicar').addEventListener('click', () => guardarContenido(true));
+
+    // === Modal de ajuste porcentual ===
+    document.getElementById('btn-ajuste-seleccion').addEventListener('click', () => {
+      document.getElementById('ma-count').textContent = getSeleccionados().length;
+      document.getElementById('ma-porcentaje').value = '';
+      document.getElementById('resultado-ajuste').style.display = 'none';
+      $('#modal-ajuste').modal('show');
     });
 
-    // === Modificar artículo publicado ===
-    document.getElementById('btn-cargar-modificar').addEventListener('click', async () => {
-      const id = document.getElementById('modificar-id').value;
-      if (!id) return;
-      try {
-        const resp = await fetch(`/admin/articulos-web/${id}`, { credentials: 'same-origin' });
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'No se pudo cargar el artículo');
-
-        const form = document.getElementById('form-modificar');
-        form.style.display = 'block';
-        form.titulo.value = data.titulo === 'null' ? '' : data.titulo;
-        form.texto.value = data.texto === 'null' ? '' : data.texto;
-        form.precio.value = data.precio === 'null' ? '' : data.precio;
-        form.detalle.value = data.detalle === 'null' ? '' : data.detalle;
-        const categoriaBase = (data.categoria || '').replace('-Novedad', '');
-        form.categoria.value = categoriaBase;
-        document.getElementById('chk-novedad-modif').checked = (data.categoria || '').endsWith('-Novedad');
-        document.getElementById('resultado-modificar').style.display = 'none';
-
-        // Resumen de fotos actuales + un input de reemplazo por color.
-        const colores = Array.isArray(data.colores) && data.colores.length > 0 ? data.colores : [];
-        document.getElementById('imagen-actual-nombre').textContent = colores.length > 0
-          ? colores.map(c => `${c.color || '(sin color)'}: ${c.imagenes.length} foto(s)`).join(' · ')
-          : '(sin imagen)';
-
-        const contModif = document.getElementById('modificar-imagenes-por-color');
-        contModif.innerHTML = '';
-        if (colores.length === 0) {
-          contModif.innerHTML = '<small class="text-muted">Este artículo no tiene colores cargados.</small>';
-        }
-        colores.forEach((c, indice) => {
-          const wrapper = document.createElement('div');
-          wrapper.className = 'mb-2';
-          wrapper.innerHTML = `
-            <label class="small mb-1">${c.color || '(sin color)'} <span class="text-muted">— ${c.imagenes.length} actual(es)</span></label>
-            <input type="file" class="form-control-file input-img-color-modif" accept="image/*" multiple
-                   data-color="${c.color}" data-indice="${indice}" />
-          `;
-          contModif.appendChild(wrapper);
-        });
-        // Guardar el orden para que el servidor mapee img_<indice> -> color.
-        document.getElementById('form-modificar').dataset.ordenColores =
-          JSON.stringify(colores.map(c => c.color));
-      } catch (error) {
-        mostrarResultado('resultado-modificar', false, error.message);
-      }
-    });
-
-    document.getElementById('form-modificar').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const id = document.getElementById('modificar-id').value;
-      if (!id) return;
-      const form = event.target;
-      const btn = document.getElementById('btn-modificar');
-      btn.disabled = true;
-      btn.textContent = 'Guardando...';
-
-      const formData = new FormData(form);
-      formData.set('novedad', document.getElementById('chk-novedad-modif').checked ? 'true' : 'false');
-      formData.set('ordenColores', form.dataset.ordenColores || '[]');
-      Array.from(document.querySelectorAll('.input-img-color-modif')).forEach(input => {
-        Array.from(input.files).forEach(file => formData.append(`img_${input.dataset.indice}`, file));
-      });
-
-      try {
-        const resp = await fetch(`/admin/articulos-web/${id}`, {
-          method: 'PUT',
-          credentials: 'same-origin',
-          body: formData
-        });
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Error al modificar el artículo');
-        const detalleModif = (data.colores || []).map(c => `${c.color || '(sin color)'}: ${c.imagenes} foto(s)`).join('\n');
-        mostrarResultado('resultado-modificar', true, `Artículo modificado correctamente.\n${detalleModif}`);
-        cargarProductos();
-      } catch (error) {
-        mostrarResultado('resultado-modificar', false, error.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Guardar cambios';
-      }
-    });
-
-    // === Ajuste porcentual ===
-    document.getElementById('form-ajuste').addEventListener('submit', async (event) => {
-      event.preventDefault();
+    document.getElementById('btn-aplicar-ajuste').addEventListener('click', async () => {
       const ids = getSeleccionados();
-      if (ids.length === 0) {
-        mostrarResultado('resultado-ajuste', false, 'Seleccioná al menos un producto en la tabla.');
+      const porcentaje = Number(document.getElementById('ma-porcentaje').value);
+      if (!porcentaje) {
+        mostrarResultado('resultado-ajuste', false, 'Indicá un porcentaje distinto de 0.');
         return;
       }
-      const porcentaje = Number(event.target.porcentaje.value);
-      const btn = document.getElementById('btn-ajuste');
+      const btn = document.getElementById('btn-aplicar-ajuste');
       btn.disabled = true;
-      btn.textContent = 'Aplicando...';
-
       try {
         const resp = await fetch('/admin/articulos-web/ajuste-porcentual', {
-          method: 'POST',
-          credentials: 'same-origin',
+          method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids, porcentaje })
         });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'Error al aplicar el ajuste');
-        const resumen = `Actualizados: ${data.actualizados.length}\nOmitidos: ${data.omitidos.length}` +
+        const resumen = `Actualizados: ${data.actualizados.length} · Omitidos: ${data.omitidos.length}` +
           (data.omitidos.length ? '\n' + data.omitidos.map(o => `#${o.id}: ${o.motivo}`).join('\n') : '');
-        mostrarResultado('resultado-ajuste', true, resumen);
-        cargarProductos();
+        $('#modal-ajuste').modal('hide');
+        mostrarResultado('resultado-acciones', true, resumen);
+        await cargarArticulos();
       } catch (error) {
         mostrarResultado('resultado-ajuste', false, error.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Aplicar ajuste';
       }
     });
 
+    // === Paneles colapsables (lote / carrito) ===
+    function abrirPanel(id) {
+      document.getElementById(id).style.display = 'block';
+      document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    document.getElementById('btn-panel-lote').addEventListener('click', () => {
+      const p = document.getElementById('panel-lote');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      if (p.style.display === 'block') renderMatrizVariantes();
+    });
+    document.getElementById('btn-cerrar-lote').addEventListener('click', () => {
+      document.getElementById('panel-lote').style.display = 'none';
+    });
+    document.getElementById('btn-panel-carrito').addEventListener('click', () => {
+      const p = document.getElementById('panel-carrito');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('btn-cerrar-carrito').addEventListener('click', () => {
+      document.getElementById('panel-carrito').style.display = 'none';
+    });
+
     // === Tabs ===
-    let stockCargado = false;
-    let ventasCargado = false;
     document.querySelectorAll('#admin-tabs .nav-link').forEach(link => {
       link.addEventListener('click', (event) => {
         event.preventDefault();
         document.querySelectorAll('#admin-tabs .nav-link').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
         const tab = link.dataset.tab;
-        document.getElementById('tab-articulos-web').style.display = tab === 'articulos-web' ? 'block' : 'none';
-        document.getElementById('tab-stock').style.display = tab === 'stock' ? 'block' : 'none';
-        document.getElementById('tab-ventas').style.display = tab === 'ventas' ? 'block' : 'none';
+        document.getElementById('tab-articulos').style.display = tab === 'articulos' ? 'block' : 'none';
         document.getElementById('tab-cashflow').style.display = tab === 'cashflow' ? 'block' : 'none';
-        if (tab === 'stock' && !stockCargado) {
-          stockCargado = true;
-          cargarStock();
-        }
-        if (tab === 'ventas' && !ventasCargado) {
-          ventasCargado = true;
-          cargarVentas();
-        }
       });
-    });
-
-    // === Stock: listado ===
-    let stockCache = [];
-
-    async function cargarStock() {
-      const tbody = document.getElementById('tbody-stock');
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Cargando...</td></tr>';
-      try {
-        const resp = await fetch('/admin/stock', { credentials: 'same-origin' });
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Error al cargar el stock');
-        stockCache = data.productos;
-        renderStock();
-      } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">${error.message}</td></tr>`;
-      }
-    }
-
-    function renderStock() {
-      const tbody = document.getElementById('tbody-stock');
-      const filtroId = document.getElementById('filtro-stock-id').value.trim();
-      const filtroPrenda = document.getElementById('filtro-stock-prenda').value.trim().toLowerCase();
-      const filtroEstado = document.getElementById('filtro-stock-estado').value.trim().toLowerCase();
-      const filtroCategoria = document.getElementById('filtro-stock-categoria').value.trim().toLowerCase();
-
-      const filtrados = stockCache.filter(p => {
-        const coincideId = !filtroId || String(p.out_id_articulo).includes(filtroId);
-        const coincidePrenda = !filtroPrenda || (p.out_nombre_articulo || '').toLowerCase().includes(filtroPrenda);
-        const coincideEstado = !filtroEstado || (p.out_estado || '').toLowerCase().includes(filtroEstado);
-        const coincideCategoria = !filtroCategoria || (p.out_categoria || '').toLowerCase().includes(filtroCategoria);
-        return coincideId && coincidePrenda && coincideEstado && coincideCategoria;
-      });
-
-      tbody.innerHTML = '';
-      filtrados.forEach(p => {
-        const publicado = p.out_publicado_en_web === 'True' || p.out_publicado_en_web === true;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${p.out_id_articulo}</td>
-          <td>${p.out_nombre_articulo || ''}</td>
-          <td>${p.out_estado || ''}</td>
-          <td>${p.out_categoria || ''}</td>
-          <td>${p.out_color || ''}</td>
-          <td>${p.out_talle || ''}</td>
-          <td>$${Number(p.out_precio_venta_efectivo || 0).toLocaleString('es-AR')}</td>
-          <td>$${Number(p.out_precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
-          <td>${publicado ? '✅' : '—'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    document.getElementById('btn-refrescar-stock').addEventListener('click', cargarStock);
-    ['filtro-stock-id', 'filtro-stock-prenda', 'filtro-stock-estado', 'filtro-stock-categoria'].forEach(id => {
-      document.getElementById(id).addEventListener('input', renderStock);
     });
 
     // === Stock: carga manual de lote (modelo + matriz de variantes) ===
@@ -1061,7 +956,7 @@
         document.getElementById('lote-talles').value = '';
         renderMatrizVariantes();
         renderProductosLote();
-        cargarStock();
+        cargarArticulos();
       } catch (error) {
         mostrarResultado('resultado-lote', false, error.message);
       } finally {
@@ -1070,103 +965,33 @@
       }
     });
 
-    // === Ventas: listado + carrito (equivalente a la pestaña Ventas del desktop) ===
-    let ventasCache = [];
+    // === Carrito de venta (por fuera de la web) ===
+    // El listado de articulos es el unificado de arriba; aca solo vive el carrito en memoria.
     let carrito = [];
 
-    async function cargarVentas() {
-      const tbody = document.getElementById('tbody-ventas');
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Cargando...</td></tr>';
-      try {
-        const resp = await fetch('/admin/stock', { credentials: 'same-origin' });
-        const data = await resp.json();
-        if (!data.success) throw new Error(data.error || 'Error al cargar los artículos');
-        ventasCache = data.productos;
-        // Sacar del carrito cualquier artículo que ya no esté Disponible (p.ej. vendido en otra sesión).
-        const disponibles = new Set(ventasCache.filter(p => p.out_estado === 'Disponible').map(p => p.out_id_articulo));
-        carrito = carrito.filter(item => disponibles.has(item.id));
-        renderVentas();
-        renderCarrito();
-      } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">${error.message}</td></tr>`;
-      }
-    }
-
-    function renderVentas() {
-      const tbody = document.getElementById('tbody-ventas');
-      const filtroId = document.getElementById('filtro-ventas-id').value.trim();
-      const filtroPrenda = document.getElementById('filtro-ventas-prenda').value.trim().toLowerCase();
-      const filtroEstado = document.getElementById('filtro-ventas-estado').value.trim().toLowerCase();
-      const filtroCategoria = document.getElementById('filtro-ventas-categoria').value.trim().toLowerCase();
-
-      const filtrados = ventasCache.filter(p => {
-        const coincideId = !filtroId || String(p.out_id_articulo).includes(filtroId);
-        const coincidePrenda = !filtroPrenda || (p.out_nombre_articulo || '').toLowerCase().includes(filtroPrenda);
-        const coincideEstado = !filtroEstado || (p.out_estado || '').toLowerCase().includes(filtroEstado);
-        const coincideCategoria = !filtroCategoria || (p.out_categoria || '').toLowerCase().includes(filtroCategoria);
-        return coincideId && coincidePrenda && coincideEstado && coincideCategoria;
-      });
-
-      const enCarrito = new Set(carrito.map(item => item.id));
-
-      tbody.innerHTML = '';
-      filtrados.forEach(p => {
-        const disponible = p.out_estado === 'Disponible';
-        const tr = document.createElement('tr');
-        let accion;
-        if (disponible) {
-          accion = enCarrito.has(p.out_id_articulo)
-            ? '<span class="text-muted small">En carrito</span>'
-            : `<button class="btn btn-sm btn-outline-secondary btn-agregar-carrito" data-id="${p.out_id_articulo}">Agregar</button>`;
-        } else {
-          accion = `<button class="btn btn-sm btn-outline-danger btn-devolver" data-id="${p.out_id_articulo}">Devolución</button>`;
-        }
-        tr.innerHTML = `
-          <td>${p.out_id_articulo}</td>
-          <td>${p.out_nombre_articulo || ''}</td>
-          <td>${p.out_estado || ''}</td>
-          <td>${p.out_categoria || ''}</td>
-          <td>${p.out_color || ''}</td>
-          <td>${p.out_talle || ''}</td>
-          <td>$${Number(p.out_precio_venta_efectivo || 0).toLocaleString('es-AR')}</td>
-          <td>$${Number(p.out_precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
-          <td>${accion}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      document.querySelectorAll('.btn-agregar-carrito').forEach(btn => {
-        btn.addEventListener('click', () => agregarAlCarrito(parseInt(btn.dataset.id, 10)));
-      });
-      document.querySelectorAll('.btn-devolver').forEach(btn => {
-        btn.addEventListener('click', () => devolverArticulo(parseInt(btn.dataset.id, 10), btn));
-      });
-    }
-
-    document.getElementById('btn-refrescar-ventas').addEventListener('click', cargarVentas);
-    ['filtro-ventas-id', 'filtro-ventas-prenda', 'filtro-ventas-estado', 'filtro-ventas-categoria'].forEach(id => {
-      document.getElementById(id).addEventListener('input', renderVentas);
-    });
-
-    function agregarAlCarrito(id) {
+    // `diferido` evita re-renderizar la tabla por cada item cuando se agregan varios de una vez.
+    function agregarAlCarrito(id, diferido) {
       if (carrito.some(item => item.id === id)) return;
-      const producto = ventasCache.find(p => p.out_id_articulo === id);
+      const producto = getArticulo(id);
       if (!producto) return;
       carrito.push({
-        id: producto.out_id_articulo,
-        prenda: producto.out_nombre_articulo,
-        color: producto.out_color,
-        talle: producto.out_talle,
-        precio_venta_efectivo: Number(producto.out_precio_venta_efectivo || 0),
-        precio_venta_transferencia: Number(producto.out_precio_venta_transferencia || 0)
+        id: producto.id_articulo,
+        prenda: producto.prenda,
+        color: producto.color,
+        talle: producto.talle,
+        precio_venta_efectivo: Number(producto.precio_venta_efectivo || 0),
+        precio_venta_transferencia: Number(producto.precio_venta_transferencia || 0)
       });
-      renderVentas();
-      renderCarrito();
+      if (!diferido) {
+        renderArticulos();
+        renderCarrito();
+        abrirPanel('panel-carrito');
+      }
     }
 
     function quitarDelCarrito(id) {
       carrito = carrito.filter(item => item.id !== id);
-      renderVentas();
+      renderArticulos();
       renderCarrito();
     }
 
@@ -1197,6 +1022,7 @@
         btn.addEventListener('click', () => quitarDelCarrito(parseInt(btn.dataset.id, 10)));
       });
       document.getElementById('venta-total').textContent = total.toLocaleString('es-AR');
+      document.getElementById('carrito-count').textContent = carrito.length;
       const hayItems = carrito.length > 0;
       document.getElementById('btn-finalizar-venta').disabled = !hayItems;
       document.getElementById('btn-cancelar-venta').disabled = !hayItems;
@@ -1211,7 +1037,7 @@
       carrito = [];
       document.getElementById('venta-cliente').value = '';
       document.getElementById('resultado-venta').style.display = 'none';
-      renderVentas();
+      renderArticulos();
       renderCarrito();
     });
 
@@ -1236,8 +1062,7 @@
         mostrarResultado('resultado-venta', true, `Venta confirmada. Total: $${Number(data.total).toLocaleString('es-AR')}`);
         carrito = [];
         document.getElementById('venta-cliente').value = '';
-        cargarVentas();
-        if (stockCargado) cargarStock();
+        await cargarArticulos();
       } catch (error) {
         mostrarResultado('resultado-venta', false, error.message);
       } finally {
@@ -1254,8 +1079,7 @@
         const resp = await fetch(`/admin/ventas/devolver/${id}`, { method: 'POST', credentials: 'same-origin' });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'No se pudo devolver el artículo');
-        cargarVentas();
-        if (stockCargado) cargarStock();
+        await cargarArticulos();
       } catch (error) {
         alert(error.message);
         btn.disabled = false;
@@ -1343,5 +1167,99 @@
 
     checkSession();
   </script>
+
+  <!-- ===================== MODAL: fotos y descripción ===================== -->
+  <!-- Sirve tanto para preparar contenido sin publicar como para editar algo ya publicado.
+       Se abre con los artículos seleccionados del listado (todos de la misma prenda). -->
+  <div class="modal fade" id="modal-contenido" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Fotos y descripción — <span id="mc-prenda"></span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3" id="mc-ayuda"></p>
+          <form id="form-contenido">
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Título</label>
+                <input type="text" class="form-control form-control-sm" name="titulo" />
+              </div>
+              <div class="form-group col-md-6">
+                <label>Subtítulo <span class="text-muted small">(texto corto en la tarjeta)</span></label>
+                <input type="text" class="form-control form-control-sm" name="texto" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>Precio (transferencia)</label>
+                <input type="number" class="form-control form-control-sm" name="precio" />
+              </div>
+              <div class="form-group col-md-5">
+                <label>Categoría</label>
+                <select class="form-control form-control-sm" name="categoria">
+                  <option value="Remeras">Remeras</option>
+                  <option value="Pantalones">Pantalones</option>
+                  <option value="Vestidos">Vestidos</option>
+                  <option value="Buzos">Buzos</option>
+                  <option value="Conjuntos">Conjuntos</option>
+                  <option value="Accesorios">Accesorios</option>
+                  <option value="Carteras">Carteras</option>
+                  <option value="OnaFitness">OnaFitness</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="mc-novedad" name="novedad" />
+                  <label class="form-check-label" for="mc-novedad">¿Novedad?</label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Descripción larga <span class="text-muted small">(sección "Detalles" en la web)</span></label>
+              <textarea class="form-control form-control-sm" name="detalle" rows="2"></textarea>
+            </div>
+            <hr />
+            <div class="form-group mb-0">
+              <label>Fotos por color</label>
+              <div id="mc-imagenes-por-color"></div>
+              <small class="form-text text-muted">Si elegís fotos para un color, reemplazan las de ese color. Los colores que dejes vacíos conservan las que ya tenían.</small>
+            </div>
+          </form>
+          <div id="resultado-contenido" class="alert mt-3 mb-0 alert-resultado" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-guardar-contenido">Guardar sin publicar</button>
+          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-guardar-publicar">Guardar y publicar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: ajuste porcentual ===================== -->
+  <div class="modal fade" id="modal-ajuste" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Ajustar precio</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">Se aplica a los <strong id="ma-count">0</strong> artículo(s) seleccionados. Solo afecta a los que ya están publicados en la web.</p>
+          <div class="form-group mb-0">
+            <label>Porcentaje</label>
+            <input type="number" step="0.01" class="form-control form-control-sm" id="ma-porcentaje" placeholder="Ej: 10 o -5" />
+          </div>
+          <div id="resultado-ajuste" class="alert mt-3 mb-0 alert-resultado" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-aplicar-ajuste">Aplicar ajuste</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

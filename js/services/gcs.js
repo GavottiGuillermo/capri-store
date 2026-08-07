@@ -82,6 +82,44 @@ async function readTextFile(destPath) {
   }
 }
 
+// Lista, en UNA sola llamada al bucket, el contenido web de todos los artículos: las fotos y el
+// .txt que viven en Novedades/{carpeta}/. Es la fuente de verdad de "este artículo tiene contenido
+// cargado", independiente de si está publicado (publicado = tener entrada en productos.json).
+// Permite cargar fotos/descripción sin publicar, y republicar sin volver a subir nada.
+//
+// Se agrupa por el id_articulo que prefija la carpeta (`Novedades/{id}-...`) y NO por segmentos de
+// ruta: hay prendas con "/" en el nombre (ej. "Vestido corto c/argolla") que generan pseudo-carpetas
+// anidadas, y partir por "/" las contaría mal. El id es la clave estable que se necesita igual.
+// Devuelve Map<idArticulo, { idArticulo, carpeta, imagenes: [], txt }>.
+async function listarContenidoWeb() {
+  const [files] = await getBucket().getFiles({ prefix: 'Novedades/' });
+  const porId = new Map();
+
+  files.forEach(file => {
+    const m = file.name.match(/^Novedades\/(\d+)-/);
+    if (!m) return;
+    const idArticulo = parseInt(m[1], 10);
+    // La carpeta es todo lo que hay entre "Novedades/" y el nombre del archivo. Como el archivo
+    // se llama igual que la carpeta, alcanza con cortar en la última barra del blob.
+    const sinPrefijo = file.name.slice('Novedades/'.length);
+    const carpeta = sinPrefijo.includes('/') ? sinPrefijo.slice(0, sinPrefijo.lastIndexOf('/')) : sinPrefijo;
+
+    if (!porId.has(idArticulo)) {
+      porId.set(idArticulo, { idArticulo, carpeta, imagenes: [], txt: null });
+    }
+    const entrada = porId.get(idArticulo);
+    if (/\.txt$/i.test(file.name)) {
+      entrada.txt = publicUrlFor(file.name);
+    } else {
+      entrada.imagenes.push(publicUrlFor(file.name));
+    }
+  });
+
+  // Orden estable de fotos: el nombre lleva "{colorSlug}-{n}", así que alfabético alcanza.
+  porId.forEach(entrada => entrada.imagenes.sort());
+  return porId;
+}
+
 async function getProductosJson() {
   const contenido = await readTextFile(PRODUCTOS_JSON_PATH);
   if (!contenido) return [];
@@ -244,6 +282,7 @@ module.exports = {
   deleteFile,
   deleteFolder,
   readTextFile,
+  listarContenidoWeb,
   getProductosJson,
   saveProductosJson,
   buildTxtContent,
