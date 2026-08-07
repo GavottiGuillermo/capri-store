@@ -92,5 +92,6 @@ router.get('/me', (req, res) => {
 router.use('/articulos-web', require('./admin/articulos-web'));
 router.use('/stock', require('./admin/stock'));
 router.use('/ventas', require('./admin/ventas'));
+router.use('/cashflow', require('./admin/cashflow'));
 
 module.exports = router;

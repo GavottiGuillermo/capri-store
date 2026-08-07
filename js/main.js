@@ -121,13 +121,21 @@ function renderizarEnlacesCategorias(categoriasOrdenadas) {
 
 function aplicarEstadoStock(cardElement, prod) {
   try {
-    const path = decodeURIComponent((prod.imagen || prod.txt || ''));
-    const m = path.match(/\/(\d+)-[^/]+/);
-    const id = m && m[1] ? parseInt(m[1], 10) : null;
-    if (!id || !window.__CAPRI_SOLD_OUT__) {
+    if (!window.__CAPRI_SOLD_OUT__) {
       return;
     }
-    if (window.__CAPRI_SOLD_OUT__.has(id)) {
+    // Una tarjeta puede cubrir varias unidades físicas (varios colores/talles de la misma prenda):
+    // solo va el cartel de "Sin stock" si están agotadas TODAS.
+    let ids = Array.isArray(prod.ids) ? prod.ids.filter(n => Number.isInteger(n)) : [];
+    if (ids.length === 0) {
+      const path = decodeURIComponent((prod.imagen || prod.txt || ''));
+      const m = path.match(/\/(\d+)-[^/]+/);
+      if (m && m[1]) ids = [parseInt(m[1], 10)];
+    }
+    if (ids.length === 0) {
+      return;
+    }
+    if (ids.every(id => window.__CAPRI_SOLD_OUT__.has(id))) {
       const card = cardElement.querySelector('.card');
       if (!card) return;
       card.style.filter = 'grayscale(0.6)';
@@ -236,6 +244,13 @@ async function cargarProductosCapri() {
     const text = await resp.text();
     productos = JSON.parse(text);
     console.log('✅ Productos cargados exitosamente:', productos.length, 'items');
+    // Una tarjeta por producto: fusiona entradas de la misma prenda (varias unidades publicadas
+    // por separado en formato viejo generaban tarjetas duplicadas) y expone sus fotos por color.
+    if (window.CapriCatalogo) {
+      const agrupados = window.CapriCatalogo.agruparPorProducto(productos);
+      console.log(`🧩 Agrupados en ${agrupados.length} producto(s) (desde ${productos.length} entradas)`);
+      productos = agrupados;
+    }
   } catch (e) {
     console.error('❌ Error al cargar productos:', e.message);
     return;

@@ -176,6 +176,8 @@
       <!-- Imágenes -->
       <div class="col-md-6 mb-4 mb-md-0 d-flex flex-column justify-content-center align-items-center fade-in-left">
         <img alt="Imagen principal del producto" class="img-fluid rounded-lg shadow-lg glow-on-hover" id="mainImage" loading="lazy" src="" style="max-height:600px; object-fit:cover;"/>
+        <!-- Miniaturas de la galería: se rellenan por JS y quedan ocultas si hay una sola foto -->
+        <div id="galeria-thumbs" class="d-flex flex-wrap justify-content-center mt-3" style="gap:10px; display:none;"></div>
       </div>
       <!-- Información -->
       <div class="col-md-6 d-flex flex-column justify-content-between fade-in-right">
@@ -227,6 +229,7 @@
   <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/catalogo.js?v=1"></script>
   <script src="js/scripts.js"></script>
   <script>
     // Solo scripts menores de UI, como el menú móvil

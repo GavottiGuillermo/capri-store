@@ -70,7 +70,7 @@ const estadoVariantes = {
   variantes: [],        // [{ color, talles: [{talle, stock, ids}] }]
   colorActual: null,
   talleActual: null,    // objeto {talle, stock, ids} elegido por el usuario
-  imagenesPorColor: {} // { "Negro": "https://...", ... }
+  entradaCatalogo: null // entrada normalizada de productos.json (trae las fotos por color)
 };
 
 /** Consulta GET /variantes-producto/:id. Retorna { prenda, variantes } o null. */
@@ -85,25 +85,71 @@ async function cargarVariantesProducto(idArticulo) {
 }
 
 /**
- * Recorre productos.json buscando entradas con el mismo campo "prenda",
- * para obtener la URL de imagen de cada color.
- * (Solo funciona con productos cargados tras el nuevo sistema Java.)
+ * Busca en productos.json la entrada (agrupada por prenda) que corresponde a este producto,
+ * para tener sus fotos separadas por color.
+ * Se busca primero por id_articulo, que es exacto; el nombre de la prenda queda como fallback
+ * porque puede diferir en espacios/mayúsculas entre la BD y el nombre de la carpeta.
  */
-async function cargarImagenesPorColor(prenda) {
-  const mapa = {};
-  if (!prenda) return mapa;
+async function cargarEntradaCatalogo(idArticulo, prenda) {
+  if (!window.CapriCatalogo) return null;
   try {
     const resp = await fetch(
       `https://storage.googleapis.com/imagenes-web-capri/productos.json?t=${Date.now()}`,
       { cache: 'no-store' }
     );
-    if (!resp.ok) return mapa;
+    if (!resp.ok) return null;
     const lista = await resp.json();
-    lista.forEach(p => {
-      if (p.prenda === prenda && p.color && p.imagen) mapa[p.color] = p.imagen;
+    const agrupados = window.CapriCatalogo.agruparPorProducto(lista);
+
+    const porId = agrupados.find(e => e.ids.includes(Number(idArticulo)));
+    if (porId) return porId;
+
+    const objetivo = String(prenda || '').trim().toLowerCase();
+    return agrupados.find(e => String(e.producto || '').trim().toLowerCase() === objetivo) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pinta la imagen principal + la tira de miniaturas.
+ * Con una sola foto las miniaturas quedan ocultas (no aportan nada).
+ */
+function renderizarGaleria(imagenes) {
+  const principal = document.getElementById('mainImage');
+  const thumbs = document.getElementById('galeria-thumbs');
+  const lista = (imagenes || []).filter(Boolean);
+
+  if (principal && lista.length > 0) principal.src = lista[0];
+  if (!thumbs) return;
+
+  thumbs.innerHTML = '';
+  if (lista.length <= 1) {
+    thumbs.style.display = 'none';
+    return;
+  }
+  thumbs.style.display = 'flex';
+
+  lista.forEach((url, i) => {
+    const thumb = document.createElement('img');
+    thumb.src = url;
+    thumb.alt = `Vista ${i + 1}`;
+    thumb.loading = 'lazy';
+    thumb.className = 'rounded shadow-sm galeria-thumb' + (i === 0 ? ' selected' : '');
+    thumb.style.cssText =
+      'width:70px; height:70px; object-fit:cover; cursor:pointer; border:2px solid ' +
+      (i === 0 ? '#6b0a0a' : 'transparent') + '; transition:border-color .2s;';
+    thumb.addEventListener('click', () => {
+      if (principal) principal.src = url;
+      thumbs.querySelectorAll('.galeria-thumb').forEach(t => {
+        t.style.borderColor = 'transparent';
+        t.classList.remove('selected');
+      });
+      thumb.style.borderColor = '#6b0a0a';
+      thumb.classList.add('selected');
     });
-  } catch {}
-  return mapa;
+    thumbs.appendChild(thumb);
+  });
 }
 
 /** Extrae el id_articulo num�rico desde el objeto producto del localStorage. */
@@ -128,13 +174,11 @@ function colorACss(nombre) {
   return mapa[k] || k || '#cccccc';
 }
 
-/** Actualiza la imagen principal cuando el usuario cambia de color. */
+/** Cambia la galería completa a las fotos del color elegido. */
 function actualizarImagenPorColor(color) {
-  const url = estadoVariantes.imagenesPorColor[color];
-  if (url) {
-    const img = document.getElementById('mainImage');
-    if (img) img.src = url;
-  }
+  if (!window.CapriCatalogo || !estadoVariantes.entradaCatalogo) return;
+  const imagenes = window.CapriCatalogo.imagenesDeColor(estadoVariantes.entradaCatalogo, color);
+  if (imagenes.length > 0) renderizarGaleria(imagenes);
 }
 
 /** Renderiza los c�rculos de color. Oculta el grupo si hay un solo color. */
@@ -287,9 +331,16 @@ async function inicializarVariantes(producto) {
 
   estadoVariantes.prenda    = data.prenda;
   estadoVariantes.variantes = data.variantes;
-  estadoVariantes.imagenesPorColor = await cargarImagenesPorColor(data.prenda);
+  estadoVariantes.entradaCatalogo = await cargarEntradaCatalogo(idRef, data.prenda);
 
   renderizarColores();
+
+  // Arrancar mostrando las fotos del color preseleccionado (el primero con stock).
+  if (estadoVariantes.colorActual) {
+    actualizarImagenPorColor(estadoVariantes.colorActual);
+  } else if (estadoVariantes.entradaCatalogo) {
+    renderizarGaleria(estadoVariantes.entradaCatalogo.imagenes);
+  }
 }
 
 // =============================================================================

@@ -37,6 +37,7 @@
         <li class="nav-item"><a class="nav-link active" href="#" data-tab="articulos-web">Artículos Web</a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-tab="stock">Stock</a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-tab="ventas">Ventas</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-tab="cashflow">Cash Flow</a></li>
       </ul>
 
       <div id="tab-articulos-web">
@@ -80,7 +81,7 @@
           <div class="card h-100">
             <div class="card-body">
               <span class="card-titulo">Generar y subir artículo</span>
-              <p class="text-muted small">Usa los productos seleccionados en la tabla (deben ser todos la misma prenda y color). Una carga = un color.</p>
+              <p class="text-muted small">Usa los productos seleccionados en la tabla (deben ser todos de la misma prenda). Podés seleccionar <strong>varios colores a la vez</strong> y subir <strong>varias fotos por color</strong>: todo queda en una sola tarjeta del catálogo.</p>
               <form id="form-generar">
                 <div class="form-group">
                   <label>Título</label>
@@ -116,8 +117,10 @@
                   <label class="form-check-label" for="chk-novedad">¿Novedad?</label>
                 </div>
                 <div class="form-group">
-                  <label>Imagen</label>
-                  <input type="file" class="form-control-file" name="imagen" accept="image/*" required />
+                  <label>Fotos por color</label>
+                  <div id="imagenes-por-color">
+                    <small class="text-muted">Seleccioná productos en la tabla para cargar sus fotos.</small>
+                  </div>
                 </div>
                 <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-generar">Generar y subir</button>
               </form>
@@ -171,12 +174,15 @@
                   <label class="form-check-label" for="chk-novedad-modif">¿Novedad?</label>
                 </div>
                 <div class="form-group">
-                  <label>Imagen actual</label>
+                  <label>Fotos actuales</label>
                   <div><small class="text-muted" id="imagen-actual-nombre">-</small></div>
                 </div>
                 <div class="form-group">
-                  <label>Nueva imagen (opcional)</label>
-                  <input type="file" class="form-control-file" name="imagen" accept="image/*" />
+                  <label>Reemplazar fotos (opcional)</label>
+                  <div id="modificar-imagenes-por-color">
+                    <small class="text-muted">Cargá un artículo para ver sus colores.</small>
+                  </div>
+                  <small class="form-text text-muted">Si elegís fotos para un color, reemplazan todas las de ese color. Los colores que dejes vacíos no se tocan.</small>
                 </div>
                 <button type="submit" class="btn btn-vino-tinto btn-sm" id="btn-modificar">Guardar cambios</button>
               </form>
@@ -398,6 +404,57 @@
           </div>
         </div>
       </div>
+
+      <div id="tab-cashflow" style="display:none;">
+        <h4 class="mb-3">Cash Flow</h4>
+        <p class="text-muted small">Consulta de ingresos (pagos), gastos (gastos extra y lotes) y saldo acumulado en un rango de fechas.</p>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="form-row align-items-end">
+              <div class="form-group col-md-3">
+                <label>Fecha inicial</label>
+                <input type="date" class="form-control form-control-sm" id="cf-fecha-inicio" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>Fecha final</label>
+                <input type="date" class="form-control form-control-sm" id="cf-fecha-fin" />
+              </div>
+              <div class="form-group col-md-6">
+                <button class="btn btn-vino-tinto btn-sm" id="btn-consultar-cf" disabled>Consultar</button>
+                <button class="btn btn-outline-secondary btn-sm" id="btn-limpiar-cf">Limpiar</button>
+              </div>
+            </div>
+            <div id="resultado-cf" class="alert mt-2 alert-resultado" style="display:none;"></div>
+
+            <div class="row text-center mb-3" id="cf-metricas" style="display:none;">
+              <div class="col"><small class="text-muted d-block">Ventas</small><strong id="cf-cant-ventas">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Ingresos</small><strong id="cf-total-ingresos">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Gastos</small><strong id="cf-total-gastos">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Saldo</small><strong id="cf-saldo-total">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Cant. gastos</small><strong id="cf-cant-gastos">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Mayor ingreso</small><strong id="cf-mayor-ingreso">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Día mayor ingreso</small><strong id="cf-dia-mayor-ingreso">-</strong></div>
+              <div class="col"><small class="text-muted d-block">Día mayor gasto</small><strong id="cf-dia-mayor-gasto">-</strong></div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+              <table class="table table-sm table-hover" id="tabla-cashflow">
+                <thead class="thead-light" style="position: sticky; top: 0;">
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Debe</th>
+                    <th>Haber</th>
+                    <th>Saldo</th>
+                    <th>Observación</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-cashflow"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -495,10 +552,54 @@
 
     function actualizarContadorSeleccion() {
       document.getElementById('seleccion-count').textContent = getSeleccionados().length;
+      renderImagenesPorColor();
     }
 
     function getSeleccionados() {
       return Array.from(document.querySelectorAll('.chk-producto:checked')).map(chk => parseInt(chk.value, 10));
+    }
+
+    // Colores distintos entre los productos seleccionados, en orden de aparición.
+    // Cada color es un grupo de unidades físicas que van a compartir las mismas fotos.
+    function getColoresSeleccionados() {
+      const ids = getSeleccionados();
+      const colores = [];
+      ids.forEach(id => {
+        const p = productosCache.find(x => x.id_articulo === id);
+        if (!p) return;
+        const color = p.color || '';
+        if (!colores.includes(color)) colores.push(color);
+      });
+      return colores;
+    }
+
+    // Un input de archivos (múltiple) por cada color de la selección.
+    function renderImagenesPorColor() {
+      const cont = document.getElementById('imagenes-por-color');
+      if (!cont) return;
+      const colores = getColoresSeleccionados();
+
+      if (colores.length === 0) {
+        cont.innerHTML = '<small class="text-muted">Seleccioná productos en la tabla para cargar sus fotos.</small>';
+        return;
+      }
+
+      // Preservar los archivos ya elegidos si los colores no cambiaron (evita perder la selección
+      // del usuario cada vez que toca un checkbox).
+      const anteriores = Array.from(cont.querySelectorAll('input[type=file]')).map(i => i.dataset.color);
+      if (anteriores.length === colores.length && anteriores.every((c, i) => c === colores[i])) return;
+
+      cont.innerHTML = '';
+      colores.forEach((color, indice) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-2';
+        wrapper.innerHTML = `
+          <label class="small mb-1">${color || '(sin color)'} <span class="text-muted">— podés elegir varias</span></label>
+          <input type="file" class="form-control-file input-img-color" accept="image/*" multiple
+                 data-color="${color}" data-indice="${indice}" />
+        `;
+        cont.appendChild(wrapper);
+      });
     }
 
     document.getElementById('filtro-prenda').addEventListener('input', renderProductos);
@@ -513,6 +614,18 @@
         return;
       }
       const form = event.target;
+      const colores = getColoresSeleccionados();
+      const inputs = Array.from(document.querySelectorAll('.input-img-color'));
+
+      // Todo color de la selección necesita al menos una foto (el servidor lo revalida, pero
+      // avisar acá evita subir el resto para nada).
+      const sinFoto = colores.filter((color, i) => !inputs[i] || inputs[i].files.length === 0);
+      if (sinFoto.length > 0) {
+        mostrarResultado('resultado-generar', false,
+          'Faltan fotos para: ' + sinFoto.map(c => c || '(sin color)').join(', '));
+        return;
+      }
+
       const btn = document.getElementById('btn-generar');
       btn.disabled = true;
       btn.textContent = 'Subiendo...';
@@ -520,6 +633,11 @@
       const formData = new FormData(form);
       formData.set('novedad', document.getElementById('chk-novedad').checked ? 'true' : 'false');
       formData.set('ids', JSON.stringify(ids));
+      // El servidor resuelve el nombre de archivo a partir de este orden (img_<indice> -> color).
+      formData.set('ordenColores', JSON.stringify(colores));
+      inputs.forEach(input => {
+        Array.from(input.files).forEach(file => formData.append(`img_${input.dataset.indice}`, file));
+      });
 
       try {
         const resp = await fetch('/admin/articulos-web/generar', {
@@ -529,7 +647,9 @@
         });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'Error al generar el artículo');
-        mostrarResultado('resultado-generar', true, `Artículo subido correctamente. Carpeta: ${data.carpeta}`);
+        const detalle = (data.colores || []).map(c => `${c.color || '(sin color)'}: ${c.imagenes} foto(s)`).join('\n');
+        mostrarResultado('resultado-generar', true,
+          `Artículo subido correctamente. Carpeta: ${data.carpeta}\n${detalle}`);
         form.reset();
         cargarProductos();
       } catch (error) {
@@ -558,8 +678,32 @@
         const categoriaBase = (data.categoria || '').replace('-Novedad', '');
         form.categoria.value = categoriaBase;
         document.getElementById('chk-novedad-modif').checked = (data.categoria || '').endsWith('-Novedad');
-        document.getElementById('imagen-actual-nombre').textContent = data.imagen ? data.imagen.split('/').pop() : '(sin imagen)';
         document.getElementById('resultado-modificar').style.display = 'none';
+
+        // Resumen de fotos actuales + un input de reemplazo por color.
+        const colores = Array.isArray(data.colores) && data.colores.length > 0 ? data.colores : [];
+        document.getElementById('imagen-actual-nombre').textContent = colores.length > 0
+          ? colores.map(c => `${c.color || '(sin color)'}: ${c.imagenes.length} foto(s)`).join(' · ')
+          : '(sin imagen)';
+
+        const contModif = document.getElementById('modificar-imagenes-por-color');
+        contModif.innerHTML = '';
+        if (colores.length === 0) {
+          contModif.innerHTML = '<small class="text-muted">Este artículo no tiene colores cargados.</small>';
+        }
+        colores.forEach((c, indice) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mb-2';
+          wrapper.innerHTML = `
+            <label class="small mb-1">${c.color || '(sin color)'} <span class="text-muted">— ${c.imagenes.length} actual(es)</span></label>
+            <input type="file" class="form-control-file input-img-color-modif" accept="image/*" multiple
+                   data-color="${c.color}" data-indice="${indice}" />
+          `;
+          contModif.appendChild(wrapper);
+        });
+        // Guardar el orden para que el servidor mapee img_<indice> -> color.
+        document.getElementById('form-modificar').dataset.ordenColores =
+          JSON.stringify(colores.map(c => c.color));
       } catch (error) {
         mostrarResultado('resultado-modificar', false, error.message);
       }
@@ -576,6 +720,10 @@
 
       const formData = new FormData(form);
       formData.set('novedad', document.getElementById('chk-novedad-modif').checked ? 'true' : 'false');
+      formData.set('ordenColores', form.dataset.ordenColores || '[]');
+      Array.from(document.querySelectorAll('.input-img-color-modif')).forEach(input => {
+        Array.from(input.files).forEach(file => formData.append(`img_${input.dataset.indice}`, file));
+      });
 
       try {
         const resp = await fetch(`/admin/articulos-web/${id}`, {
@@ -585,7 +733,8 @@
         });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'Error al modificar el artículo');
-        mostrarResultado('resultado-modificar', true, 'Artículo modificado correctamente.');
+        const detalleModif = (data.colores || []).map(c => `${c.color || '(sin color)'}: ${c.imagenes} foto(s)`).join('\n');
+        mostrarResultado('resultado-modificar', true, `Artículo modificado correctamente.\n${detalleModif}`);
         cargarProductos();
       } catch (error) {
         mostrarResultado('resultado-modificar', false, error.message);
@@ -641,6 +790,7 @@
         document.getElementById('tab-articulos-web').style.display = tab === 'articulos-web' ? 'block' : 'none';
         document.getElementById('tab-stock').style.display = tab === 'stock' ? 'block' : 'none';
         document.getElementById('tab-ventas').style.display = tab === 'ventas' ? 'block' : 'none';
+        document.getElementById('tab-cashflow').style.display = tab === 'cashflow' ? 'block' : 'none';
         if (tab === 'stock' && !stockCargado) {
           stockCargado = true;
           cargarStock();
@@ -997,6 +1147,84 @@
         btn.textContent = 'Devolución';
       }
     }
+
+    // === Cash Flow: consulta por rango de fechas (equivalente a la pestaña Cash Flow del desktop) ===
+    function validarFechasCF() {
+      const inicio = document.getElementById('cf-fecha-inicio').value;
+      const fin = document.getElementById('cf-fecha-fin').value;
+      document.getElementById('btn-consultar-cf').disabled = !inicio || !fin;
+    }
+    ['cf-fecha-inicio', 'cf-fecha-fin'].forEach(id => {
+      document.getElementById(id).addEventListener('change', validarFechasCF);
+    });
+
+    function formatoMoneda(n) {
+      return '$' + Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    document.getElementById('btn-consultar-cf').addEventListener('click', async () => {
+      const fechaInicio = document.getElementById('cf-fecha-inicio').value;
+      const fechaFin = document.getElementById('cf-fecha-fin').value;
+      if (fechaInicio > fechaFin) {
+        mostrarResultado('resultado-cf', false, 'Intervalo de fechas incorrecto');
+        return;
+      }
+
+      const btn = document.getElementById('btn-consultar-cf');
+      btn.disabled = true;
+      btn.textContent = 'Consultando...';
+      document.getElementById('resultado-cf').style.display = 'none';
+      const tbody = document.getElementById('tbody-cashflow');
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>';
+
+      try {
+        const resp = await fetch(`/admin/cashflow?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al consultar el cash flow');
+
+        tbody.innerHTML = '';
+        if (data.transacciones.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sin transacciones en el rango seleccionado</td></tr>';
+        }
+        data.transacciones.forEach(t => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${t.fecha}</td>
+            <td>${t.debe != null ? formatoMoneda(t.debe) : ''}</td>
+            <td>${t.haber != null ? formatoMoneda(t.haber) : ''}</td>
+            <td>${t.saldo != null ? formatoMoneda(t.saldo) : '—'}</td>
+            <td>${t.observacion || ''}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        const m = data.metricas;
+        document.getElementById('cf-cant-ventas').textContent = m.cantidadVentas;
+        document.getElementById('cf-total-ingresos').textContent = formatoMoneda(m.totalIngresos);
+        document.getElementById('cf-total-gastos').textContent = formatoMoneda(m.totalGastos);
+        document.getElementById('cf-saldo-total').textContent = formatoMoneda(m.saldoTotal);
+        document.getElementById('cf-cant-gastos').textContent = m.cantidadGastos;
+        document.getElementById('cf-mayor-ingreso').textContent = formatoMoneda(m.mayorIngreso);
+        document.getElementById('cf-dia-mayor-ingreso').textContent = m.diaMayorIngreso || '-';
+        document.getElementById('cf-dia-mayor-gasto').textContent = m.diaMayorGasto || '-';
+        document.getElementById('cf-metricas').style.display = 'flex';
+      } catch (error) {
+        tbody.innerHTML = '';
+        mostrarResultado('resultado-cf', false, error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Consultar';
+      }
+    });
+
+    document.getElementById('btn-limpiar-cf').addEventListener('click', () => {
+      document.getElementById('cf-fecha-inicio').value = '';
+      document.getElementById('cf-fecha-fin').value = '';
+      document.getElementById('btn-consultar-cf').disabled = true;
+      document.getElementById('resultado-cf').style.display = 'none';
+      document.getElementById('cf-metricas').style.display = 'none';
+      document.getElementById('tbody-cashflow').innerHTML = '';
+    });
 
     checkSession();
   </script>

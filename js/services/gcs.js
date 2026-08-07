@@ -128,6 +128,111 @@ function normalizeTextField(value) {
   return trimmed === '' ? 'null' : trimmed;
 }
 
+// ===============================
+// FORMATO DE ENTRADA DE productos.json
+// ===============================
+// Formato viejo (el que tienen hoy las 45 entradas publicadas): una entrada por id_articulo,
+//   { categoria, carpeta: "74-Body trikini", imagen: "...jpg", txt: "...txt" }
+// Formato nuevo (agrupado): una entrada por PRENDA, con varias imágenes por color,
+//   { ...lo anterior..., producto, prenda, color, colores: [{ color, ids, imagenes: [...] }] }
+//
+// El campo `carpeta` MANTIENE el prefijo "{id}-" a propósito: main.js y detalle.js derivan el
+// id_articulo parseando /(\d+)-[^/]+/ sobre la URL (marcado de agotados, resolución del detalle).
+// Por eso el formato nuevo es un superconjunto del viejo y los lectores viejos siguen andando.
+
+// Convierte un color a un fragmento de nombre de archivo seguro ("Beige Oscuro" -> "beige-oscuro").
+function slugify(texto) {
+  return String(texto || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'sin-color';
+}
+
+// Devuelve una entrada de productos.json en forma canónica, venga del formato viejo o del nuevo.
+// Las entradas viejas se exponen como un único color sin nombre con su imagen suelta, así el
+// resto del código puede tratar a todas por igual (siempre hay `colores` con al menos un item).
+function normalizeProductoEntry(node) {
+  if (!node || typeof node !== 'object') return null;
+
+  const carpeta = String(node.carpeta || '');
+  const idMatch = carpeta.match(/^(\d+)-(.*)$/);
+  const idPrincipal = idMatch ? parseInt(idMatch[1], 10) : null;
+  // El nombre del producto: preferir el campo explícito; si no, derivarlo de la carpeta.
+  const producto = node.producto || node.prenda || (idMatch ? idMatch[2] : carpeta);
+
+  let colores;
+  if (Array.isArray(node.colores) && node.colores.length > 0) {
+    colores = node.colores.map(c => ({
+      color: c.color || '',
+      ids: Array.isArray(c.ids) ? c.ids.map(Number).filter(Number.isInteger) : [],
+      imagenes: Array.isArray(c.imagenes) ? c.imagenes.filter(Boolean) : (c.imagen ? [c.imagen] : [])
+    }));
+  } else {
+    colores = [{
+      color: node.color || '',
+      ids: idPrincipal !== null ? [idPrincipal] : [],
+      imagenes: node.imagen ? [node.imagen] : []
+    }];
+  }
+
+  const portada = node.imagen || (colores[0] && colores[0].imagenes[0]) || '';
+
+  return {
+    producto,
+    categoria: node.categoria || '',
+    carpeta,
+    idPrincipal,
+    txt: node.txt || '',
+    imagen: portada,
+    colores,
+    // Todos los id_articulo que cubre esta tarjeta (uno por unidad física publicada).
+    ids: colores.reduce((acc, c) => acc.concat(c.ids), [])
+  };
+}
+
+// Arma el objeto que se guarda en productos.json. Mantiene los campos del formato viejo
+// (categoria/carpeta/imagen/txt) para no romper lectores que no conozcan `colores`.
+function buildProductoEntry({ producto, categoria, carpeta, txt, colores }) {
+  const listaColores = (colores || []).map(c => ({
+    color: c.color || '',
+    ids: Array.isArray(c.ids) ? c.ids : [],
+    imagenes: Array.isArray(c.imagenes) ? c.imagenes : []
+  }));
+  const primero = listaColores[0] || { color: '', imagenes: [] };
+  return {
+    categoria,
+    carpeta,
+    imagen: primero.imagenes[0] || '',
+    txt,
+    producto,
+    // `prenda`/`color` describen la portada: los usa cargarImagenesPorColor() de detalle.js.
+    prenda: producto,
+    color: primero.color,
+    colores: listaColores
+  };
+}
+
+// Busca la entrada que cubre un id_articulo, sea porque es el id principal de la carpeta
+// (formato viejo) o porque figura en alguno de sus colores (formato nuevo agrupado).
+function findEntryIndexByArticuloId(productos, idArticulo) {
+  const idStr = String(idArticulo);
+  return productos.findIndex(p => {
+    if (String(p.carpeta || '').startsWith(`${idStr}-`)) return true;
+    const normalizado = normalizeProductoEntry(p);
+    return normalizado ? normalizado.ids.includes(Number(idArticulo)) : false;
+  });
+}
+
+// Busca la entrada de una prenda por nombre (para agrupar al publicar).
+function findEntryIndexByProducto(productos, producto) {
+  const objetivo = String(producto || '').trim().toLowerCase();
+  return productos.findIndex(p => {
+    const normalizado = normalizeProductoEntry(p);
+    return normalizado && String(normalizado.producto || '').trim().toLowerCase() === objetivo;
+  });
+}
+
 module.exports = {
   BUCKET_NAME,
   PUBLIC_URL_PREFIX,
@@ -143,5 +248,10 @@ module.exports = {
   saveProductosJson,
   buildTxtContent,
   parseTxtContent,
-  normalizeTextField
+  normalizeTextField,
+  slugify,
+  normalizeProductoEntry,
+  buildProductoEntry,
+  findEntryIndexByArticuloId,
+  findEntryIndexByProducto
 };

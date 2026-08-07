@@ -20,6 +20,10 @@ function qualifyTable(tableName) {
 }
 
 const PRODUCTOS_TABLE = qualifyTable('productos');
+// Tabla propia de la web (no existe del lado Java): guarda el detalle de cada devolución
+// para poder mostrarlo en Cash Flow, ya que sp_devolver_articulo borra el pago asociado
+// sin dejar rastro de qué se devolvió ni por qué monto.
+const DEVOLUCIONES_TABLE = qualifyTable('devoluciones_web');
 
 // Optional DB pool (may remain null en modo stateless)
 let pool = null;
@@ -43,6 +47,20 @@ async function initializeDatabase() {
 
   const client = await pool.connect();
   console.log('✅ Conexión PostgreSQL establecida');
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${DEVOLUCIONES_TABLE} (
+      id SERIAL PRIMARY KEY,
+      id_articulo INTEGER NOT NULL,
+      prenda VARCHAR(255),
+      color VARCHAR(255),
+      talle VARCHAR(255),
+      monto DOUBLE PRECISION,
+      metodo_pago VARCHAR(50),
+      nombre_cliente VARCHAR(255),
+      fecha_devolucion DATE NOT NULL DEFAULT CURRENT_DATE,
+      creado_en TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
   client.release();
 
   return pool;
@@ -113,6 +131,7 @@ module.exports = {
   buildPaymentIdContext,
   DB_SCHEMA,
   PRODUCTOS_TABLE,
+  DEVOLUCIONES_TABLE,
   get pool() {
     return pool;
   }

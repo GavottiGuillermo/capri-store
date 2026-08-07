@@ -76,6 +76,14 @@ router.post('/confirmar', express.json(), requireDb, async (req, res) => {
 });
 
 // === DEVOLUCIÓN DE ARTÍCULO (equivalente a devolverArticulo, vía sp_devolver_articulo) ===
+// sp_devolver_articulo borra por completo la fila de 'pagos' asociada (comportamiento del desktop,
+// preservado desde Fase 4), así que después de la devolución no queda ningún rastro de qué se
+// devolvió ni por qué monto. Para poder mostrar ese detalle en Cash Flow sin tocar la SP compartida
+// con el desktop, acá se lee el artículo + su pago ANTES de llamar a la SP (una vez que la SP corre,
+// el pago ya no existe) y, solo si la SP tiene éxito, se guarda una copia en la tabla propia de la
+// web `devoluciones_web`. El monto se recalcula con el mismo criterio que /confirmar (precio efectivo
+// o transferencia según el método de pago original) en vez de usar pagos.monto, porque ese monto es el
+// total de todo el carrito de la venta original y puede incluir otros artículos.
 router.post('/devolver/:idArticulo', requireDb, async (req, res) => {
   const idArticulo = parseInt(req.params.idArticulo, 10);
   if (!Number.isInteger(idArticulo)) {
@@ -83,7 +91,27 @@ router.post('/devolver/:idArticulo', requireDb, async (req, res) => {
   }
 
   try {
+    const detalleResult = await db.pool.query(
+      `SELECT p.prenda, p.color, p.talle, p.precio_venta_efectivo, p.precio_venta_transferencia,
+              pg.metodo_pago, pg.nombre_cliente
+       FROM ${db.PRODUCTOS_TABLE} p
+       LEFT JOIN pagos pg ON pg.id_pago = p.id_pago
+       WHERE p.id_articulo = $1`,
+      [idArticulo]
+    );
+    const detalle = detalleResult.rows[0];
+
     await db.pool.query('CALL sp_devolver_articulo($1)', [idArticulo]);
+
+    if (detalle && detalle.metodo_pago) {
+      const monto = detalle.metodo_pago === 'Efectivo' ? detalle.precio_venta_efectivo : detalle.precio_venta_transferencia;
+      await db.pool.query(
+        `INSERT INTO ${db.DEVOLUCIONES_TABLE} (id_articulo, prenda, color, talle, monto, metodo_pago, nombre_cliente)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [idArticulo, detalle.prenda, detalle.color, detalle.talle, monto, detalle.metodo_pago, detalle.nombre_cliente]
+      );
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('❌ Error devolviendo artículo:', error.message);
