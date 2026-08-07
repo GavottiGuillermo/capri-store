@@ -5,6 +5,8 @@ const db = require('../db');
 const mpService = require('../services/mercadopago');
 const whatsappBusiness = require('../services/whatsapp');
 const whatsappApiService = require('../whatsapp-api-service');
+// `variantes_` con guion bajo para no chocar con las variables locales `variantes` de las rutas.
+const variantes_ = require('../services/variantes');
 
 const router = express.Router();
 
@@ -579,21 +581,26 @@ router.get('/variantes-producto/:id', async (req, res) => {
       ORDER BY color, talle, id_articulo
     `, [prenda]);
 
-    // 3. Agrupar por color -> talle, contando solo filas Disponible y publicadas
+    // 3. Agrupar por color -> talle, contando solo filas Disponible y publicadas.
+    //    Se agrupa por color/talle NORMALIZADOS: la carga manual del desktop dejó valores
+    //    equivalentes escritos distinto ('m' y 'M', 'u' y 'unico', 'Blanco ' con espacio final)
+    //    y compararlos crudos los mostraría como variantes separadas. Normalizar acá arregla
+    //    los datos ya cargados sin escribir en la BD que comparte el desktop.
     const coloresMap = new Map();
 
     result.rows.forEach(row => {
       const publicado = row.publicado_en_web === 'True' || row.publicado_en_web === true;
       if (!publicado) return;
 
-      const color = row.color || 'Sin color';
-      const talle = row.talle || 'Único';
+      const color = variantes_.normalizarColor(row.color) || 'Sin color';
+      const claveColor = variantes_.claveColor(row.color) || 'sin color';
+      const talle = variantes_.normalizarTalle(row.talle);
       const disponible = row.estado === 'Disponible';
 
-      if (!coloresMap.has(color)) {
-        coloresMap.set(color, new Map());
+      if (!coloresMap.has(claveColor)) {
+        coloresMap.set(claveColor, { color, talles: new Map() });
       }
-      const tallesMap = coloresMap.get(color);
+      const tallesMap = coloresMap.get(claveColor).talles;
 
       if (!tallesMap.has(talle)) {
         tallesMap.set(talle, { talle, stock: 0, ids: [] });
@@ -605,9 +612,9 @@ router.get('/variantes-producto/:id', async (req, res) => {
       }
     });
 
-    const variantes = Array.from(coloresMap.entries()).map(([color, tallesMap]) => ({
+    const variantes = Array.from(coloresMap.values()).map(({ color, talles }) => ({
       color,
-      talles: Array.from(tallesMap.values())
+      talles: Array.from(talles.values())
     }));
 
     console.log(`✅ Variantes de "${prenda}": ${variantes.length} colores`);

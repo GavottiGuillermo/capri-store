@@ -1,6 +1,7 @@
 const express = require('express');
 
 const db = require('../../db');
+const variantes = require('../../services/variantes');
 
 const router = express.Router();
 
@@ -68,6 +69,12 @@ router.post('/lotes', express.json(), requireDb, async (req, res) => {
         return res.status(400).json({ success: false, error: `Producto #${i + 1}: prenda, categoría, color y talle son obligatorios` });
       }
 
+      // Normalizar antes de insertar para no seguir ensuciando la tabla: la carga manual del
+      // desktop dejó 'm' junto a 'M', 'u' junto a 'unico' y colores con espacios al final, y el
+      // agrupado de variantes de la tienda compara strings exactos.
+      const colorNormalizado = variantes.normalizarColor(color);
+      const talleNormalizado = variantes.normalizarTalle(talle);
+
       const precioCompra = toNumber(p.precio_compra, 'Precio de compra');
       if (precioCompra.error) {
         return res.status(400).json({ success: false, error: `Producto #${i + 1}: ${precioCompra.error}` });
@@ -83,17 +90,28 @@ router.post('/lotes', express.json(), requireDb, async (req, res) => {
       // 10% de descuento por pago en efectivo, mismo cálculo que agregarProducto() en el desktop.
       const precioVentaEfectivo = Math.round(precioVentaTransferencia.value * 0.9 * 100) / 100;
 
-      costoLote += precioCompra.value;
-      productosLimpios.push({
-        estado: 'Disponible',
-        prenda,
-        categoria,
-        color,
-        talle,
-        precio_compra: precioCompra.value,
-        precio_venta_efectivo: precioVentaEfectivo,
-        precio_venta_transferencia: precioVentaTransferencia.value
-      });
+      // `cantidad` permite mandar N unidades idénticas en un solo item (la matriz de variantes
+      // del panel manda una celda color × talle × cantidad). Cada unidad sigue siendo su propia
+      // fila en `productos`, igual que en el desktop: acá solo se expande.
+      const cantidadRaw = p.cantidad === undefined ? 1 : p.cantidad;
+      const cantidad = Number(cantidadRaw);
+      if (!Number.isInteger(cantidad) || cantidad < 1) {
+        return res.status(400).json({ success: false, error: `Producto #${i + 1}: la cantidad debe ser un entero mayor o igual a 1` });
+      }
+
+      for (let u = 0; u < cantidad; u++) {
+        costoLote += precioCompra.value;
+        productosLimpios.push({
+          estado: 'Disponible',
+          prenda,
+          categoria,
+          color: colorNormalizado,
+          talle: talleNormalizado,
+          precio_compra: precioCompra.value,
+          precio_venta_efectivo: precioVentaEfectivo,
+          precio_venta_transferencia: precioVentaTransferencia.value
+        });
+      }
     }
 
     // El SP recibe el costo total del lote (suma de precio_compra) + observación + inversor + productos en JSON.

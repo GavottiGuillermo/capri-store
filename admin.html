@@ -249,7 +249,7 @@
         <div class="card mb-5">
           <div class="card-body">
             <span class="card-titulo">Carga manual de lote</span>
-            <p class="text-muted small">Agregá los productos de este lote uno por uno y finalizá para insertarlos todos juntos en la base de datos.</p>
+            <p class="text-muted small">Cargá un <strong>modelo</strong> (prenda + categoría + precios) y definí sus <strong>variantes</strong> en la matriz de color × talle. Cada unidad entra como su propia fila en la base, igual que en el desktop.</p>
 
             <div class="form-row">
               <div class="form-group col-md-6">
@@ -266,32 +266,39 @@
 
             <form id="form-agregar-producto-lote">
               <div class="form-row">
-                <div class="form-group col-md-2">
+                <div class="form-group col-md-3">
                   <label>Prenda</label>
                   <input type="text" class="form-control form-control-sm" name="prenda" required />
                 </div>
-                <div class="form-group col-md-2">
+                <div class="form-group col-md-3">
                   <label>Categoría</label>
                   <input type="text" class="form-control form-control-sm" name="categoria" required />
                 </div>
-                <div class="form-group col-md-2">
-                  <label>Color</label>
-                  <input type="text" class="form-control form-control-sm" name="color" required />
-                </div>
-                <div class="form-group col-md-2">
-                  <label>Talle</label>
-                  <input type="text" class="form-control form-control-sm" name="talle" required />
-                </div>
-                <div class="form-group col-md-2">
+                <div class="form-group col-md-3">
                   <label>Precio compra</label>
                   <input type="number" step="0.01" class="form-control form-control-sm" name="precio_compra" required />
                 </div>
-                <div class="form-group col-md-2">
+                <div class="form-group col-md-3">
                   <label>Precio venta (transf.)</label>
                   <input type="number" step="0.01" class="form-control form-control-sm" name="precio_venta_transferencia" required />
                 </div>
               </div>
-              <button type="submit" class="btn btn-outline-secondary btn-sm" id="btn-agregar-producto-lote">+ Agregar producto</button>
+
+              <div class="form-row">
+                <div class="form-group col-md-6">
+                  <label>Colores <span class="text-muted small">(separados por coma)</span></label>
+                  <input type="text" class="form-control form-control-sm" id="lote-colores" placeholder="Negro, Blanco, Visón" />
+                </div>
+                <div class="form-group col-md-6">
+                  <label>Talles <span class="text-muted small">(separados por coma)</span></label>
+                  <input type="text" class="form-control form-control-sm" id="lote-talles" placeholder="S, M, L — dejá vacío para talle único" />
+                </div>
+              </div>
+
+              <!-- Matriz de variantes: se regenera al cambiar colores/talles -->
+              <div id="matriz-variantes" class="table-responsive mb-2"></div>
+
+              <button type="submit" class="btn btn-outline-secondary btn-sm" id="btn-agregar-producto-lote">+ Agregar variantes al lote</button>
             </form>
 
             <div class="table-responsive mt-3">
@@ -302,6 +309,7 @@
                     <th>Categoría</th>
                     <th>Color</th>
                     <th>Talle</th>
+                    <th>Cant.</th>
                     <th>Precio compra</th>
                     <th>Precio venta efec. (-10%)</th>
                     <th>Precio venta transf.</th>
@@ -313,6 +321,10 @@
             </div>
 
             <div class="mt-3">
+              <div class="mb-2 small text-muted">
+                Total: <strong id="lote-total-unidades">0</strong> unidad(es) ·
+                costo del lote: <strong>$<span id="lote-total-costo">0</span></strong>
+              </div>
               <button class="btn btn-vino-tinto btn-sm" id="btn-finalizar-carga" disabled>Finalizar carga</button>
               <button class="btn btn-outline-danger btn-sm" id="btn-cancelar-carga" disabled>Cancelar carga</button>
             </div>
@@ -858,19 +870,78 @@
       document.getElementById(id).addEventListener('input', renderStock);
     });
 
-    // === Stock: carga manual de lote ===
+    // === Stock: carga manual de lote (modelo + matriz de variantes) ===
+    // Un "modelo" es prenda + categoría + precios; sus variantes son las combinaciones
+    // color × talle con una cantidad cada una. Cada unidad termina siendo su propia fila
+    // en `productos` (el servidor expande la cantidad), igual que en el desktop.
     let productosLote = [];
+
+    function parseListaCsv(valor) {
+      return String(valor || '')
+        .split(',')
+        .map(s => s.trim().replace(/\s+/g, ' '))
+        .filter(Boolean);
+    }
+
+    // Colores y talles actuales del formulario. Sin talles se asume uno solo ("único").
+    function getEjesMatriz() {
+      const colores = parseListaCsv(document.getElementById('lote-colores').value);
+      const tallesRaw = parseListaCsv(document.getElementById('lote-talles').value);
+      const talles = tallesRaw.length > 0 ? tallesRaw : ['unico'];
+      return { colores, talles };
+    }
+
+    // Redibuja la matriz preservando las cantidades ya tipeadas para las celdas que siguen existiendo.
+    function renderMatrizVariantes() {
+      const cont = document.getElementById('matriz-variantes');
+      const { colores, talles } = getEjesMatriz();
+
+      const previas = {};
+      cont.querySelectorAll('input[data-color]').forEach(input => {
+        previas[`${input.dataset.color}||${input.dataset.talle}`] = input.value;
+      });
+
+      if (colores.length === 0) {
+        cont.innerHTML = '<small class="text-muted">Escribí al menos un color para armar la matriz.</small>';
+        return;
+      }
+
+      let html = '<table class="table table-sm table-bordered mb-1"><thead class="thead-light"><tr><th>Color \\ Talle</th>';
+      talles.forEach(t => { html += `<th class="text-center">${t}</th>`; });
+      html += '</tr></thead><tbody>';
+      colores.forEach(color => {
+        html += `<tr><td class="align-middle"><strong>${color}</strong></td>`;
+        talles.forEach(talle => {
+          const valor = previas[`${color}||${talle}`] || '';
+          html += `<td><input type="number" min="0" step="1" class="form-control form-control-sm text-center celda-matriz"
+                     data-color="${color}" data-talle="${talle}" value="${valor}" placeholder="0" style="min-width:60px;" /></td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table><small class="text-muted">Poné la cantidad de unidades de cada combinación. Las vacías o en 0 se ignoran.</small>';
+      cont.innerHTML = html;
+    }
+
+    ['lote-colores', 'lote-talles'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderMatrizVariantes);
+    });
+    renderMatrizVariantes();
 
     function renderProductosLote() {
       const tbody = document.getElementById('tbody-lote');
       tbody.innerHTML = '';
+      let totalUnidades = 0;
+      let totalCosto = 0;
       productosLote.forEach((p, index) => {
+        totalUnidades += p.cantidad;
+        totalCosto += p.cantidad * p.precio_compra;
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${p.prenda}</td>
           <td>${p.categoria}</td>
           <td>${p.color}</td>
           <td>${p.talle}</td>
+          <td><strong>${p.cantidad}</strong></td>
           <td>$${p.precio_compra.toLocaleString('es-AR')}</td>
           <td>$${(Math.round(p.precio_venta_transferencia * 0.9 * 100) / 100).toLocaleString('es-AR')}</td>
           <td>$${p.precio_venta_transferencia.toLocaleString('es-AR')}</td>
@@ -884,6 +955,8 @@
           renderProductosLote();
         });
       });
+      document.getElementById('lote-total-unidades').textContent = totalUnidades;
+      document.getElementById('lote-total-costo').textContent = totalCosto.toLocaleString('es-AR');
       const hayProductos = productosLote.length > 0;
       document.getElementById('btn-finalizar-carga').disabled = !hayProductos;
       document.getElementById('btn-cancelar-carga').disabled = !hayProductos;
@@ -898,15 +971,49 @@
         mostrarResultado('resultado-lote', false, "El 'Precio de venta' no puede ser menor que el 'Precio de compra'.");
         return;
       }
-      productosLote.push({
-        prenda: form.prenda.value.trim(),
-        categoria: form.categoria.value.trim(),
-        color: form.color.value.trim(),
-        talle: form.talle.value.trim(),
-        precio_compra: precioCompra,
-        precio_venta_transferencia: precioVenta
+
+      const celdas = Array.from(document.querySelectorAll('.celda-matriz'))
+        .map(input => ({
+          color: input.dataset.color,
+          talle: input.dataset.talle,
+          cantidad: parseInt(input.value, 10)
+        }))
+        .filter(c => Number.isInteger(c.cantidad) && c.cantidad > 0);
+
+      if (celdas.length === 0) {
+        mostrarResultado('resultado-lote', false, 'Indicá al menos una cantidad en la matriz de color × talle.');
+        return;
+      }
+
+      const prenda = form.prenda.value.trim();
+      const categoria = form.categoria.value.trim();
+
+      celdas.forEach(celda => {
+        // Si la misma combinación ya estaba en el lote, se acumula en vez de duplicar la fila.
+        const existente = productosLote.find(p =>
+          p.prenda === prenda && p.categoria === categoria &&
+          p.color === celda.color && p.talle === celda.talle &&
+          p.precio_compra === precioCompra && p.precio_venta_transferencia === precioVenta
+        );
+        if (existente) {
+          existente.cantidad += celda.cantidad;
+        } else {
+          productosLote.push({
+            prenda,
+            categoria,
+            color: celda.color,
+            talle: celda.talle,
+            cantidad: celda.cantidad,
+            precio_compra: precioCompra,
+            precio_venta_transferencia: precioVenta
+          });
+        }
       });
+
       form.reset();
+      document.getElementById('lote-colores').value = '';
+      document.getElementById('lote-talles').value = '';
+      renderMatrizVariantes();
       document.getElementById('resultado-lote').style.display = 'none';
       renderProductosLote();
     });
@@ -916,6 +1023,9 @@
       productosLote = [];
       document.getElementById('lote-inversor').value = '';
       document.getElementById('lote-observacion').value = '';
+      document.getElementById('lote-colores').value = '';
+      document.getElementById('lote-talles').value = '';
+      renderMatrizVariantes();
       document.getElementById('resultado-lote').style.display = 'none';
       renderProductosLote();
     });
@@ -927,7 +1037,8 @@
         mostrarResultado('resultado-lote', false, "Los campos 'Inversor' y 'Observación' son obligatorios para finalizar la carga.");
         return;
       }
-      if (!confirm('¿Confirmás la carga del lote? Esta acción insertará el lote y los productos en la base de datos.')) return;
+      const unidades = productosLote.reduce((suma, p) => suma + p.cantidad, 0);
+      if (!confirm(`¿Confirmás la carga del lote? Se insertarán ${unidades} unidad(es) como filas individuales en la base de datos.`)) return;
 
       const btn = document.getElementById('btn-finalizar-carga');
       btn.disabled = true;
@@ -941,10 +1052,14 @@
         });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'No se pudo cargar el lote');
-        mostrarResultado('resultado-lote', true, `Lote cargado correctamente. ${data.cantidad} producto(s) insertado(s).`);
+        mostrarResultado('resultado-lote', true,
+          `Lote cargado correctamente. ${data.cantidad} unidad(es) insertada(s). Costo del lote: $${Number(data.costo_lote).toLocaleString('es-AR')}`);
         productosLote = [];
         document.getElementById('lote-inversor').value = '';
         document.getElementById('lote-observacion').value = '';
+        document.getElementById('lote-colores').value = '';
+        document.getElementById('lote-talles').value = '';
+        renderMatrizVariantes();
         renderProductosLote();
         cargarStock();
       } catch (error) {
