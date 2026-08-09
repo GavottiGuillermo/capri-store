@@ -90,7 +90,7 @@
                 </div>
                 <div class="form-group col-md-3">
                   <label>Categoría</label>
-                  <input type="text" class="form-control form-control-sm" name="categoria" required />
+                  <select class="form-control form-control-sm" name="categoria" id="lote-categoria" required></select>
                 </div>
                 <div class="form-group col-md-3">
                   <label>Precio compra</label>
@@ -105,11 +105,16 @@
               <div class="form-row">
                 <div class="form-group col-md-6">
                   <label>Colores <span class="text-muted small">(separados por coma)</span></label>
-                  <input type="text" class="form-control form-control-sm" id="lote-colores" placeholder="Negro, Blanco, Visón" />
+                  <input type="text" class="form-control form-control-sm" id="lote-colores" placeholder="Negro, Blanco, Visón" list="datalist-colores" autocomplete="off" />
+                  <!-- Los colores son abiertos (podés escribir uno nuevo), pero se sugieren los ya
+                       usados para que no se recarguen mal escritos. -->
+                  <datalist id="datalist-colores"></datalist>
+                  <small class="form-text text-muted">Escribí uno nuevo o elegí de los existentes.</small>
                 </div>
                 <div class="form-group col-md-6">
-                  <label>Talles <span class="text-muted small">(separados por coma)</span></label>
-                  <input type="text" class="form-control form-control-sm" id="lote-talles" placeholder="S, M, L — dejá vacío para talle único" />
+                  <label>Talles</label>
+                  <div id="lote-talles-catalogo" class="border rounded p-2" style="font-size:0.85rem;"></div>
+                  <small class="form-text text-muted">Si no marcás ninguno se usa talle único.</small>
                 </div>
               </div>
 
@@ -347,16 +352,9 @@
               </div>
               <div class="form-group col-md-5">
                 <label>Categoría</label>
-                <select class="form-control form-control-sm" name="categoria">
-                  <option value="Remeras">Remeras</option>
-                  <option value="Pantalones">Pantalones</option>
-                  <option value="Vestidos">Vestidos</option>
-                  <option value="Buzos">Buzos</option>
-                  <option value="Conjuntos">Conjuntos</option>
-                  <option value="Accesorios">Accesorios</option>
-                  <option value="Carteras">Carteras</option>
-                  <option value="OnaFitness">OnaFitness</option>
-                </select>
+                <!-- Se llena desde /admin/catalogos: son las categorías que la tienda sabe ordenar
+                     y mostrar. Antes esta lista estaba escrita a mano acá y no coincidía. -->
+                <select class="form-control form-control-sm" name="categoria" id="mc-categoria"></select>
               </div>
               <div class="form-group col-md-3 d-flex align-items-end">
                 <div class="form-check">
@@ -432,7 +430,9 @@
         document.getElementById('admin-username').textContent = data.username;
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
-        cargarArticulos();
+        // Los catálogos primero: los desplegables de categoría y talle dependen de ellos.
+        await cargarCatalogos();
+        await cargarArticulos();
       } catch (error) {
         window.location.href = 'admin-login.html';
       }
@@ -448,6 +448,44 @@
       el.style.display = 'block';
       el.className = 'alert mt-3 alert-resultado ' + (ok ? 'alert-success' : 'alert-danger');
       el.textContent = texto;
+    }
+
+    // ===================== CATÁLOGOS =====================
+    // Categorías y talles vienen del servidor (GET /admin/catalogos), que es la misma fuente
+    // contra la que validan las rutas de carga: así no hay una copia acá que se desincronice.
+    let catalogos = { categorias: [], talles: [], colores: [] };
+
+    async function cargarCatalogos() {
+      try {
+        const resp = await fetch('/admin/catalogos', { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudieron cargar los catálogos');
+        catalogos = data;
+      } catch (error) {
+        console.error('Error cargando catálogos:', error);
+        mostrarResultado('resultado-acciones', false,
+          'No se pudieron cargar los catálogos de categoría/talle: ' + error.message);
+        return;
+      }
+
+      const opciones = catalogos.categorias
+        .map(c => `<option value="${c.valor}">${c.etiqueta}</option>`).join('');
+      document.getElementById('lote-categoria').innerHTML =
+        '<option value="">Elegí una categoría...</option>' + opciones;
+      document.getElementById('mc-categoria').innerHTML = opciones;
+
+      // Talles como checkboxes: la matriz de variantes acepta varios a la vez.
+      document.getElementById('lote-talles-catalogo').innerHTML = catalogos.talles.map(t => `
+        <div class="form-check form-check-inline mr-3">
+          <input class="form-check-input chk-talle" type="checkbox" value="${t.valor}" id="talle-${t.valor.replace(/[^a-zA-Z0-9]/g, '')}">
+          <label class="form-check-label" for="talle-${t.valor.replace(/[^a-zA-Z0-9]/g, '')}">${t.etiqueta}</label>
+        </div>`).join('');
+      document.querySelectorAll('.chk-talle').forEach(chk => {
+        chk.addEventListener('change', renderMatrizVariantes);
+      });
+
+      document.getElementById('datalist-colores').innerHTML =
+        catalogos.colores.map(c => `<option value="${c}"></option>`).join('');
     }
 
     // ===================== LISTADO ÚNICO DE ARTÍCULOS =====================
@@ -881,11 +919,12 @@
         .filter(Boolean);
     }
 
-    // Colores y talles actuales del formulario. Sin talles se asume uno solo ("único").
+    // Colores (texto libre) y talles (catálogo) actuales del formulario.
+    // Sin talles marcados se asume talle único, que es el caso más común.
     function getEjesMatriz() {
       const colores = parseListaCsv(document.getElementById('lote-colores').value);
-      const tallesRaw = parseListaCsv(document.getElementById('lote-talles').value);
-      const talles = tallesRaw.length > 0 ? tallesRaw : ['unico'];
+      const marcados = Array.from(document.querySelectorAll('.chk-talle:checked')).map(chk => chk.value);
+      const talles = marcados.length > 0 ? marcados : ['unico'];
       return { colores, talles };
     }
 
@@ -920,7 +959,8 @@
       cont.innerHTML = html;
     }
 
-    ['lote-colores', 'lote-talles'].forEach(id => {
+    // Los talles ahora son checkboxes (su listener se engancha al construir el catálogo).
+    ['lote-colores'].forEach(id => {
       document.getElementById(id).addEventListener('input', renderMatrizVariantes);
     });
     renderMatrizVariantes();
@@ -1010,7 +1050,7 @@
 
       form.reset();
       document.getElementById('lote-colores').value = '';
-      document.getElementById('lote-talles').value = '';
+      document.querySelectorAll('.chk-talle').forEach(chk => { chk.checked = false; });
       renderMatrizVariantes();
       document.getElementById('resultado-lote').style.display = 'none';
       renderProductosLote();
@@ -1022,7 +1062,7 @@
       document.getElementById('lote-inversor').value = '';
       document.getElementById('lote-observacion').value = '';
       document.getElementById('lote-colores').value = '';
-      document.getElementById('lote-talles').value = '';
+      document.querySelectorAll('.chk-talle').forEach(chk => { chk.checked = false; });
       renderMatrizVariantes();
       document.getElementById('resultado-lote').style.display = 'none';
       renderProductosLote();
@@ -1056,7 +1096,7 @@
         document.getElementById('lote-inversor').value = '';
         document.getElementById('lote-observacion').value = '';
         document.getElementById('lote-colores').value = '';
-        document.getElementById('lote-talles').value = '';
+        document.querySelectorAll('.chk-talle').forEach(chk => { chk.checked = false; });
         renderMatrizVariantes();
         renderProductosLote();
         cargarArticulos();

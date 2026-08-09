@@ -1,6 +1,7 @@
 const express = require('express');
 
 const auth = require('../services/auth');
+const db = require('../db');
 
 const router = express.Router();
 
@@ -87,6 +88,33 @@ router.use((req, res, next) => {
 
 router.get('/me', (req, res) => {
   res.json({ success: true, username: req.admin.username });
+});
+
+// Catálogos para los desplegables del panel. Se sirven desde el servidor (y no se duplican en
+// admin.html) para que haya una sola definición de categorías y talles válidos: la misma contra
+// la que después validan las rutas de carga.
+// `colores` no es un catálogo cerrado —los colores son abiertos— sino la lista de los que ya
+// existen, para ofrecerlos como sugerencia y evitar que se recarguen mal escritos.
+router.get('/catalogos', async (req, res) => {
+  const catalogos = require('../services/catalogos');
+  let colores = [];
+  if (db.pool) {
+    try {
+      const result = await db.pool.query(
+        `SELECT DISTINCT color FROM ${db.PRODUCTOS_TABLE}
+         WHERE color IS NOT NULL AND TRIM(color) <> '' ORDER BY color`
+      );
+      colores = result.rows.map(r => r.color);
+    } catch (error) {
+      console.error('⚠️ No se pudieron leer los colores existentes:', error.message);
+    }
+  }
+  res.json({
+    success: true,
+    categorias: catalogos.CATEGORIAS,
+    talles: catalogos.TALLES,
+    colores,
+  });
 });
 
 router.use('/articulos-web', require('./admin/articulos-web'));

@@ -2,6 +2,7 @@ const express = require('express');
 
 const db = require('../../db');
 const variantes = require('../../services/variantes');
+const catalogos = require('../../services/catalogos');
 
 const router = express.Router();
 
@@ -69,6 +70,16 @@ router.post('/lotes', express.json(), requireDb, async (req, res) => {
         return res.status(400).json({ success: false, error: `Producto #${i + 1}: prenda, categoría, color y talle son obligatorios` });
       }
 
+      // La categoría es un catálogo cerrado: es lo que evita que vuelvan a aparecer variantes del
+      // mismo concepto ('Parte de arriba' / 'Arriba' / 'Top'). Se guarda el valor canónico.
+      const categoriaCanonica = catalogos.normalizarCategoria(categoria);
+      if (!categoriaCanonica) {
+        return res.status(400).json({
+          success: false,
+          error: `Producto #${i + 1}: la categoría "${categoria}" no es válida. Opciones: ${catalogos.etiquetasCategorias()}`
+        });
+      }
+
       // Normalizar antes de insertar para no seguir ensuciando la tabla: la carga manual del
       // desktop dejó 'm' junto a 'M', 'u' junto a 'unico' y colores con espacios al final, y el
       // agrupado de variantes de la tienda compara strings exactos.
@@ -104,7 +115,7 @@ router.post('/lotes', express.json(), requireDb, async (req, res) => {
         productosLimpios.push({
           estado: 'Disponible',
           prenda,
-          categoria,
+          categoria: categoriaCanonica,
           color: colorNormalizado,
           talle: talleNormalizado,
           precio_compra: precioCompra.value,

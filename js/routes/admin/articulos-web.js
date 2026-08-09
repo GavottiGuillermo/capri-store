@@ -4,6 +4,7 @@ const path = require('path');
 
 const db = require('../../db');
 const gcs = require('../../services/gcs');
+const catalogos = require('../../services/catalogos');
 
 const router = express.Router();
 
@@ -57,12 +58,19 @@ function extensionFor(file) {
   return byMime[file.mimetype] || '.jpg';
 }
 
+// Resuelve la categoría a guardar, validándola contra el catálogo.
+// Importante: la tienda solo ordena y muestra las categorías de `ORDEN_CATEGORIAS` (main.js); una
+// categoría fuera de esa lista cae en un grupo sin ordenar, así que acá se rechaza en vez de
+// publicar algo que no se va a ver donde corresponde.
+// Devuelve { value } o { error }.
 function resolveCategoria(categoriaRaw, novedad) {
-  let categoria = gcs.normalizeTextField(categoriaRaw);
-  if (novedad && !categoria.endsWith('-Novedad')) {
-    categoria += '-Novedad';
+  const canonica = catalogos.normalizarCategoria(categoriaRaw);
+  if (!canonica) {
+    return {
+      error: `La categoría "${gcs.normalizeTextField(categoriaRaw)}" no es válida. Opciones: ${catalogos.etiquetasCategorias()}`
+    };
   }
-  return categoria;
+  return { value: novedad ? `${canonica}${catalogos.SUFIJO_NOVEDAD}` : canonica };
 }
 
 function parsePrecio(precioRaw) {
@@ -340,7 +348,11 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
     const titulo = gcs.normalizeTextField(req.body.titulo);
     const texto = gcs.normalizeTextField(req.body.texto);
     const detalle = gcs.normalizeTextField(req.body.detalle);
-    const categoria = resolveCategoria(req.body.categoria, isNovedadFlag(req.body.novedad));
+    const categoriaResult = resolveCategoria(req.body.categoria, isNovedadFlag(req.body.novedad));
+    if (categoriaResult.error) {
+      return res.status(400).json({ success: false, error: categoriaResult.error });
+    }
+    const categoria = categoriaResult.value;
 
     // Agrupar los ids seleccionados por color (cada color = un grupo de unidades físicas).
     const coloresSeleccionados = agruparIdsPorColor(result.rows);
@@ -614,7 +626,11 @@ router.put('/:idArticulo', requireGcs, requireDb, upload.any(), async (req, res)
     const titulo = gcs.normalizeTextField(req.body.titulo);
     const texto = gcs.normalizeTextField(req.body.texto);
     const detalle = gcs.normalizeTextField(req.body.detalle);
-    const categoria = resolveCategoria(req.body.categoria, isNovedadFlag(req.body.novedad));
+    const categoriaResult = resolveCategoria(req.body.categoria, isNovedadFlag(req.body.novedad));
+    if (categoriaResult.error) {
+      return res.status(400).json({ success: false, error: categoriaResult.error });
+    }
+    const categoria = categoriaResult.value;
 
     // 1. Actualizar el .txt
     const contenidoTxt = gcs.buildTxtContent({ titulo, texto, precio, detalle });
