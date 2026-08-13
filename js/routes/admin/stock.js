@@ -141,6 +141,97 @@ router.post('/lotes', express.json(), requireDb, async (req, res) => {
   }
 });
 
+// === EDITAR UN ARTÍCULO ===
+// Corrige los datos de una unidad ya cargada (prenda, categoría, color, talle, precios).
+// `estado` NO se toca acá a propósito: cambia solo por las acciones que representan un hecho real
+// (Vender, Devolución, o un pedido web). Editarlo a mano dejaría el stock mintiendo.
+// Tampoco se tocan `id_pago` / `id_pedido`, que son el vínculo con la venta.
+router.put('/:idArticulo', express.json(), requireDb, async (req, res) => {
+  const idArticulo = parseInt(req.params.idArticulo, 10);
+  if (!Number.isInteger(idArticulo)) {
+    return res.status(400).json({ success: false, error: 'ID de artículo inválido' });
+  }
+
+  try {
+    const actual = await db.pool.query(
+      `SELECT id_articulo, prenda, categoria, color, talle, estado,
+              precio_compra, precio_venta_transferencia
+       FROM ${db.PRODUCTOS_TABLE} WHERE id_articulo = $1`,
+      [idArticulo]
+    );
+    if (actual.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Artículo no encontrado' });
+    }
+    const previo = actual.rows[0];
+
+    const prenda = String(req.body.prenda ?? previo.prenda).trim();
+    const colorNuevo = variantes.normalizarColor(req.body.color ?? previo.color);
+    const talleNuevo = variantes.normalizarTalle(req.body.talle ?? previo.talle);
+    if (!prenda || !colorNuevo || !talleNuevo) {
+      return res.status(400).json({ success: false, error: 'Prenda, color y talle no pueden quedar vacíos' });
+    }
+
+    const categoriaCanonica = catalogos.normalizarCategoria(req.body.categoria ?? previo.categoria);
+    if (!categoriaCanonica) {
+      return res.status(400).json({
+        success: false,
+        error: `La categoría "${req.body.categoria ?? previo.categoria}" no es válida. Opciones: ${catalogos.etiquetasCategorias()}`
+      });
+    }
+
+    const precioCompra = toNumber(req.body.precio_compra ?? previo.precio_compra, 'Precio de compra');
+    if (precioCompra.error) return res.status(400).json({ success: false, error: precioCompra.error });
+    const precioVenta = toNumber(req.body.precio_venta_transferencia ?? previo.precio_venta_transferencia, 'Precio de venta');
+    if (precioVenta.error) return res.status(400).json({ success: false, error: precioVenta.error });
+    if (precioVenta.value < precioCompra.value) {
+      return res.status(400).json({ success: false, error: 'El precio de venta no puede ser menor al precio de compra' });
+    }
+
+    // La tarjeta de la tienda se identifica por prenda y sus fotos se nombran por el slug del
+    // color: renombrar cualquiera de los dos mientras está publicado dejaría la tarjeta apuntando
+    // a datos que ya no existen. Se pide quitarlo de la web primero (las fotos se conservan).
+    const cambiaPrenda = prenda !== previo.prenda;
+    const cambiaColor = colorNuevo !== previo.color;
+    if ((cambiaPrenda || cambiaColor) && gcs.isConfigured()) {
+      const productosJson = await gcs.getProductosJson();
+      if (gcs.findEntryIndexByArticuloId(productosJson, idArticulo) !== -1) {
+        return res.status(400).json({
+          success: false,
+          error: 'Para cambiar la prenda o el color, primero quitá el artículo de la tienda ' +
+                 '("Quitar"). Las fotos se conservan y después lo volvés a publicar.'
+        });
+      }
+    }
+
+    // 10% de descuento por efectivo, mismo criterio que la carga de lotes.
+    const precioEfectivo = Math.round(precioVenta.value * 0.9 * 100) / 100;
+
+    await db.pool.query(
+      `UPDATE ${db.PRODUCTOS_TABLE}
+       SET prenda = $1, categoria = $2, color = $3, talle = $4,
+           precio_compra = $5, precio_venta_transferencia = $6, precio_venta_efectivo = $7
+       WHERE id_articulo = $8`,
+      [prenda, categoriaCanonica, colorNuevo, talleNuevo,
+       precioCompra.value, precioVenta.value, precioEfectivo, idArticulo]
+    );
+
+    res.json({
+      success: true,
+      articulo: {
+        id_articulo: idArticulo,
+        prenda, categoria: categoriaCanonica, color: colorNuevo, talle: talleNuevo,
+        precio_compra: precioCompra.value,
+        precio_venta_transferencia: precioVenta.value,
+        precio_venta_efectivo: precioEfectivo,
+        estado: previo.estado
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error editando artículo:', error.message);
+    res.status(500).json({ success: false, error: 'Error al editar el artículo' });
+  }
+});
+
 // === ELIMINAR ARTÍCULOS DE LA BASE ===
 // Borrado definitivo de unidades físicas (mercadería que no se va a vender más, cargas
 // equivocadas, etc.). El desktop hace esto con `sp_eliminar_registro`, un DELETE genérico por

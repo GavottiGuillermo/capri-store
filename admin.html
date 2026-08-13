@@ -36,8 +36,54 @@
     <div id="content" style="display:none;">
       <ul class="nav nav-tabs mb-3" id="admin-tabs">
         <li class="nav-item"><a class="nav-link active" href="#" data-tab="articulos">Artículos</a></li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-tab="pedidos">
+            Pedidos <span class="badge badge-warning" id="pedidos-badge" style="display:none;">0</span>
+          </a>
+        </li>
         <li class="nav-item"><a class="nav-link" href="#" data-tab="cashflow">Cash Flow</a></li>
       </ul>
+
+      <!-- ===================== PEDIDOS WEB ===================== -->
+      <div id="tab-pedidos" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap mb-1">
+          <h4 class="mb-0">Pedidos</h4>
+          <div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="pedidos-solo-pendientes" checked>
+              <label class="form-check-label small" for="pedidos-solo-pendientes">Solo pendientes</label>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" id="btn-refrescar-pedidos">↻ Refrescar</button>
+          </div>
+        </div>
+        <p class="text-muted small">
+          Pedidos hechos desde la tienda online. Al cobrarse quedan como <strong>Pendiente retiro</strong> o
+          <strong>Pendiente envío</strong> según lo que eligió el cliente. Hacé click en un pedido para ver el detalle.
+        </p>
+
+        <div class="card mb-5">
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover" id="tabla-pedidos">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Pedido</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Entrega</th>
+                    <th>Artículos</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-pedidos"></tbody>
+              </table>
+            </div>
+            <div id="resultado-pedidos" class="alert mt-2 mb-0 alert-resultado" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- ===================== ARTÍCULOS (listado único) ===================== -->
       <!-- Una sola pantalla para todo el ciclo de vida de un artículo: verlo, cargarle fotos y
@@ -386,6 +432,77 @@
     </div>
   </div>
 
+  <!-- ===================== MODAL: editar artículo ===================== -->
+  <!-- El estado no está acá a propósito: cambia solo por Vender / Devolución / pedido web. -->
+  <div class="modal fade" id="modal-editar" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar artículo <span id="me-id" class="text-muted"></span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-editar">
+            <div class="form-group">
+              <label>Prenda</label>
+              <input type="text" class="form-control form-control-sm" name="prenda" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Categoría</label>
+                <select class="form-control form-control-sm" name="categoria" id="me-categoria"></select>
+              </div>
+              <div class="form-group col-md-6">
+                <label>Talle</label>
+                <select class="form-control form-control-sm" name="talle" id="me-talle"></select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Color</label>
+              <input type="text" class="form-control form-control-sm" name="color" list="datalist-colores" autocomplete="off" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Precio compra</label>
+                <input type="number" step="0.01" class="form-control form-control-sm" name="precio_compra" required />
+              </div>
+              <div class="form-group col-md-6">
+                <label>Precio venta (transf.)</label>
+                <input type="number" step="0.01" class="form-control form-control-sm" name="precio_venta_transferencia" required />
+              </div>
+            </div>
+            <small class="form-text text-muted mb-2">
+              El precio en efectivo se recalcula solo (10% menos que transferencia), igual que en la carga.
+              El <strong>estado</strong> no se edita: cambia al vender, devolver o cuando entra un pedido web.
+            </small>
+          </form>
+          <div id="resultado-editar" class="alert mt-2 mb-0 alert-resultado" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-guardar-edicion">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: detalle de pedido ===================== -->
+  <div class="modal fade" id="modal-pedido" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Pedido <span id="mp-id"></span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body" id="mp-cuerpo"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-sm btn-vino-tinto" id="btn-marcar-entregado">Marcar como entregado</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== MODAL: ajuste porcentual ===================== -->
   <div class="modal fade" id="modal-ajuste" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -434,6 +551,8 @@
         // Los catálogos primero: los desplegables de categoría y talle dependen de ellos.
         await cargarCatalogos();
         await cargarArticulos();
+        // Trae el contador de pendientes para el badge de la pestaña, sin abrirla.
+        cargarPedidos();
       } catch (error) {
         window.location.href = 'admin-login.html';
       }
@@ -587,6 +706,24 @@
       });
     }
 
+    // Semáforo de stock. Los 4 estados posibles los define la base:
+    // 'Disponible' y 'Sin Stock' los maneja el sistema de ventas, y 'Pendiente Retiro' /
+    // 'Pendiente Envio' los crea sp_crear_pedido_web según el tipo de entrega del checkout.
+    function badgeEstado(estado) {
+      const mapa = {
+        'Disponible': { clase: 'badge-success', texto: 'Disponible' },
+        'Sin Stock': { clase: 'badge-danger', texto: 'Sin stock' },
+        'Pendiente Retiro': { clase: 'badge-warning', texto: 'Pendiente retiro' },
+        'Pendiente Envio': { clase: 'badge-warning', texto: 'Pendiente envío' },
+      };
+      const info = mapa[estado] || { clase: 'badge-secondary', texto: estado || '—' };
+      return `<span class="badge ${info.clase}">${info.texto}</span>`;
+    }
+
+    function esPendiente(estado) {
+      return estado === 'Pendiente Retiro' || estado === 'Pendiente Envio';
+    }
+
     // Etiqueta del estado web: publicado / con fotos listo para publicar / sin fotos.
     function badgeWeb(a) {
       if (a.inconsistente) {
@@ -618,6 +755,7 @@
 
         // Acciones contextuales: solo se ofrece lo que tiene sentido para el estado de la fila.
         const acciones = [];
+        acciones.push(`<button class="btn btn-sm btn-outline-secondary btn-acc" data-acc="editar" data-id="${a.id_articulo}" title="Editar prenda, color, talle y precios">✏️</button>`);
         acciones.push(`<button class="btn btn-sm btn-outline-primary btn-acc" data-acc="contenido" data-id="${a.id_articulo}" title="Cargar o editar fotos y descripción">📷</button>`);
         if (!a.publicado && a.tiene_contenido) {
           acciones.push(`<button class="btn btn-sm btn-outline-success btn-acc" data-acc="publicar" data-id="${a.id_articulo}" title="Publicar en la tienda">Publicar</button>`);
@@ -641,7 +779,7 @@
           <td>${a.prenda || ''}</td>
           <td>${a.color || ''}</td>
           <td>${a.talle || ''}</td>
-          <td>${disponible ? a.estado : `<span class="text-muted">${a.estado}</span>`}</td>
+          <td>${badgeEstado(a.estado)}</td>
           <td>$${Number(a.precio_venta_efectivo || 0).toLocaleString('es-AR')}</td>
           <td>$${Number(a.precio_venta_transferencia || 0).toLocaleString('es-AR')}</td>
           <td>${badgeWeb(a)}</td>
@@ -704,7 +842,201 @@
       if (accion === 'publicar') return publicarArticulo(id, btn);
       if (accion === 'despublicar') return despublicarArticulo(id, btn);
       if (accion === 'eliminar') return eliminarArticulos([id]);
+      if (accion === 'editar') return abrirModalEditar(id);
     }
+
+    // === Editar artículo ===
+    let idEditando = null;
+
+    function abrirModalEditar(id) {
+      const a = getArticulo(id);
+      if (!a) return;
+      idEditando = id;
+      const form = document.getElementById('form-editar');
+      document.getElementById('me-id').textContent = `#${id}`;
+      document.getElementById('resultado-editar').style.display = 'none';
+
+      form.prenda.value = a.prenda || '';
+      form.color.value = a.color || '';
+      form.precio_compra.value = a.precio_compra ?? '';
+      form.precio_venta_transferencia.value = a.precio_venta_transferencia ?? '';
+
+      // Categoría y talle salen del catálogo. Si el artículo tiene un valor viejo fuera de
+      // catálogo (ej. 'Parte de arriba'), se agrega como opción para no perderlo al abrir.
+      const selCat = document.getElementById('me-categoria');
+      selCat.innerHTML = catalogos.categorias.map(c => `<option value="${c.valor}">${c.etiqueta}</option>`).join('');
+      if (a.categoria && !catalogos.categorias.some(c => c.valor === a.categoria)) {
+        selCat.insertAdjacentHTML('afterbegin',
+          `<option value="${a.categoria}">${a.categoria} (valor viejo — elegí uno del catálogo)</option>`);
+      }
+      selCat.value = a.categoria || catalogos.categorias[0]?.valor;
+
+      const selTalle = document.getElementById('me-talle');
+      selTalle.innerHTML = catalogos.talles.map(t => `<option value="${t.valor}">${t.etiqueta}</option>`).join('');
+      if (a.talle && !catalogos.talles.some(t => t.valor === a.talle)) {
+        selTalle.insertAdjacentHTML('afterbegin', `<option value="${a.talle}">${a.talle} (valor viejo)</option>`);
+      }
+      selTalle.value = a.talle || 'unico';
+
+      abrirModal('modal-editar');
+    }
+
+    document.getElementById('btn-guardar-edicion').addEventListener('click', async () => {
+      if (idEditando === null) return;
+      const form = document.getElementById('form-editar');
+      const btn = document.getElementById('btn-guardar-edicion');
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/admin/stock/${idEditando}`, {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prenda: form.prenda.value,
+            categoria: form.categoria.value,
+            color: form.color.value,
+            talle: form.talle.value,
+            precio_compra: form.precio_compra.value,
+            precio_venta_transferencia: form.precio_venta_transferencia.value,
+          })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo guardar');
+        cerrarModal('modal-editar');
+        mostrarResultado('resultado-acciones', true, `Artículo #${idEditando} actualizado.`);
+        idEditando = null;
+        await cargarArticulos();
+      } catch (error) {
+        mostrarResultado('resultado-editar', false, error.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // === Pedidos web ===
+    let pedidosCache = [];
+
+    async function cargarPedidos() {
+      const tbody = document.getElementById('tbody-pedidos');
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Cargando...</td></tr>';
+      const soloPendientes = document.getElementById('pedidos-solo-pendientes').checked;
+      try {
+        const resp = await fetch(`/admin/pedidos?soloPendientes=${soloPendientes}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Error al cargar los pedidos');
+        pedidosCache = data.pedidos;
+        renderPedidos();
+        // El badge de la pestaña siempre cuenta los pendientes, se esté filtrando o no.
+        const badge = document.getElementById('pedidos-badge');
+        badge.textContent = data.pendientes;
+        badge.style.display = data.pendientes > 0 ? '' : 'none';
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${error.message}</td></tr>`;
+      }
+    }
+
+    function formatoFecha(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return isNaN(d) ? '—' : d.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    function renderPedidos() {
+      const tbody = document.getElementById('tbody-pedidos');
+      tbody.innerHTML = '';
+      if (pedidosCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay pedidos para mostrar.</td></tr>';
+        return;
+      }
+      pedidosCache.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = `
+          <td><strong>${p.id_pedido}</strong></td>
+          <td>${formatoFecha(p.fecha)}</td>
+          <td>${p.cliente || '—'}</td>
+          <td>${p.tipo_entrega || '—'}</td>
+          <td>${p.cantidad}</td>
+          <td>$${Number(p.monto_total || 0).toLocaleString('es-AR')}</td>
+          <td>${badgeEstado(p.estado)}</td>
+          <td><button class="btn btn-sm btn-outline-primary btn-ver-pedido" data-id="${p.id_pedido}">Ver</button></td>
+        `;
+        tr.addEventListener('click', (e) => {
+          if (!e.target.closest('button')) abrirModalPedido(p.id_pedido);
+        });
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('.btn-ver-pedido').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalPedido(btn.dataset.id));
+      });
+    }
+
+    let idPedidoAbierto = null;
+
+    function abrirModalPedido(idPedido) {
+      const p = pedidosCache.find(x => x.id_pedido === idPedido);
+      if (!p) return;
+      idPedidoAbierto = idPedido;
+      document.getElementById('mp-id').textContent = p.id_pedido;
+
+      const filas = p.articulos.map(a => `
+        <tr>
+          <td>${a.id_articulo}</td>
+          <td>${a.prenda || ''}</td>
+          <td>$${Number(a.precio || 0).toLocaleString('es-AR')}</td>
+        </tr>`).join('');
+
+      document.getElementById('mp-cuerpo').innerHTML = `
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <div class="mb-1"><strong>Cliente:</strong> ${p.cliente || '—'}</div>
+            <div class="mb-1"><strong>Correo:</strong> ${p.correo || '—'}</div>
+            <div class="mb-1"><strong>Teléfono:</strong> ${p.telefono || '—'}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="mb-1"><strong>Entrega:</strong> ${p.tipo_entrega || '—'}</div>
+            <div class="mb-1"><strong>Fecha:</strong> ${formatoFecha(p.fecha)}</div>
+            <div class="mb-1"><strong>Estado:</strong> ${badgeEstado(p.estado)}</div>
+          </div>
+        </div>
+        <table class="table table-sm">
+          <thead class="thead-light"><tr><th>ID</th><th>Prenda</th><th>Precio</th></tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+        <div class="text-right"><strong>Total del pedido: $${Number(p.monto_total || 0).toLocaleString('es-AR')}</strong></div>
+      `;
+
+      // Solo tiene sentido marcar entregado lo que sigue pendiente.
+      document.getElementById('btn-marcar-entregado').style.display = esPendiente(p.estado) ? '' : 'none';
+      abrirModal('modal-pedido');
+    }
+
+    document.getElementById('btn-marcar-entregado').addEventListener('click', async () => {
+      if (!idPedidoAbierto) return;
+      if (!confirm(`¿Marcar el pedido ${idPedidoAbierto} como entregado? Sus artículos pasan a "Sin stock".`)) return;
+      const btn = document.getElementById('btn-marcar-entregado');
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/admin/pedidos/${encodeURIComponent(idPedidoAbierto)}/entregado`, {
+          method: 'POST', credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudo marcar como entregado');
+        cerrarModal('modal-pedido');
+        mostrarResultado('resultado-pedidos', true,
+          `Pedido ${data.idPedido} entregado. ${data.articulosActualizados} artículo(s) pasaron a "Sin stock".`);
+        idPedidoAbierto = null;
+        await cargarPedidos();
+        await cargarArticulos();
+      } catch (error) {
+        mostrarResultado('resultado-pedidos', false, error.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btn-refrescar-pedidos').addEventListener('click', cargarPedidos);
+    document.getElementById('pedidos-solo-pendientes').addEventListener('change', cargarPedidos);
 
     // Borrado definitivo. El servidor omite los vendidos o tomados por un pedido web y devuelve
     // el motivo de cada omisión, así que acá se muestra el resultado real y no un "listo" genérico.
@@ -998,7 +1330,9 @@
         link.classList.add('active');
         const tab = link.dataset.tab;
         document.getElementById('tab-articulos').style.display = tab === 'articulos' ? 'block' : 'none';
+        document.getElementById('tab-pedidos').style.display = tab === 'pedidos' ? 'block' : 'none';
         document.getElementById('tab-cashflow').style.display = tab === 'cashflow' ? 'block' : 'none';
+        if (tab === 'pedidos') cargarPedidos();
       });
     });
 
