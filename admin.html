@@ -1139,6 +1139,15 @@
     // === Modal de fotos y descripción ===
     let mcIds = [];
     let mcColores = [];
+    // URLs de fotos ya subidas que el usuario marcó para quitar (se aplica recién al guardar).
+    let mcQuitadas = new Set();
+
+    // El .txt del catálogo guarda los campos vacíos con el literal "null": si se muestra tal cual
+    // en el formulario, el usuario ve "null" escrito y termina guardándolo como texto real.
+    function limpiarNull(valor) {
+      const s = String(valor ?? '').trim();
+      return (s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') ? '' : s;
+    }
 
     async function abrirModalContenido(ids) {
       if (ids.length === 0) return;
@@ -1182,10 +1191,10 @@
           const resp = await fetch(`/admin/articulos-web/${mcIds[0]}`, { credentials: 'same-origin' });
           const data = await resp.json();
           if (data.success) {
-            form.titulo.value = data.titulo || '';
-            form.texto.value = data.texto || '';
-            form.precio.value = data.precio || '';
-            form.detalle.value = data.detalle || '';
+            form.titulo.value = limpiarNull(data.titulo);
+            form.texto.value = limpiarNull(data.texto);
+            form.precio.value = limpiarNull(data.precio);
+            form.detalle.value = limpiarNull(data.detalle);
             const base = (data.categoria || '').replace('-Novedad', '');
             if (base) form.categoria.value = base;
             document.getElementById('mc-novedad').checked = (data.categoria || '').endsWith('-Novedad');
@@ -1197,37 +1206,130 @@
         form.precio.value = getArticulo(mcIds[0])?.precio_venta_transferencia || '';
       }
 
-      // Un input de archivos por color, indicando cuántas fotos ya tiene cada uno.
+      // Por cada color: las fotos que ya están subidas (con opción de quitarlas) + input para sumar.
+      mcQuitadas = new Set();
       const cont = document.getElementById('mc-imagenes-por-color');
       cont.innerHTML = '';
       mcColores.forEach((color, indice) => {
         const previo = existentes.find(c => (c.color || '').trim().toLowerCase() === color.trim().toLowerCase());
-        const actuales = previo ? previo.imagenes.length : 0;
+        const imagenes = previo ? previo.imagenes : [];
         const wrapper = document.createElement('div');
-        wrapper.className = 'mb-2';
+        wrapper.className = 'mb-3 pb-2 border-bottom';
         wrapper.innerHTML = `
           <label class="small mb-1">
-            ${color || '(sin color)'}
-            <span class="text-muted">${actuales > 0 ? `— ${actuales} foto(s) cargada(s)` : '— sin fotos'}</span>
+            <strong>${color || '(sin color)'}</strong>
+            <span class="text-muted mc-contador" data-indice="${indice}">${imagenes.length > 0 ? `— ${imagenes.length} foto(s)` : '— sin fotos'}</span>
           </label>
+          <div class="d-flex flex-wrap mb-2 mc-galeria" data-indice="${indice}" style="gap:8px;"></div>
           <input type="file" class="form-control-file mc-input-img" accept="image/*" multiple
-                 data-color="${color}" data-indice="${indice}" data-actuales="${actuales}" />
+                 data-color="${color}" data-indice="${indice}" />
         `;
         cont.appendChild(wrapper);
+
+        const galeria = wrapper.querySelector('.mc-galeria');
+        imagenes.forEach(url => galeria.appendChild(miniaturaExistente(url, indice)));
+        // Vista previa de lo que se está por subir, para saber qué se agrega antes de guardar.
+        wrapper.querySelector('.mc-input-img').addEventListener('change', (e) => {
+          galeria.querySelectorAll('.mc-nueva').forEach(n => n.remove());
+          Array.from(e.target.files).forEach(file => galeria.appendChild(miniaturaNueva(file)));
+          actualizarContadorFotos(indice);
+        });
       });
 
       abrirModal('modal-contenido');
+    }
+
+    // Miniatura de una foto ya subida, con botón para quitarla (se marca y se aplica al guardar).
+    function miniaturaExistente(url, indice) {
+      const cont = document.createElement('div');
+      cont.className = 'position-relative mc-existente';
+      cont.dataset.url = url;
+      cont.dataset.indice = indice;
+      cont.style.cssText = 'width:84px;';
+      cont.innerHTML = `
+        <img src="${url}" alt="" style="width:84px; height:84px; object-fit:cover; border-radius:4px; border:1px solid #dee2e6;">
+        <button type="button" class="btn btn-sm btn-danger mc-quitar"
+                title="Quitar esta foto"
+                style="position:absolute; top:-6px; right:-6px; border-radius:50%; width:22px; height:22px; padding:0; line-height:1;">&times;</button>
+      `;
+      cont.querySelector('.mc-quitar').addEventListener('click', () => alternarQuitarFoto(cont));
+      return cont;
+    }
+
+    // Vista previa (local) de un archivo recién elegido, todavía no subido.
+    function miniaturaNueva(file) {
+      const cont = document.createElement('div');
+      cont.className = 'position-relative mc-nueva';
+      cont.style.cssText = 'width:84px;';
+      const url = URL.createObjectURL(file);
+      cont.innerHTML = `
+        <img src="${url}" alt="" style="width:84px; height:84px; object-fit:cover; border-radius:4px; border:2px solid #28a745;">
+        <span class="badge badge-success" style="position:absolute; bottom:2px; left:2px;">nueva</span>
+      `;
+      return cont;
+    }
+
+    function alternarQuitarFoto(elemento) {
+      const url = elemento.dataset.url;
+      const img = elemento.querySelector('img');
+      if (mcQuitadas.has(url)) {
+        mcQuitadas.delete(url);
+        img.style.opacity = '1';
+        img.style.filter = 'none';
+        elemento.querySelector('.mc-quitar').textContent = '×';
+        elemento.querySelector('.mc-quitar').className = 'btn btn-sm btn-danger mc-quitar';
+      } else {
+        mcQuitadas.add(url);
+        img.style.opacity = '0.35';
+        img.style.filter = 'grayscale(1)';
+        elemento.querySelector('.mc-quitar').textContent = '↺';
+        elemento.querySelector('.mc-quitar').className = 'btn btn-sm btn-secondary mc-quitar';
+      }
+      elemento.querySelector('.mc-quitar').style.cssText =
+        'position:absolute; top:-6px; right:-6px; border-radius:50%; width:22px; height:22px; padding:0; line-height:1;';
+      actualizarContadorFotos(elemento.dataset.indice);
+    }
+
+    // Cuenta cuántas fotos quedarían para ese color: las que se conservan más las nuevas.
+    function actualizarContadorFotos(indice) {
+      const galeria = document.querySelector(`.mc-galeria[data-indice="${indice}"]`);
+      if (!galeria) return;
+      const conservadas = Array.from(galeria.querySelectorAll('.mc-existente'))
+        .filter(el => !mcQuitadas.has(el.dataset.url)).length;
+      const nuevas = galeria.querySelectorAll('.mc-nueva').length;
+      const total = conservadas + nuevas;
+      const etiqueta = document.querySelector(`.mc-contador[data-indice="${indice}"]`);
+      if (!etiqueta) return;
+      etiqueta.textContent = total === 0
+        ? '— quedaría sin fotos'
+        : `— ${total} foto(s)` + (nuevas > 0 ? ` (${nuevas} nueva/s)` : '');
+      etiqueta.className = 'text-muted mc-contador' + (total === 0 ? ' text-danger' : '');
     }
 
     async function guardarContenido(publicar) {
       const form = document.getElementById('form-contenido');
       const inputs = Array.from(document.querySelectorAll('.mc-input-img'));
 
-      // Cada color necesita fotos: nuevas o de una carga anterior.
-      const faltan = inputs.filter(i => i.files.length === 0 && Number(i.dataset.actuales) === 0)
-        .map(i => i.dataset.color || '(sin color)');
+      // Fotos que se conservan por color (las subidas que no se marcaron para quitar).
+      const conservadas = {};
+      mcColores.forEach((color, indice) => {
+        const galeria = document.querySelector(`.mc-galeria[data-indice="${indice}"]`);
+        conservadas[indice] = galeria
+          ? Array.from(galeria.querySelectorAll('.mc-existente'))
+              .map(el => el.dataset.url)
+              .filter(url => !mcQuitadas.has(url))
+          : [];
+      });
+
+      // Ningún color puede quedar sin fotos: ni conservadas ni nuevas.
+      const faltan = mcColores.filter((color, indice) => {
+        const input = inputs.find(i => Number(i.dataset.indice) === indice);
+        const nuevas = input ? input.files.length : 0;
+        return conservadas[indice].length === 0 && nuevas === 0;
+      }).map(c => c || '(sin color)');
       if (faltan.length > 0) {
-        mostrarResultado('resultado-contenido', false, 'Faltan fotos para: ' + faltan.join(', '));
+        mostrarResultado('resultado-contenido', false,
+          'Estos colores quedarían sin fotos: ' + faltan.join(', ') + '. Agregá al menos una o no les quites todas.');
         return;
       }
 
@@ -1239,6 +1341,8 @@
       formData.set('ids', JSON.stringify(mcIds));
       formData.set('ordenColores', JSON.stringify(mcColores));
       formData.set('publicar', publicar ? 'true' : 'false');
+      // El servidor borra de GCS las fotos previas que no estén en esta lista.
+      formData.set('imagenesConservadas', JSON.stringify(conservadas));
       inputs.forEach(input => {
         Array.from(input.files).forEach(file => formData.append(`img_${input.dataset.indice}`, file));
       });

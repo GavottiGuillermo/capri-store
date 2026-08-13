@@ -135,17 +135,60 @@ function agruparArchivosPorColor(files, ordenColoresRaw, coloresDisponibles) {
   return porColor;
 }
 
-// Sube la lista de archivos de un color y devuelve sus URLs públicas, borrando las anteriores.
-async function reemplazarImagenesDeColor(rutaCarpeta, color, archivos, imagenesPrevias) {
-  for (const urlPrevia of imagenesPrevias || []) {
+// Interpreta el campo `imagenesConservadas` que manda el panel: qué fotos previas se mantienen.
+// Formato: JSON { "<indice del color>": ["url", ...] }. Si no viene, `null` = sin información,
+// que se trata como el comportamiento anterior (las fotos nuevas reemplazan a todas las previas).
+function parseImagenesConservadas(raw, ordenColoresRaw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  let mapaIndices;
+  try {
+    mapaIndices = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch { return null; }
+  if (!mapaIndices || typeof mapaIndices !== 'object') return null;
+
+  let ordenColores = [];
+  try {
+    const parsed = typeof ordenColoresRaw === 'string' ? JSON.parse(ordenColoresRaw) : ordenColoresRaw;
+    if (Array.isArray(parsed)) ordenColores = parsed.map(c => String(c));
+  } catch { /* sin orden: no se puede mapear indice -> color */ }
+
+  const porColor = new Map();
+  Object.entries(mapaIndices).forEach(([indice, urls]) => {
+    const color = ordenColores[parseInt(indice, 10)];
+    if (color === undefined || !Array.isArray(urls)) return;
+    porColor.set(color, urls.filter(u => typeof u === 'string' && u));
+  });
+  return porColor;
+}
+
+// Deja un color con las fotos que se conservan más las nuevas que se suban, y borra de GCS las
+// previas que se quitaron. `conservadas === null` significa "no vino la información": se mantiene
+// el comportamiento viejo de reemplazar todo, para no romper a quien llame sin ese campo.
+//
+// Las fotos nuevas se numeran a partir del mayor índice existente ({slug}-{n}) para no pisar una
+// que se está conservando.
+async function guardarImagenesDeColor(rutaCarpeta, color, archivos, imagenesPrevias, conservadas) {
+  const previas = imagenesPrevias || [];
+  const seConservan = conservadas === null ? [] : previas.filter(u => conservadas.includes(u));
+
+  for (const urlPrevia of previas) {
+    if (seConservan.includes(urlPrevia)) continue;
     const ruta = gcs.pathFromPublicUrl(urlPrevia);
     if (ruta) await gcs.deleteFile(ruta);
   }
+
   const slug = gcs.slugify(color);
-  const urls = [];
+  let maximo = 0;
+  seConservan.forEach(url => {
+    const archivo = decodeURIComponent(url).split('/').pop() || '';
+    const m = archivo.match(/-(\d+)\.[^.]+$/);
+    if (m) maximo = Math.max(maximo, parseInt(m[1], 10));
+  });
+
+  const urls = [...seConservan];
   for (let i = 0; i < archivos.length; i++) {
     const archivo = archivos[i];
-    const destino = `${rutaCarpeta}${slug}-${i + 1}${extensionFor(archivo)}`;
+    const destino = `${rutaCarpeta}${slug}-${maximo + i + 1}${extensionFor(archivo)}`;
     urls.push(await gcs.uploadBuffer(destino, archivo.buffer, archivo.mimetype));
   }
   return urls;
@@ -361,6 +404,8 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
       req.body.ordenColores,
       coloresSeleccionados.map(g => g.color)
     );
+    // Qué fotos previas mantiene el usuario (las que no borró desde el panel).
+    const conservadasPorColor = parseImagenesConservadas(req.body.imagenesConservadas, req.body.ordenColores);
 
     const productos = await gcs.getProductosJson();
     // Reusar la carpeta si esta prenda ya estaba publicada, para no invalidar URLs vigentes.
@@ -387,25 +432,36 @@ router.post('/generar', requireGcs, requireDb, upload.any(), async (req, res) =>
     const nombreBase = entradaExistente?.carpeta || carpetaBorrador || `${idPrincipal}-${prenda.trim()}`;
     const rutaCarpeta = `Novedades/${nombreBase}/`;
 
-    // Cada color necesita al menos una imagen: nueva o preexistente de una carga anterior.
-    const coloresFinales = [];
+    // Primera pasada: SOLO validar. Es importante no escribir nada todavía, porque guardar borra
+    // de GCS las fotos que se quitaron: si se validara sobre la marcha, un color inválido al final
+    // dejaría ya borradas las fotos de los anteriores.
+    const plan = [];
     for (const grupo of coloresSeleccionados) {
       const slug = gcs.slugify(grupo.color);
       const archivos = archivosPorColor.get(grupo.color) || [];
       const previo = coloresPrevios.find(c => gcs.slugify(c.color) === slug);
+      // Sin información de conservadas se mantiene todo lo previo (salvo que el panel diga otra cosa).
+      const conservadas = conservadasPorColor === null
+        ? (previo?.imagenes || [])
+        : (conservadasPorColor.get(grupo.color) || []);
+      const escribe = archivos.length > 0 || conservadasPorColor !== null;
 
-      if (archivos.length === 0 && (!previo || previo.imagenes.length === 0)) {
+      if ((escribe ? conservadas.length + archivos.length : (previo?.imagenes || []).length) === 0) {
         return res.status(400).json({
           success: false,
-          error: `Falta la imagen del color "${grupo.color || 'sin color'}"`
+          error: `El color "${grupo.color || 'sin color'}" quedaría sin fotos. Agregá al menos una o no le quites todas.`
         });
       }
+      plan.push({ grupo, archivos, previo, conservadas, escribe });
+    }
 
-      const imagenes = archivos.length > 0
-        ? await reemplazarImagenesDeColor(rutaCarpeta, grupo.color, archivos, previo?.imagenes)
-        : previo.imagenes;
-
-      coloresFinales.push({ color: grupo.color, ids: grupo.ids, imagenes });
+    // Segunda pasada: recién acá se sube y se borra.
+    const coloresFinales = [];
+    for (const paso of plan) {
+      const imagenes = paso.escribe
+        ? await guardarImagenesDeColor(rutaCarpeta, paso.grupo.color, paso.archivos, paso.previo?.imagenes, paso.conservadas)
+        : (paso.previo?.imagenes || []);
+      coloresFinales.push({ color: paso.grupo.color, ids: paso.grupo.ids, imagenes });
     }
 
     // Conservar colores ya cargados que no vinieron en esta selección (carga incremental).
@@ -637,22 +693,41 @@ router.put('/:idArticulo', requireGcs, requireDb, upload.any(), async (req, res)
     const rutaTxt = `${rutaCarpeta}${carpeta}.txt`;
     await gcs.uploadBuffer(rutaTxt, Buffer.from(contenidoTxt, 'utf8'), 'text/plain; charset=utf-8');
 
-    // 2. Reemplazar las fotos de los colores para los que se subieron archivos nuevos.
+    // 2. Actualizar las fotos: se suman las nuevas y se borran las que el usuario haya quitado.
     const archivosPorColor = agruparArchivosPorColor(
       req.files,
       req.body.ordenColores,
       node.colores.map(c => c.color)
     );
+    const conservadasPorColor = parseImagenesConservadas(req.body.imagenesConservadas, req.body.ordenColores);
 
-    const coloresFinales = [];
+    // Igual que en /generar: validar todo primero, escribir después (guardar borra en GCS).
+    const plan = [];
     for (const previo of node.colores) {
       const archivos = archivosPorColor.get(previo.color) || [];
-      if (archivos.length === 0) {
-        coloresFinales.push(previo);
+      // Sin archivos nuevos ni información de conservadas, el color queda como estaba.
+      if (archivos.length === 0 && conservadasPorColor === null) {
+        plan.push({ previo, escribe: false });
         continue;
       }
-      const imagenes = await reemplazarImagenesDeColor(rutaCarpeta, previo.color, archivos, previo.imagenes);
-      coloresFinales.push({ ...previo, imagenes });
+      const conservadas = conservadasPorColor === null
+        ? previo.imagenes
+        : (conservadasPorColor.get(previo.color) || []);
+      if (conservadas.length + archivos.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: `El color "${previo.color || 'sin color'}" quedaría sin fotos. Agregá al menos una o no le quites todas.`
+        });
+      }
+      plan.push({ previo, archivos, conservadas, escribe: true });
+    }
+
+    const coloresFinales = [];
+    for (const paso of plan) {
+      if (!paso.escribe) { coloresFinales.push(paso.previo); continue; }
+      const imagenes = await guardarImagenesDeColor(
+        rutaCarpeta, paso.previo.color, paso.archivos, paso.previo.imagenes, paso.conservadas);
+      coloresFinales.push({ ...paso.previo, imagenes });
     }
 
     // 3. Actualizar productos.json
