@@ -236,7 +236,8 @@
               <button class="btn btn-sm btn-outline-primary mr-2" id="btn-contenido-seleccion" disabled>Fotos y descripción</button>
               <button class="btn btn-sm btn-outline-success mr-2" id="btn-publicar-seleccion" disabled>Publicar en la web</button>
               <button class="btn btn-sm btn-outline-secondary mr-2" id="btn-ajuste-seleccion" disabled>Ajustar precio %</button>
-              <button class="btn btn-sm btn-outline-dark" id="btn-vender-seleccion" disabled>Vender</button>
+              <button class="btn btn-sm btn-outline-dark mr-2" id="btn-vender-seleccion" disabled>Vender</button>
+              <button class="btn btn-sm btn-outline-danger" id="btn-eliminar-seleccion" disabled>Eliminar</button>
             </div>
             <div id="resultado-acciones" class="alert mt-2 mb-0 alert-resultado" style="display:none;"></div>
           </div>
@@ -578,6 +579,8 @@
         } else {
           acciones.push(`<button class="btn btn-sm btn-outline-danger btn-acc" data-acc="devolver" data-id="${a.id_articulo}" title="Revertir la venta">Devolución</button>`);
         }
+        // Eliminar de la base. Los vendidos se filtran server-side (habría que devolverlos primero).
+        acciones.push(`<button class="btn btn-sm btn-outline-danger btn-acc" data-acc="eliminar" data-id="${a.id_articulo}" title="Eliminar de la base de datos">🗑</button>`);
 
         tr.innerHTML = `
           <td><input type="checkbox" class="chk-articulo" value="${a.id_articulo}" ${seleccionados.has(a.id_articulo) ? 'checked' : ''}></td>
@@ -627,6 +630,7 @@
       // Vender solo tiene sentido si hay algo disponible entre lo seleccionado.
       const vendibles = ids.filter(id => getArticulo(id)?.estado === 'Disponible');
       document.getElementById('btn-vender-seleccion').disabled = vendibles.length === 0;
+      document.getElementById('btn-eliminar-seleccion').disabled = !hay;
     }
 
     ['f-id', 'f-prenda', 'f-categoria', 'f-estado', 'f-web'].forEach(id => {
@@ -646,7 +650,46 @@
       if (accion === 'devolver') return devolverArticulo(id, btn);
       if (accion === 'publicar') return publicarArticulo(id, btn);
       if (accion === 'despublicar') return despublicarArticulo(id, btn);
+      if (accion === 'eliminar') return eliminarArticulos([id]);
     }
+
+    // Borrado definitivo. El servidor omite los vendidos o tomados por un pedido web y devuelve
+    // el motivo de cada omisión, así que acá se muestra el resultado real y no un "listo" genérico.
+    async function eliminarArticulos(ids) {
+      if (ids.length === 0) return;
+      const detalle = ids.slice(0, 5)
+        .map(id => { const a = getArticulo(id); return a ? `#${id} ${a.prenda}` : `#${id}`; })
+        .join('\n');
+      const resto = ids.length > 5 ? `\n…y ${ids.length - 5} más` : '';
+      if (!confirm(
+        `¿Eliminar ${ids.length} artículo(s) de la base de datos?\n\n${detalle}${resto}\n\n` +
+        'Esta acción no se puede deshacer. Si alguno está publicado, también se quita de la tienda.'
+      )) return;
+
+      try {
+        const resp = await fetch('/admin/stock/eliminar', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'No se pudieron eliminar los artículos');
+
+        const partes = [`Eliminados: ${data.eliminados.length}`];
+        if (data.tarjetasQuitadas) partes.push(`Tarjetas quitadas de la tienda: ${data.tarjetasQuitadas}`);
+        if (data.omitidos.length) {
+          partes.push(`Omitidos: ${data.omitidos.length}`);
+          partes.push(data.omitidos.map(o => `  #${o.id}: ${o.motivo}`).join('\n'));
+        }
+        mostrarResultado('resultado-acciones', data.omitidos.length === 0, partes.join('\n'));
+        await cargarArticulos();
+      } catch (error) {
+        mostrarResultado('resultado-acciones', false, error.message);
+      }
+    }
+
+    document.getElementById('btn-eliminar-seleccion').addEventListener('click', () => eliminarArticulos(getSeleccionados()));
 
     async function accionSimple(url, btn, textoOriginal, confirmacion) {
       if (confirmacion && !confirm(confirmacion)) return;
