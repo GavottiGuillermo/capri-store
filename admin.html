@@ -451,6 +451,59 @@
       el.textContent = texto;
     }
 
+    // ===================== MODALES =====================
+    // El panel carga solo el CSS de Bootstrap, no su JavaScript ni jQuery, así que los modales
+    // se abren y cierran a mano manipulando las mismas clases que usa Bootstrap 4.
+    // (Usar el plugin jQuery de modales acá fallaba con "jQuery is not defined" y los botones
+    //  no hacían absolutamente nada al clickearlos.)
+    function abrirModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.style.display = 'block';
+      modal.classList.add('show');
+      modal.setAttribute('aria-modal', 'true');
+      modal.removeAttribute('aria-hidden');
+      document.body.classList.add('modal-open');
+      if (!document.querySelector('.modal-backdrop')) {
+        const fondo = document.createElement('div');
+        fondo.className = 'modal-backdrop fade show';
+        document.body.appendChild(fondo);
+      }
+    }
+
+    function cerrarModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.style.display = 'none';
+      modal.classList.remove('show');
+      modal.setAttribute('aria-hidden', 'true');
+      modal.removeAttribute('aria-modal');
+      document.body.classList.remove('modal-open');
+      const fondo = document.querySelector('.modal-backdrop');
+      if (fondo) fondo.remove();
+    }
+
+    function cerrarModalesAbiertos() {
+      document.querySelectorAll('.modal.show').forEach(m => cerrarModal(m.id));
+    }
+
+    // Bootstrap normalmente cablea esto solo: sin su JS hay que hacerlo a mano.
+    document.addEventListener('click', (evento) => {
+      const cierre = evento.target.closest('[data-dismiss="modal"]');
+      if (cierre) {
+        const modal = cierre.closest('.modal');
+        if (modal) cerrarModal(modal.id);
+        return;
+      }
+      // Click en el fondo oscuro (fuera del cuadro) cierra, igual que Bootstrap.
+      if (evento.target.classList && evento.target.classList.contains('modal')) {
+        cerrarModal(evento.target.id);
+      }
+    });
+    document.addEventListener('keydown', (evento) => {
+      if (evento.key === 'Escape') cerrarModalesAbiertos();
+    });
+
     // ===================== CATÁLOGOS =====================
     // Categorías y talles vienen del servidor (GET /admin/catalogos), que es la misma fuente
     // contra la que validan las rutas de carga: así no hay una copia acá que se desincronice.
@@ -831,7 +884,7 @@
         cont.appendChild(wrapper);
       });
 
-      $('#modal-contenido').modal('show');
+      abrirModal('modal-contenido');
     }
 
     async function guardarContenido(publicar) {
@@ -864,7 +917,7 @@
         });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'No se pudo guardar el contenido');
-        $('#modal-contenido').modal('hide');
+        cerrarModal('modal-contenido');
         const detalle = (data.colores || []).map(c => `${c.color || '(sin color)'}: ${c.imagenes} foto(s)`).join(' · ');
         mostrarResultado('resultado-acciones', true,
           (data.publicado ? 'Contenido guardado y publicado en la tienda.' : 'Contenido guardado (sin publicar).') + '\n' + detalle);
@@ -884,7 +937,7 @@
       document.getElementById('ma-count').textContent = getSeleccionados().length;
       document.getElementById('ma-porcentaje').value = '';
       document.getElementById('resultado-ajuste').style.display = 'none';
-      $('#modal-ajuste').modal('show');
+      abrirModal('modal-ajuste');
     });
 
     document.getElementById('btn-aplicar-ajuste').addEventListener('click', async () => {
@@ -906,7 +959,7 @@
         if (!data.success) throw new Error(data.error || 'Error al aplicar el ajuste');
         const resumen = `Actualizados: ${data.actualizados.length} · Omitidos: ${data.omitidos.length}` +
           (data.omitidos.length ? '\n' + data.omitidos.map(o => `#${o.id}: ${o.motivo}`).join('\n') : '');
-        $('#modal-ajuste').modal('hide');
+        cerrarModal('modal-ajuste');
         mostrarResultado('resultado-acciones', true, resumen);
         await cargarArticulos();
       } catch (error) {
